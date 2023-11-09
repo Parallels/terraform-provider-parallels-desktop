@@ -1,32 +1,21 @@
 package virtualmachine
 
 import (
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+	"terraform-provider-parallels-desktop/internal/schemas/filter"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 var virtualMachineDataSourceSchema = schema.Schema{
+	MarkdownDescription: "Virtual Machine Data Source",
+	Blocks: map[string]schema.Block{
+		authenticator.SchemaName: authenticator.SchemaBlock,
+		filter.SchemaName:        filter.SchemaBlock,
+	},
 	Attributes: map[string]schema.Attribute{
 		"host": schema.StringAttribute{
 			Required: true,
-		},
-		"filter": schema.SingleNestedAttribute{
-			Optional: true,
-			Attributes: map[string]schema.Attribute{
-				"state": schema.StringAttribute{
-					Optional: true,
-					Validators: []validator.String{
-						stringvalidator.OneOf("running", "suspended", "stopped", "paused", "unknown"),
-					},
-				},
-				"id": schema.StringAttribute{
-					Optional: true,
-				},
-				"name": schema.StringAttribute{
-					Optional: true,
-				},
-			},
 		},
 		"machines": schema.ListNestedAttribute{
 			Computed: true,

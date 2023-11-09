@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"terraform-provider-parallels/internal/clientmodels"
-	"terraform-provider-parallels/internal/constants"
-	"terraform-provider-parallels/internal/helpers"
+	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -24,101 +23,7 @@ func NewVirtualMachineStateResource() resource.Resource {
 
 // VirtualMachineStateResource defines the resource implementation.
 type VirtualMachineStateResource struct {
-}
-
-func (r *VirtualMachineStateResource) getVm(ctx context.Context, url string) (*clientmodels.VirtualMachine, error) {
-	tflog.Info(ctx, "Getting VM from "+url)
-	var result clientmodels.VirtualMachine
-
-	caller := helpers.NewHttpCaller(ctx)
-	_, err := caller.GetDataFromClient(url, nil, helpers.HttpCallerAuth{}, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.ID == "" {
-		return nil, fmt.Errorf("VM not found")
-	}
-
-	return &result, nil
-}
-
-func (r *VirtualMachineStateResource) setState(ctx context.Context, data VirtualMachineStateResourceModel) (*clientmodels.VirtualMachine, error) {
-	if data.Host.IsNull() {
-		return nil, fmt.Errorf("Host is required")
-	}
-
-	if data.ID.IsNull() {
-		return nil, fmt.Errorf("Id is required")
-	}
-
-	baseUrl := fmt.Sprintf("%s/%s/%s/%s",
-		helpers.CleanUrlSuffixAndPrefix(data.Host.ValueString()),
-		helpers.CleanUrlSuffixAndPrefix(constants.API_PREFIX),
-		"machines", data.ID.ValueString())
-
-	vm, err := r.getVm(ctx, baseUrl)
-	if err != nil {
-		return nil, err
-	}
-	if vm == nil {
-		return nil, fmt.Errorf("machine not found")
-	}
-
-	var queryBaseUrl string
-	switch strings.ToLower(data.Operation.ValueString()) {
-	case "start":
-		if vm.State != "stopped" {
-			return nil, fmt.Errorf("machine is not stopped")
-		}
-		queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "start")
-	case "stop":
-		if vm.State != "running" {
-			return nil, fmt.Errorf("machine is not running")
-		}
-		queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "stop")
-	case "suspend":
-		if vm.State != "running" {
-			return nil, fmt.Errorf("machine is not running")
-		}
-		queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "suspend")
-	case "pause":
-		if vm.State != "running" {
-			return nil, fmt.Errorf("machine is not running")
-		}
-		queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "pause")
-	case "resume":
-		if vm.State != "suspended" && vm.State != "paused" {
-			return nil, fmt.Errorf("machine is not suspended or paused")
-		}
-		queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "resume")
-	case "restart":
-		if vm.State == "running" {
-			queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "restart")
-		} else {
-			queryBaseUrl = fmt.Sprintf("%s/%s", baseUrl, "start")
-		}
-	default:
-		return nil, fmt.Errorf("invalid desired_state")
-	}
-
-	var result clientmodels.VirtualMachineStateResponse
-	caller := helpers.NewHttpCaller(ctx)
-	_, err = caller.GetDataFromClient(queryBaseUrl, nil, helpers.HttpCallerAuth{}, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.Status != "Success" {
-		return nil, fmt.Errorf("error changing the machine state")
-	}
-
-	vm, err = r.getVm(ctx, baseUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	return vm, nil
+	provider *models.ParallelsProviderModel
 }
 
 func (r *VirtualMachineStateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -130,7 +35,20 @@ func (r *VirtualMachineStateResource) Schema(ctx context.Context, req resource.S
 }
 
 func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	return
+	if req.ProviderData == nil {
+		return
+	}
+
+	data, ok := req.ProviderData.(*models.ParallelsProviderModel)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected *models.ParallelsProviderModel, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.provider = data
 }
 
 func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -141,17 +59,40 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
+		return
+	}
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
 
-	vm, err := r.setState(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("error changing the machine state", err.Error())
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+	if vm == nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	result, diag := apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), r.GetOpState(data.Operation.ValueString()))
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+	if !result {
+		resp.Diagnostics.AddError("error changing the machine state", "Could not change the machine "+vm.Name+" state to +"+data.Operation.ValueString())
 		return
 	}
 
 	data.Operation = types.StringValue(data.Operation.ValueString())
 	data.CurrentState = types.StringValue(vm.State)
 
-	tflog.Trace(ctx, "virtual machine "+data.ID.ValueString()+" state changed to "+data.Operation.ValueString()+" on host "+data.Host.ValueString())
+	tflog.Trace(ctx, "virtual machine "+vm.Name+" state changed to "+data.Operation.ValueString())
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -166,20 +107,24 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 		return
 	}
 
-	baseUrl := fmt.Sprintf("%s/%s/%s/%s",
-		helpers.CleanUrlSuffixAndPrefix(data.Host.ValueString()),
-		helpers.CleanUrlSuffixAndPrefix(constants.API_PREFIX),
-		"machines", data.ID.ValueString())
-
-	vm, err := r.getVm(ctx, baseUrl)
-
-	if err != nil {
-		resp.Diagnostics.AddError("error getting machine", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
 	if vm == nil {
-		resp.Diagnostics.AddError("machine not found", "machine not found")
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -201,8 +146,8 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	if data.Host.IsNull() {
-		resp.Diagnostics.AddError("Host is required", "Host is required")
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
@@ -211,57 +156,58 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	baseUrl := fmt.Sprintf("%s/%s/%s/%s",
-		helpers.CleanUrlSuffixAndPrefix(data.Host.ValueString()),
-		helpers.CleanUrlSuffixAndPrefix(constants.API_PREFIX),
-		"machines", data.ID.ValueString())
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
 
-	vm, err := r.getVm(ctx, baseUrl)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting machine", err.Error())
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
 	if vm == nil {
-		resp.Diagnostics.AddError("machine not found", "machine not found")
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	var proposedState string
-	switch strings.ToLower(data.Operation.ValueString()) {
-	case "start":
-		proposedState = "running"
-	case "stop":
-		proposedState = "stopped"
-	case "suspend":
-		proposedState = "suspended"
-	case "pause":
-		proposedState = "paused"
-	case "resume":
-		proposedState = "running"
-	case "restart":
-		proposedState = "running"
-	default:
-		resp.Diagnostics.AddError("invalid desired_state", "invalid desired_state")
+	// var proposedState string
+	// switch strings.ToLower(data.Operation.ValueString()) {
+	// case "start":
+	// 	proposedState = "running"
+	// case "stop":
+	// 	proposedState = "stopped"
+	// case "suspend":
+	// 	proposedState = "suspended"
+	// case "pause":
+	// 	proposedState = "paused"
+	// case "resume":
+	// 	proposedState = "running"
+	// case "restart":
+	// 	proposedState = "running"
+	// default:
+	// 	resp.Diagnostics.AddError("invalid desired_state", "invalid desired_state")
+	// 	return
+	// }
+
+	result, diag := apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), r.GetOpState(data.Operation.ValueString()))
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+	if !result {
+		resp.Diagnostics.AddError("error changing the machine state", "Could not change the machine "+vm.Name+" state to +"+data.Operation.ValueString())
 		return
 	}
 
-	if vm.State != proposedState {
-		vm, err = r.setState(ctx, data)
-		if err != nil {
-			resp.Diagnostics.AddError("error changing the machine state", err.Error())
-			return
-		}
+	data.Operation = types.StringValue(data.Operation.ValueString())
+	data.CurrentState = types.StringValue(vm.State)
 
-		data.CurrentState = types.StringValue(vm.State)
-	}
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	return
 }
 
 func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -277,4 +223,23 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 
 func (r *VirtualMachineStateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *VirtualMachineStateResource) GetOpState(value string) apiclient.MachineStateOp {
+	switch strings.ToLower(value) {
+	case "start":
+		return apiclient.MachineStateOpStart
+	case "stop":
+		return apiclient.MachineStateOpStop
+	case "suspend":
+		return apiclient.MachineStateOpSuspend
+	case "pause":
+		return apiclient.MachineStateOpPause
+	case "resume":
+		return apiclient.MachineStateOpResume
+	case "restart":
+		return apiclient.MachineStateOpRestart
+	default:
+		return ""
+	}
 }

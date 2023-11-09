@@ -3,13 +3,8 @@ package virtualmachine
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"regexp"
-	"strings"
-	"terraform-provider-parallels/internal/clientmodels"
-	"terraform-provider-parallels/internal/constants"
-	"terraform-provider-parallels/internal/helpers"
-	"terraform-provider-parallels/internal/models"
+	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -25,8 +20,7 @@ func NewVirtualMachinesDataSource() datasource.DataSource {
 }
 
 type VirtualMachinesDataSource struct {
-	host   string
-	client *http.Client
+	provider *models.ParallelsProviderModel
 }
 
 func (d *VirtualMachinesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
@@ -34,18 +28,16 @@ func (d *VirtualMachinesDataSource) Configure(_ context.Context, req datasource.
 		return
 	}
 
-	config, ok := req.ProviderData.(*models.ParallelsProviderModel)
+	data, ok := req.ProviderData.(*models.ParallelsProviderModel)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *models.ParallelsProviderModel, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
-
 		return
 	}
 
-	d.host = config.License.String()
-	d.client = &http.Client{}
+	d.provider = data
 }
 
 func (d *VirtualMachinesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -57,30 +49,31 @@ func (d *VirtualMachinesDataSource) Schema(_ context.Context, req datasource.Sch
 }
 
 func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state virtualMachinesDataSourceModel
+	var data virtualMachinesDataSourceModel
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
-	if state.Host.IsUnknown() {
-		resp.Diagnostics.AddError("host is required", "host is required")
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	baseUrl := state.Host.ValueString()
-	if strings.HasSuffix(baseUrl, "/") {
-		baseUrl = baseUrl[:len(baseUrl)-1]
-	}
-	baseUrl = fmt.Sprintf("%s%s%s", baseUrl, constants.API_PREFIX, "/machines")
-
-	var jsonResponse []clientmodels.VirtualMachine
-
-	caller := helpers.NewHttpCaller(ctx)
-	_, err := caller.GetDataFromClient(baseUrl, nil, helpers.HttpCallerAuth{}, &jsonResponse)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting machines", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
-	for _, machine := range jsonResponse {
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       d.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vms, diag := apiclient.GetVms(ctx, hostConfig, data.Filter.FieldName.ValueString(), data.Filter.Value.ValueString())
+	if diag.HasError() {
+		diag.Append(diag...)
+		return
+	}
+
+	for _, machine := range vms {
 		stateMachine := virtualMachineModel{
 			HostIP:      types.StringValue("-"),
 			ID:          types.StringValue(machine.ID),
@@ -90,53 +83,15 @@ func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.Rea
 			State:       types.StringValue(machine.State),
 			Home:        types.StringValue(machine.Home),
 		}
-		if !state.Filter.Id.IsUnknown() || !state.Filter.Name.IsUnknown() || !state.Filter.State.IsUnknown() {
-			if !state.Filter.Id.IsNull() {
-				// Compile the regex pattern
-				regex, err := regexp.Compile(state.Filter.Id.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError("error compiling ID regex", err.Error())
-					return
-				}
-				if regex.MatchString(machine.ID) {
-					state.Machines = append(state.Machines, stateMachine)
-					continue
-				}
-			}
-			if !state.Filter.Name.IsNull() {
-				// Compile the regex pattern
-				regex, err := regexp.Compile(state.Filter.Name.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError("error compiling Name regex", err.Error())
-					return
-				}
-				if regex.MatchString(machine.Name) {
-					state.Machines = append(state.Machines, stateMachine)
-					continue
-				}
-			}
-			if !state.Filter.State.IsNull() {
-				// Compile the regex pattern
-				regex, err := regexp.Compile(state.Filter.State.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError("error compiling State regex", err.Error())
-					return
-				}
-				if regex.MatchString(machine.State) {
-					state.Machines = append(state.Machines, stateMachine)
-					continue
-				}
-			}
-		} else {
-			state.Machines = append(state.Machines, stateMachine)
-		}
+
+		data.Machines = append(data.Machines, stateMachine)
 	}
 
-	if state.Machines == nil {
-		state.Machines = make([]virtualMachineModel, 0)
+	if data.Machines == nil {
+		data.Machines = make([]virtualMachineModel, 0)
 	}
 
-	diags := resp.State.Set(ctx, &state)
+	diags := resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return

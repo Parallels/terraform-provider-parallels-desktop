@@ -1,6 +1,8 @@
 package virtualmachinestate
 
 import (
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -9,9 +11,10 @@ import (
 )
 
 var virtualMachineStateResourceSchema = schema.Schema{
-	// This description is used by the documentation generator and the language server.
-	MarkdownDescription: "Parallels Virtual Machine State Resource",
-
+	MarkdownDescription: "Parallels Virtual Machine State Resource\n Use this to set a virtual machine to a desired state.",
+	Blocks: map[string]schema.Block{
+		authenticator.SchemaName: authenticator.SchemaBlock,
+	},
 	Attributes: map[string]schema.Attribute{
 		"host": schema.StringAttribute{
 			MarkdownDescription: "Parallels server host",

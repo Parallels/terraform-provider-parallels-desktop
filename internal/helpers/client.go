@@ -11,7 +11,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"terraform-provider-parallels/internal/clientmodels"
+	"terraform-provider-parallels-desktop/internal/clientmodels"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -50,23 +50,23 @@ func NewHttpCaller(ctx context.Context) *HttpCaller {
 	}
 }
 
-func (c *HttpCaller) GetDataFromClient(url string, headers *map[string]string, auth HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+func (c *HttpCaller) GetDataFromClient(url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
 	return c.RequestDataToClient(HttpCallerVerbGet, url, headers, nil, auth, destination)
 }
 
-func (c *HttpCaller) PostDataToClient(url string, headers *map[string]string, data interface{}, auth HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+func (c *HttpCaller) PostDataToClient(url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
 	return c.RequestDataToClient(HttpCallerVerbPost, url, headers, data, auth, destination)
 }
 
-func (c *HttpCaller) PutDataToClient(url string, headers *map[string]string, data interface{}, auth HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+func (c *HttpCaller) PutDataToClient(url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
 	return c.RequestDataToClient(HttpCallerVerbPut, url, headers, data, auth, destination)
 }
 
-func (c *HttpCaller) DeleteDataFromClient(url string, headers *map[string]string, auth HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+func (c *HttpCaller) DeleteDataFromClient(url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
 	return c.RequestDataToClient(HttpCallerVerbDelete, url, headers, nil, auth, destination)
 }
 
-func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, headers *map[string]string, data interface{}, auth HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
 	tflog.Info(c.ctx, fmt.Sprintf("%v data from %s", verb, url))
 	var err error
 	clientResponse := HttpCallerResponse{
@@ -89,45 +89,48 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	var req *http.Request
 
 	if data != nil {
-		reqBody, err := json.Marshal(data)
+		reqBody, err := json.MarshalIndent(data, "", "  ")
+		tflog.Info(c.ctx, fmt.Sprintf("Request body: %s", reqBody))
 		if err != nil {
 			return &clientResponse, fmt.Errorf("error marshalling data, err: %v", err)
 		}
 		req, err = http.NewRequest(verb.String(), url, bytes.NewBuffer(reqBody))
+		if err != nil {
+			return &clientResponse, fmt.Errorf("error creating request, err: %v", err)
+		}
 	} else {
 		req, err = http.NewRequest(verb.String(), url, nil)
+		if err != nil {
+			return &clientResponse, fmt.Errorf("error creating request, err: %v", err)
+		}
 	}
 
-	if err != nil {
-		return &clientResponse, fmt.Errorf("error creating request, err: %v", err)
-	}
 	if req == nil {
 		return &clientResponse, fmt.Errorf("request is nil")
 	}
 
-	tflog.Info(c.ctx, fmt.Sprintf("Request: %v", req))
-
-	if auth.BearerToken != "" {
-		tflog.Info(c.ctx, fmt.Sprintf("Setting Authorization header to Bearer %s", auth.BearerToken))
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.BearerToken))
-	} else if auth.ApiKey != "" {
-		req.Header.Set("X-Api-Key", auth.ApiKey)
+	if auth != nil {
+		if auth.BearerToken != "" {
+			tflog.Info(c.ctx, fmt.Sprintf("Setting Authorization header to Bearer %s", auth.BearerToken))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.BearerToken))
+		} else if auth.ApiKey != "" {
+			req.Header.Set("X-Api-Key", auth.ApiKey)
+		}
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	if headers != nil && len(*headers) > 0 {
 		for k, v := range *headers {
-			req.Header.Set("X-Filter", fmt.Sprintf("%s=%s", k, v))
+			req.Header.Set(k, v)
 		}
 	}
 
 	response, err := client.Do(req)
-	clientResponse.StatusCode = response.StatusCode
-
 	if err != nil {
 		return &clientResponse, fmt.Errorf("error %s data on %s, err: %v", verb, url, err)
 	}
 
+	clientResponse.StatusCode = response.StatusCode
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var errMsg clientmodels.APIErrorResponse
 		body, bodyErr := io.ReadAll(response.Body)
@@ -136,8 +139,11 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 				clientResponse.ApiError = &errMsg
 			}
 		}
-
-		return &clientResponse, fmt.Errorf("error %s data from %s, status code: %d", verb, url, response.StatusCode)
+		if clientResponse.ApiError.Message != "" {
+			return &clientResponse, fmt.Errorf("error on %s data from %s, err: %v message: %v", verb, url, clientResponse.ApiError.Code, clientResponse.ApiError.Message)
+		} else {
+			return &clientResponse, fmt.Errorf("error on %s data from %s, status code: %d", verb, url, response.StatusCode)
+		}
 	}
 
 	if destination != nil {
@@ -170,10 +176,11 @@ func (c *HttpCaller) GetJwtToken(baseUrl, username, password string) (string, er
 		Email:    username,
 		Password: password,
 	}
+
 	tflog.Info(c.ctx, "Getting token from %s"+baseUrl+"/api/v1/auth/token with username"+username+" and password"+password+"")
 
 	var tokenResponse clientmodels.TokenLoginResponse
-	if _, err := c.PostDataToClient(baseUrl+"/api/v1/auth/token", nil, tokenRequest, HttpCallerAuth{}, &tokenResponse); err != nil {
+	if _, err := c.PostDataToClient(baseUrl+"/api/v1/auth/token", nil, tokenRequest, nil, &tokenResponse); err != nil {
 		return "", err
 	}
 	return tokenResponse.Token, nil
@@ -205,12 +212,7 @@ func (c *HttpCaller) GetFileFromUrl(fileUrl string, destinationPath string) erro
 }
 
 func CleanUrlSuffixAndPrefix(url string) string {
-	if strings.HasPrefix(url, "/") {
-		url = url[1:]
-	}
-	if strings.HasSuffix(url, "/") {
-		url = url[:len(url)-1]
-	}
-
+	url = strings.TrimPrefix(url, "/")
+	url = strings.TrimSuffix(url, "/")
 	return url
 }

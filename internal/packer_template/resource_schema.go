@@ -2,15 +2,15 @@ package packertemplate
 
 import (
 	"context"
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
+	"terraform-provider-parallels-desktop/internal/schemas/sharedfolder"
+	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
-	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func getSchema(ctx context.Context) schema.Schema {
@@ -18,36 +18,10 @@ func getSchema(ctx context.Context) schema.Schema {
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "Parallels Virtual Machine State Resource",
 		Blocks: map[string]schema.Block{
-			"authenticator": schema.SingleNestedBlock{
-				MarkdownDescription: "Authenticator",
-				Validators: []validator.Object{
-					objectvalidator.AtLeastOneOf(path.Expressions{
-						path.MatchRoot("username"),
-						path.MatchRoot("api_key"),
-					}...),
-				},
-				Attributes: map[string]schema.Attribute{
-					"username": schema.StringAttribute{
-						MarkdownDescription: "Username",
-						Optional:            true,
-					},
-					"password": schema.StringAttribute{
-						MarkdownDescription: "Password",
-						Optional:            true,
-						Sensitive:           true,
-						Validators: []validator.String{
-							stringvalidator.AlsoRequires(path.Expressions{
-								path.MatchRoot("username"),
-							}...),
-						},
-					},
-					"api_key": schema.StringAttribute{
-						MarkdownDescription: "API Key",
-						Optional:            true,
-						Sensitive:           true,
-					},
-				},
-			},
+			authenticator.SchemaName:       authenticator.SchemaBlock,
+			vmspecs.SchemaName:             vmspecs.SchemaBlock,
+			postprocessorscript.SchemaName: postprocessorscript.SchemaBlock,
+			sharedfolder.SchemaName:        sharedfolder.SchemaBlock,
 		},
 		Attributes: map[string]schema.Attribute{
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
@@ -59,6 +33,10 @@ func getSchema(ctx context.Context) schema.Schema {
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"force_changes": schema.BoolAttribute{
+				MarkdownDescription: "Force changes",
+				Optional:            true,
 			},
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine Id",
@@ -89,20 +67,6 @@ func getSchema(ctx context.Context) schema.Schema {
 			"run_after_create": schema.BoolAttribute{
 				MarkdownDescription: "Run after create",
 				Optional:            true,
-			},
-			"specs": schema.SingleNestedAttribute{
-				Optional: true,
-				Attributes: map[string]schema.Attribute{
-					"cpu_count": schema.StringAttribute{
-						Optional: true,
-					},
-					"memory_size": schema.StringAttribute{
-						Optional: true,
-					},
-					"disk_size": schema.StringAttribute{
-						Optional: true,
-					},
-				},
 			},
 		},
 	}

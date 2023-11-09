@@ -3,11 +3,12 @@ package authorization
 import (
 	"context"
 	"fmt"
-	"terraform-provider-parallels/internal/clientmodels"
-	"terraform-provider-parallels/internal/constants"
-	"terraform-provider-parallels/internal/helpers"
-	"terraform-provider-parallels/internal/models"
+	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
+	"terraform-provider-parallels-desktop/internal/helpers"
+	"terraform-provider-parallels-desktop/internal/models"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -50,14 +51,13 @@ func (r *AuthorizationResource) Configure(ctx context.Context, req resource.Conf
 	}
 
 	r.provider = data
-	return
 }
 
 func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	tflog.Info(ctx, "Creating Authorization Resource")
 	var data AuthorizationResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -67,26 +67,89 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	client := helpers.NewHttpCaller(ctx)
-	password := r.provider.License.ValueString()
-	token, err := client.GetJwtToken(data.Host.ValueString(), constants.RootUser, password)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting token", err.Error())
-		return
-	}
-	auth := helpers.HttpCallerAuth{
-		BearerToken: token,
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
 	}
 
 	usersNotCreated := make([]string, 0)
 	apiKeysNotCreated := make([]string, 0)
+	claimsNotCreated := make([]string, 0)
+	rolesNotCreated := make([]string, 0)
+
+	if len(data.Claims) > 0 {
+		for i, claim := range data.Claims {
+			existingClaim, diag := apiclient.GetClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				claimsNotCreated = append(claimsNotCreated, claim.Name.ValueString())
+				continue
+			}
+			if existingClaim != nil {
+				tflog.Info(ctx, fmt.Sprintf("Claim %s found during create", claim.Name.ValueString()))
+				claimsNotCreated = append(claimsNotCreated, claim.Name.ValueString())
+				continue
+			}
+
+			response, diag := apiclient.CreateClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				claimsNotCreated = append(claimsNotCreated, claim.Name.ValueString())
+				continue
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("Claim %s created", claim.Name.ValueString()))
+				data.Claims[i].Id = types.StringValue(response.ID)
+			}
+		}
+	}
+
+	if len(data.Roles) > 0 {
+		for i, role := range data.Roles {
+			existingRole, diag := apiclient.GetRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				rolesNotCreated = append(rolesNotCreated, role.Name.ValueString())
+				continue
+			}
+			if existingRole != nil {
+				tflog.Info(ctx, fmt.Sprintf("Role %s found during create", role.Name.ValueString()))
+				rolesNotCreated = append(rolesNotCreated, role.Name.ValueString())
+				continue
+			}
+
+			response, diag := apiclient.CreateRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				rolesNotCreated = append(rolesNotCreated, role.Name.ValueString())
+				continue
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("Role %s created", role.Name.ValueString()))
+				data.Roles[i].Id = types.StringValue(response.ID)
+			}
+		}
+	}
 
 	if len(data.ApiKeys) > 0 {
-		// Checking for duplicates
 		for i, apiKey := range data.ApiKeys {
-			if response, err := r.createApiKey(ctx, data.Host.ValueString(), auth, apiKey.Name.ValueString(), apiKey.Key.ValueString(), apiKey.Secret.ValueString()); err != nil {
-				resp.Diagnostics.AddError("error creating api key", err.Error())
-				apiKeysNotCreated = append(apiKeysNotCreated, apiKey.Name.ValueString())
+			existingApiKey, diag := apiclient.GetApiKey(ctx, hostConfig, apiKey.Key.ValueString())
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			if existingApiKey != nil {
+				tflog.Info(ctx, fmt.Sprintf("API Key %s found during create", apiKey.Name.ValueString()))
+				resp.Diagnostics.AddError("api key already exists", fmt.Sprintf("api key %s already exists", apiKey.Name.ValueString()))
+				return
+			}
+
+			request := apimodels.ApiKeyRequest{
+				Name:   apiKey.Name.ValueString(),
+				Key:    apiKey.Key.ValueString(),
+				Secret: apiKey.Secret.ValueString(),
+			}
+
+			response, diag := apiclient.CreateApiKey(ctx, hostConfig, request)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
 			} else {
 				data.ApiKeys[i].Id = types.StringValue(response.ID)
 				data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
@@ -97,37 +160,56 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 	if len(data.Users) > 0 {
 		// Checking for duplicates
 		for i, user := range data.Users {
-			userModel := clientmodels.CreateUserRequest{
+			existingUser, diag := apiclient.GetUser(ctx, hostConfig, user.Username.ValueString())
+			if diag.HasError() {
+				usersNotCreated = append(usersNotCreated, user.Username.ValueString())
+				continue
+			}
+			if existingUser != nil {
+				tflog.Info(ctx, fmt.Sprintf("User %s found during create", user.Username.ValueString()))
+				resp.Diagnostics.AddError("user already exists", fmt.Sprintf("user %s already exists", user.Username.ValueString()))
+			}
+
+			userModel := apimodels.UserRequest{
 				Name:     user.Name.ValueString(),
 				Email:    user.Email.ValueString(),
 				Username: user.Username.ValueString(),
 				Password: user.Password.ValueString(),
 			}
-			if response, err := r.createUser(ctx, data.Host.ValueString(), auth, userModel); err != nil {
-				resp.Diagnostics.AddError("error creating user", err.Error())
-				usersNotCreated = append(usersNotCreated, user.Name.ValueString())
+
+			response, diag := apiclient.CreateUser(ctx, hostConfig, userModel)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
 			} else {
 				data.Users[i].Id = types.StringValue(response.ID)
 			}
+
 			for e, role := range user.Roles {
-				if roleResponse, err := r.addRoleToUser(ctx, data.Host.ValueString(), auth, data.Users[i].Id.ValueString(), role.Name.ValueString()); err != nil {
-					resp.Diagnostics.AddError("error adding roles to user", err.Error())
-					usersNotCreated = append(usersNotCreated, user.Name.ValueString())
-					client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+data.Users[i].Id.ValueString(), nil, auth, nil)
-					break
-				} else {
-					data.Users[i].Roles[e].Id = types.StringValue(roleResponse.ID)
+				roleResponse, diag := apiclient.AddRoleToUser(ctx, hostConfig, data.Users[i].Id.ValueString(), role.Name.ValueString())
+				if diag.HasError() {
+					resp.Diagnostics.AddError("role not found", fmt.Sprintf("role %s not found", role.Name))
+					return
 				}
+				if roleResponse == nil {
+					resp.Diagnostics.AddError("role not found", fmt.Sprintf("role %s not found", role.Name))
+					return
+				}
+
+				data.Users[i].Roles[e].Id = types.StringValue(roleResponse.ID)
 			}
+
 			for e, claim := range user.Claims {
-				if claimResponse, err := r.addClaimToUser(ctx, data.Host.ValueString(), auth, data.Users[i].Id.ValueString(), claim.Name.ValueString()); err != nil {
-					resp.Diagnostics.AddError("error adding claims to user", err.Error())
-					usersNotCreated = append(usersNotCreated, user.Name.ValueString())
-					client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+data.Users[i].Id.ValueString(), nil, auth, nil)
-					break
-				} else {
-					data.Users[i].Claims[e].Id = types.StringValue(claimResponse.ID)
+				claimResponse, diag := apiclient.AddClaimToUser(ctx, hostConfig, data.Users[i].Id.ValueString(), claim.Name.ValueString())
+				if diag.HasError() {
+					resp.Diagnostics.AddError("claim not found", fmt.Sprintf("role %s not found", claim.Name))
+					return
 				}
+				if claimResponse == nil {
+					resp.Diagnostics.AddError("claim not found", fmt.Sprintf("role %s not found", claim.Name))
+					return
+				}
+				data.Users[i].Claims[e].Id = types.StringValue(claimResponse.ID)
 			}
 		}
 	}
@@ -142,6 +224,7 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 						break
 					}
 				}
+				resp.Diagnostics.AddError("user not created", fmt.Sprintf("user %s not created", user))
 			}
 		}
 		if len(apiKeysNotCreated) > 0 {
@@ -152,6 +235,30 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 						break
 					}
 				}
+				resp.Diagnostics.AddError("api key not created", fmt.Sprintf("api key %s not created", apiKey))
+			}
+		}
+		if len(claimsNotCreated) > 0 {
+			for _, claim := range claimsNotCreated {
+				for i, claimBlock := range data.Claims {
+					if claimBlock.Name.ValueString() == claim {
+						data.Claims = append(data.Claims[:i], data.Claims[i+1:]...)
+						break
+					}
+				}
+				resp.Diagnostics.AddError("claim not created", fmt.Sprintf("claim %s not created", claim))
+			}
+		}
+
+		if len(rolesNotCreated) > 0 {
+			for _, role := range rolesNotCreated {
+				for i, roleBlock := range data.Claims {
+					if roleBlock.Name.ValueString() == role {
+						data.Roles = append(data.Roles[:i], data.Roles[i+1:]...)
+						break
+					}
+				}
+				resp.Diagnostics.AddError("role not created", fmt.Sprintf("role %s not created", role))
 			}
 		}
 	}
@@ -171,49 +278,68 @@ func (r *AuthorizationResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	client := helpers.NewHttpCaller(ctx)
-	password := r.provider.License.ValueString()
-	token, err := client.GetJwtToken(data.Host.ValueString(), constants.RootUser, password)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting token", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
-	auth := helpers.HttpCallerAuth{
-		BearerToken: token,
-	}
 
-	if len(data.ApiKeys) > 0 {
-		// Checking for duplicates
-		for i, apiKey := range data.ApiKeys {
-			var currentApiKey clientmodels.APIKeyResponse
-			client.GetDataFromClient(data.Host.ValueString()+"/api/v1/auth/api_keys/"+apiKey.Key.ValueString(), nil, auth, &currentApiKey)
-			if currentApiKey.ID != "" {
-				tflog.Info(ctx, fmt.Sprintf("API Key %s found during read", apiKey.Id.ValueString()))
-				data.ApiKeys[i].Id = types.StringValue(currentApiKey.ID)
-				data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
-			} else {
-				tflog.Info(ctx, fmt.Sprintf("API Key %s not found during read", apiKey.Id.ValueString()))
-				resp.Diagnostics.AddError("API Key not found", fmt.Sprintf("API Key %s not found during read", apiKey.Id.ValueString()))
-				return
-			}
-		}
-	}
+	// hostConfig := apiclient.HostConfig{
+	// 	Host:          data.Host.ValueString(),
+	// 	License:       r.provider.License.ValueString(),
+	// 	Authorization: data.Authenticator,
+	// }
 
-	if len(data.ApiKeys) > 0 {
-		// Checking for duplicates
-		for i, user := range data.Users {
-			var currentUser clientmodels.APIKeyResponse
-			client.GetDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+user.Id.ValueString(), nil, auth, &currentUser)
-			if currentUser.ID != "" {
-				tflog.Info(ctx, fmt.Sprintf("User %s found during read", user.Id.ValueString()))
-				data.Users[i].Id = types.StringValue(currentUser.ID)
-			} else {
-				tflog.Info(ctx, fmt.Sprintf("user %s not found during read", user.Id.ValueString()))
-				resp.Diagnostics.AddError("user not found", fmt.Sprintf("user %s not found during read", user.Id.ValueString()))
-				return
-			}
-		}
-	}
+	// for i, apiKey := range data.ApiKeys {
+	// 	existingApiKey, diag := apiclient.GetApiKey(ctx, hostConfig, apiKey.Key.ValueString())
+	// 	if diag.HasError() {
+	// 		resp.Diagnostics.Append(diag...)
+	// 		return
+	// 	}
+	// 	if existingApiKey == nil {
+	// 		resp.Diagnostics.AddError("api key not found", fmt.Sprintf("api key %s not found", apiKey.Name.ValueString()))
+	// 		return
+	// 	}
+	// 	data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
+	// }
+
+	// for _, user := range data.Users {
+	// 	currentUser, diag := apiclient.GetUser(ctx, hostConfig, user.Username.ValueString())
+	// 	if diag.HasError() {
+	// 		resp.Diagnostics.Append(diag...)
+	// 		return
+	// 	}
+	// 	if currentUser == nil {
+	// 		resp.Diagnostics.AddError("user not found", fmt.Sprintf("user %s not found", user.Name.ValueString()))
+	// 		return
+	// 	}
+	// }
+
+	// for _, role := range data.Roles {
+	// 	currentRole, diag := apiclient.GetRole(ctx, hostConfig, role.Name.ValueString())
+	// 	if diag.HasError() {
+	// 		resp.Diagnostics.Append(diag...)
+	// 		return
+	// 	}
+	// 	if currentRole == nil {
+	// 		resp.Diagnostics.AddError("role not found", fmt.Sprintf("role %s not found", role.Name.ValueString()))
+	// 		return
+	// 	}
+
+	// }
+
+	// if len(data.Claims) > 0 {
+	// 	for _, claim := range data.Claims {
+	// 		currentClaim, diag := apiclient.GetClaim(ctx, hostConfig, claim.Name.ValueString())
+	// 		if diag.HasError() {
+	// 			resp.Diagnostics.Append(diag...)
+	// 			return
+	// 		}
+	// 		if currentClaim == nil {
+	// 			resp.Diagnostics.AddError("claim not found", fmt.Sprintf("claim %s not found", claim.Name.ValueString()))
+	// 			return
+	// 		}
+	// 	}
+	// }
 
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 
@@ -223,167 +349,116 @@ func (r *AuthorizationResource) Read(ctx context.Context, req resource.ReadReque
 }
 
 func (r *AuthorizationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	tflog.Info(ctx, "Updating Authorization Resource")
 	var data AuthorizationResourceModel
+	var currentData AuthorizationResourceModel
 
+	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
+		return
+	}
+
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	diag := updateClaims(ctx, hostConfig, &data, &currentData)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+	}
+
+	diag = updateRoles(ctx, hostConfig, &data, &currentData)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+	}
+
+	diag = updateApiKeys(ctx, hostConfig, &data, &currentData)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+	}
+
+	diag = updateUsers(ctx, hostConfig, &data, &currentData)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client := helpers.NewHttpCaller(ctx)
-	password := r.provider.License.ValueString()
-	token, err := client.GetJwtToken(data.Host.ValueString(), constants.RootUser, password)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting token", err.Error())
-		return
-	}
-	auth := helpers.HttpCallerAuth{
-		BearerToken: token,
-	}
-
-	if len(data.ApiKeys) > 0 {
-		// Checking for duplicates
-		for i, apiKey := range data.ApiKeys {
-			if apiKey.Id.IsNull() || apiKey.Id.IsUnknown() || apiKey.Id.ValueString() == "" {
-				tflog.Info(ctx, fmt.Sprintf("New API Key %s found, creating", apiKey.Id.ValueString()))
-				if response, err := r.createApiKey(ctx, data.Host.ValueString(), auth, apiKey.Name.ValueString(), apiKey.Key.ValueString(), apiKey.Secret.ValueString()); err != nil {
-					resp.Diagnostics.AddError("error creating api key", err.Error())
-				} else {
-					data.ApiKeys[i].Id = types.StringValue(response.ID)
-					data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
-				}
-			} else {
-				existingApiKey := clientmodels.APIKeyResponse{}
-				client.GetDataFromClient(data.Host.ValueString()+"/api/v1/auth/api_keys/"+apiKey.Id.ValueString(), nil, auth, &existingApiKey)
-				if existingApiKey.ID != "" {
-					tflog.Info(ctx, fmt.Sprintf("API Key %s found, deleting", apiKey.Id.ValueString()))
-					if _, err := client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/api_keys/"+apiKey.Id.ValueString(), nil, auth, nil); err != nil {
-						resp.Diagnostics.AddError("error deleting api key", err.Error())
-					}
-				} else {
-					tflog.Info(ctx, fmt.Sprintf("API Key %s not found, creating", apiKey.Id.ValueString()))
-				}
-
-				if response, err := r.createApiKey(ctx, data.Host.ValueString(), auth, apiKey.Name.ValueString(), apiKey.Key.ValueString(), apiKey.Secret.ValueString()); err != nil {
-					resp.Diagnostics.AddError("error creating api key", err.Error())
-				} else {
-					data.ApiKeys[i].Id = types.StringValue(response.ID)
-					data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
-				}
-			}
-		}
-	}
-
-	if len(data.Users) > 0 {
-		// Checking for duplicates
-		for i, user := range data.Users {
-			userModel := clientmodels.CreateUserRequest{
-				Name:     user.Name.ValueString(),
-				Email:    user.Email.ValueString(),
-				Username: user.Username.ValueString(),
-				Password: user.Password.ValueString(),
-			}
-			if user.Id.IsNull() || user.Id.IsUnknown() || user.Id.ValueString() == "" {
-				tflog.Info(ctx, fmt.Sprintf("New user %s found, creating", user.Id.ValueString()))
-
-				if response, err := r.createUser(ctx, data.Host.ValueString(), auth, userModel); err != nil {
-					resp.Diagnostics.AddError("error creating user", err.Error())
-				} else {
-					data.Users[i].Id = types.StringValue(response.ID)
-				}
-			} else {
-				existingUser := clientmodels.CreateUserResponse{}
-				client.GetDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+user.Id.ValueString(), nil, auth, &existingUser)
-				if existingUser.ID != "" {
-					tflog.Info(ctx, fmt.Sprintf("User %s found, deleting", user.Id.ValueString()))
-					if _, err := client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+user.Id.ValueString(), nil, auth, nil); err != nil {
-						resp.Diagnostics.AddError("error deleting user", err.Error())
-					}
-				} else {
-					tflog.Info(ctx, fmt.Sprintf("user %s not found, creating", user.Id.ValueString()))
-				}
-
-				if response, err := r.createUser(ctx, data.Host.ValueString(), auth, userModel); err != nil {
-					resp.Diagnostics.AddError("error creating user", err.Error())
-				} else {
-					data.Users[i].Id = types.StringValue(response.ID)
-				}
-			}
-		}
-	}
-
-	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	return
 }
 
 func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	tflog.Info(ctx, "Deleting Authorization Resource")
 	var data AuthorizationResourceModel
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client := helpers.NewHttpCaller(ctx)
-	password := r.provider.License.ValueString()
-	token, err := client.GetJwtToken(data.Host.ValueString(), constants.RootUser, password)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting token", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
-	auth := helpers.HttpCallerAuth{
-		BearerToken: token,
+
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
 	}
 
-	if len(data.ApiKeys) > 0 {
-		// Checking for duplicates
-		deletedKeys := make([]string, 0)
-		for _, apiKey := range data.ApiKeys {
-			if apiKey.Id.ValueString() != "" {
-				if _, err := client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/api_keys/"+apiKey.Id.ValueString(), nil, auth, nil); err != nil {
-					resp.Diagnostics.AddError("error deleting api key", err.Error())
-
-				}
-				deletedKeys = append(deletedKeys, apiKey.Id.ValueString())
+	for _, apiKey := range data.ApiKeys {
+		diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Id.ValueString())
+		if diag.HasError() {
+			tflog.Info(ctx, fmt.Sprintf("Error deleting api key %s", apiKey.Key.ValueString()))
+			diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Key.ValueString())
+			if diag.HasError() {
+				tflog.Info(ctx, fmt.Sprintf("Error1 deleting api key %s", apiKey.Key.ValueString()))
+				resp.Diagnostics.Append(diag...)
+				return
 			}
-		}
-		for len(deletedKeys) > 0 {
-			for i, apiKey := range data.ApiKeys {
-				if apiKey.Id.ValueString() == deletedKeys[0] {
-					data.ApiKeys = append(data.ApiKeys[:i], data.ApiKeys[i+1:]...)
-					deletedKeys = deletedKeys[1:]
-					break
-				}
-			}
+			tflog.Info(ctx, fmt.Sprintf("Api Key %s deleted", apiKey.Key.ValueString()))
 		}
 	}
 
-	if len(data.Users) > 0 {
-		// Checking for duplicates
-		deletedUsers := make([]string, 0)
-		for _, apiKey := range data.Users {
-			if apiKey.Id.ValueString() != "" {
-				if _, err := client.DeleteDataFromClient(data.Host.ValueString()+"/api/v1/auth/users/"+apiKey.Id.ValueString(), nil, auth, nil); err != nil {
-					resp.Diagnostics.AddError("error deleting user", err.Error())
-				}
-				deletedUsers = append(deletedUsers, apiKey.Id.ValueString())
+	for _, user := range data.Users {
+		diag := apiclient.DeleteUser(ctx, hostConfig, user.Id.ValueString())
+		if diag.HasError() {
+			diag := apiclient.DeleteUser(ctx, hostConfig, user.Username.ValueString())
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
 			}
 		}
-		for len(deletedUsers) > 0 {
-			for i, apiKey := range data.Users {
-				if apiKey.Id.ValueString() == deletedUsers[0] {
-					data.Users = append(data.Users[:i], data.Users[i+1:]...)
-					deletedUsers = deletedUsers[1:]
-					break
-				}
+	}
+
+	for _, role := range data.Roles {
+		diag := apiclient.DeleteRole(ctx, hostConfig, role.Id.ValueString())
+		if diag.HasError() {
+			diag := apiclient.DeleteRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+			}
+		}
+	}
+
+	for _, claim := range data.Claims {
+		diag := apiclient.DeleteClaim(ctx, hostConfig, claim.Id.ValueString())
+		if diag.HasError() {
+			diag := apiclient.DeleteClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
 			}
 		}
 	}
@@ -391,6 +466,7 @@ func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteR
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
+		tflog.Info(ctx, "Error deleting Authorization Resource")
 		return
 	}
 }
@@ -399,83 +475,399 @@ func (r *AuthorizationResource) ImportState(ctx context.Context, req resource.Im
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *AuthorizationResource) createApiKey(ctx context.Context, host string, auth helpers.HttpCallerAuth, name, key, secret string) (*clientmodels.APIKeyResponse, error) {
-	client := helpers.NewHttpCaller(ctx)
-	tflog.Info(ctx, "Creating API Key "+name)
-	request := clientmodels.APIKeyRequest{
-		Name:   name,
-		Key:    key,
-		Secret: secret,
-	}
-	var response clientmodels.APIKeyResponse
+func updateClaims(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
 
-	if resp, err := client.PostDataToClient(host+"/api/v1/auth/api_keys", nil, request, auth, &response); err != nil {
-		if resp != nil && resp.ApiError != nil {
-			return nil, fmt.Errorf("error creating api key %s, %v", name, resp.ApiError.Message)
-		} else {
-			return nil, err
+	// If there is not any claim we delete all of them
+	if len(data.Claims) == 0 {
+		for _, claim := range currentData.Claims {
+			diag := apiclient.DeleteClaim(ctx, hostConfig, claim.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
 		}
 	}
 
-	return &response, nil
+	// Let's see if we need to delete any claim
+	for _, claim := range currentData.Claims {
+		found := false
+		for _, newClaim := range data.Claims {
+			if claim.Name.ValueString() == newClaim.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			diag := apiclient.DeleteClaim(ctx, hostConfig, claim.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
+		}
+	}
+
+	// If there is not any claim we delete all of them
+	for i, claim := range data.Claims {
+		found := false
+		for _, currentClaim := range currentData.Claims {
+			if claim.Name.ValueString() == currentClaim.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tflog.Info(ctx, fmt.Sprintf("Creating claim %s", claim.Name.ValueString()))
+			response, diag := apiclient.CreateClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				tflog.Info(ctx, fmt.Sprintf("Error creating claim %s", claim.Name.ValueString()))
+
+				diagnostics.Append(diag...)
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("Claim %s created", claim.Name.ValueString()))
+				data.Claims[i].Id = types.StringValue(response.ID)
+			}
+		} else {
+			tflog.Info(ctx, fmt.Sprintf("Claim %s already exists", claim.Name.ValueString()))
+			claimExists, diag := apiclient.GetClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				break
+			}
+			if claimExists == nil {
+				diagnostics.AddError("claim not found", fmt.Sprintf("claim %s not found", claim.Name))
+				break
+			}
+
+			tflog.Info(ctx, fmt.Sprintf("Claim %s found, updating id %v", claimExists.Name, claimExists.ID))
+			data.Claims[i].Id = types.StringValue(claimExists.ID)
+		}
+	}
+
+	return diagnostics
 }
 
-func (r *AuthorizationResource) createUser(ctx context.Context, host string, auth helpers.HttpCallerAuth, user clientmodels.CreateUserRequest) (*clientmodels.APIKeyResponse, error) {
-	client := helpers.NewHttpCaller(ctx)
-	tflog.Info(ctx, "Creating User "+user.Name)
-	var response clientmodels.APIKeyResponse
-
-	if resp, err := client.PostDataToClient(host+"/api/v1/auth/users", nil, user, auth, &response); err != nil {
-		if resp != nil && resp.ApiError != nil {
-			return nil, fmt.Errorf("error creating user %s, %v", user.Name, resp.ApiError.Message)
-		} else {
-			return nil, err
+func updateRoles(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
+	// If there is not any claim we delete all of them
+	if len(data.Roles) == 0 {
+		for _, role := range currentData.Roles {
+			diag := apiclient.DeleteRole(ctx, hostConfig, role.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
 		}
 	}
 
-	return &response, nil
+	// Let's see if we need to delete any role
+	for _, role := range currentData.Roles {
+		found := false
+		for _, newRole := range data.Roles {
+			if role.Name.ValueString() == newRole.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			diag := apiclient.DeleteRole(ctx, hostConfig, role.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
+		}
+	}
+
+	// If there is not any claim we delete all of them
+	for i, role := range data.Roles {
+		found := false
+		for _, currentRole := range currentData.Roles {
+			if role.Name.ValueString() == currentRole.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tflog.Info(ctx, fmt.Sprintf("Creating Role %s", role.Name.ValueString()))
+			response, diag := apiclient.CreateRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				tflog.Info(ctx, fmt.Sprintf("Error creating role %s", role.Name.ValueString()))
+				diagnostics.Append(diag...)
+				data.Roles[i].Id = types.StringValue("-")
+				continue
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("Role %s created", role.Name.ValueString()))
+				data.Roles[i].Id = types.StringValue(response.ID)
+			}
+		} else {
+			tflog.Info(ctx, fmt.Sprintf("Role %s already exists", role.Name.ValueString()))
+			roleExists, diag := apiclient.GetRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				data.Roles[i].Id = types.StringValue("-")
+				continue
+			}
+			if roleExists == nil {
+				diagnostics.AddError("role not found", fmt.Sprintf("role %s not found", role.Name))
+				data.Roles[i].Id = types.StringValue("-")
+				continue
+			}
+			tflog.Info(ctx, fmt.Sprintf("Role %s found, updating id %v", roleExists.Name, roleExists.ID))
+			data.Roles[i].Id = types.StringValue(roleExists.ID)
+		}
+	}
+
+	return diagnostics
 }
 
-func (r *AuthorizationResource) addRoleToUser(ctx context.Context, host string, auth helpers.HttpCallerAuth, userId string, role string) (*clientmodels.ClaimRole, error) {
-	if role == "" {
-		return nil, nil
-	}
+func updateApiKeys(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
 
-	client := helpers.NewHttpCaller(ctx)
-	tflog.Info(ctx, "Adding Role "+role+" to User "+userId)
-	requestBody := clientmodels.UserClaimRoleCreate{
-		Name: role,
-	}
-	var respClaim clientmodels.ClaimRole
-	if resp, err := client.PostDataToClient(fmt.Sprintf("%s/api/v1/auth/users/%s/claims", host, userId), nil, &requestBody, auth, &respClaim); err != nil {
-		if resp != nil && resp.ApiError != nil {
-			return nil, fmt.Errorf("error creating user %s role %s, %v", userId, role, resp.ApiError.Message)
-		} else {
-			return nil, err
+	// If there is not any api key we delete all of them
+	if len(data.ApiKeys) == 0 {
+		for _, apiKey := range currentData.ApiKeys {
+			diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
 		}
 	}
 
-	return &respClaim, nil
+	// Let's see if we need to delete any api key
+	for _, apiKey := range currentData.ApiKeys {
+		found := false
+		for _, newApiKey := range data.ApiKeys {
+			if apiKey.Name.ValueString() == newApiKey.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
+		}
+	}
+
+	// If there is not any api key we delete all of them
+	for i, apiKey := range data.ApiKeys {
+		found := false
+		for _, currentApiKey := range currentData.ApiKeys {
+			if apiKey.Name.ValueString() == currentApiKey.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tflog.Info(ctx, fmt.Sprintf("Creating api key %s", apiKey.Name.ValueString()))
+			request := apimodels.ApiKeyRequest{
+				Name:   apiKey.Name.ValueString(),
+				Key:    apiKey.Key.ValueString(),
+				Secret: apiKey.Secret.ValueString(),
+			}
+
+			response, diag := apiclient.CreateApiKey(ctx, hostConfig, request)
+			if diag.HasError() {
+				tflog.Info(ctx, fmt.Sprintf("Error creating api key %s", apiKey.Name.ValueString()))
+				diagnostics.Append(diag...)
+				continue
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("Api Key %s created", apiKey.Name.ValueString()))
+				data.ApiKeys[i].Id = types.StringValue(response.ID)
+				data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
+
+			}
+		} else {
+			tflog.Info(ctx, fmt.Sprintf("Api Key %s already exists", apiKey.Name.ValueString()))
+			apiKeyExists, diag := apiclient.GetApiKey(ctx, hostConfig, apiKey.Name.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				break
+			}
+			if apiKeyExists == nil {
+				diagnostics.AddError("api key not found", fmt.Sprintf("api key %s not found", apiKey.Name))
+				break
+			}
+			tflog.Info(ctx, fmt.Sprintf("ApiKey %s found, updating id %v", apiKeyExists.Name, apiKeyExists.ID))
+			data.ApiKeys[i].Id = types.StringValue(apiKeyExists.ID)
+			data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", data.ApiKeys[i].Key.ValueString(), data.ApiKeys[i].Secret.ValueString())))
+		}
+	}
+
+	return diagnostics
 }
 
-func (r *AuthorizationResource) addClaimToUser(ctx context.Context, host string, auth helpers.HttpCallerAuth, userId string, claim string) (*clientmodels.ClaimRole, error) {
-	if claim == "" {
-		return nil, nil
-	}
+func updateUsers(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
 
-	client := helpers.NewHttpCaller(ctx)
-	tflog.Info(ctx, "Adding Claim "+claim+" to User "+userId)
-	requestBody := clientmodels.UserClaimRoleCreate{
-		Name: claim,
-	}
-	var respClaim clientmodels.ClaimRole
-	if resp, err := client.PostDataToClient(fmt.Sprintf("%s/api/v1/auth/users/%s/claims", host, userId), nil, &requestBody, auth, &respClaim); err != nil {
-		if resp != nil && resp.ApiError != nil {
-			return nil, fmt.Errorf("error creating user %s claim %s, %v", userId, claim, resp.ApiError.Message)
-		} else {
-			return nil, err
+	// If there is not any users, we delete all of them
+	if len(data.Users) == 0 {
+		for _, user := range currentData.Users {
+			diag := apiclient.DeleteUser(ctx, hostConfig, user.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
 		}
 	}
 
-	return &respClaim, nil
+	// Let's see if we need to delete any user, the rule is simple if we have it in the current
+	// state and not in the new state we delete it
+	for _, user := range currentData.Users {
+		found := false
+		for _, newUser := range data.Users {
+			if user.Name.ValueString() == newUser.Name.ValueString() {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			diag := apiclient.DeleteUser(ctx, hostConfig, user.Id.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				return diagnostics
+			}
+		}
+	}
+
+	// We will now check if there is any user like that in the current state,
+	// if not we will create it otherwise we will just update the id
+	for i, user := range data.Users {
+		found := false
+		for _, currentUser := range currentData.Users {
+			if user.Username.ValueString() == currentUser.Username.ValueString() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tflog.Info(ctx, fmt.Sprintf("Creating User %s", user.Username.ValueString()))
+			request := apimodels.UserRequest{
+				Name:     user.Name.ValueString(),
+				Email:    user.Email.ValueString(),
+				Username: user.Username.ValueString(),
+				Password: user.Password.ValueString(),
+			}
+
+			response, diag := apiclient.CreateUser(ctx, hostConfig, request)
+			if diag.HasError() {
+				tflog.Info(ctx, fmt.Sprintf("Error creating user %s", user.Username.ValueString()))
+				diagnostics.Append(diag...)
+				continue
+			} else {
+				tflog.Info(ctx, fmt.Sprintf("User %s created", user.Username.ValueString()))
+				updateUserClaims(ctx, hostConfig, data, currentData, i)
+				updateUserRoles(ctx, hostConfig, data, currentData, i)
+				data.Users[i].Id = types.StringValue(response.ID)
+			}
+		} else {
+			tflog.Info(ctx, fmt.Sprintf("User %s already exists", user.Username.ValueString()))
+			userExists, diag := apiclient.GetUser(ctx, hostConfig, user.Username.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				continue
+			}
+			if userExists == nil {
+				diagnostics.AddError("user not found", fmt.Sprintf("user %s not found", user.Username))
+				continue
+			}
+			tflog.Info(ctx, fmt.Sprintf("User %s found, updating id %v", userExists.Name, userExists.ID))
+			updateUserClaims(ctx, hostConfig, data, currentData, i)
+			updateUserRoles(ctx, hostConfig, data, currentData, i)
+			data.Users[i].Id = types.StringValue(userExists.ID)
+		}
+	}
+
+	return diagnostics
+}
+
+func updateUserRoles(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel, userIndex int) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
+
+	// We will now check if there is any user like that in the current state,
+	// if not we will create it otherwise we will just update the id
+	for i, role := range data.Users[userIndex].Roles {
+		found := false
+		for _, currentUserRole := range currentData.Users[userIndex].Roles {
+			if role == currentUserRole {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			roleResponse, diag := apiclient.AddRoleToUser(ctx, hostConfig, data.Users[userIndex].Id.ValueString(), role.Name.ValueString())
+			if diag.HasError() {
+				diag := apiclient.DeleteUser(ctx, hostConfig, data.Users[i].Id.ValueString())
+				if diag.HasError() {
+					diagnostics.Append(diag...)
+					continue
+				}
+			} else {
+				data.Users[userIndex].Roles[i].Id = types.StringValue(roleResponse.ID)
+			}
+		} else {
+			roleExists, diag := apiclient.GetRole(ctx, hostConfig, role.Name.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				continue
+			}
+			if roleExists == nil {
+				diagnostics.AddError("role not found", fmt.Sprintf("role %s not found", role.Name))
+				continue
+			}
+			data.Users[userIndex].Roles[i].Id = types.StringValue(roleExists.ID)
+		}
+	}
+
+	return diagnostics
+}
+
+func updateUserClaims(ctx context.Context, hostConfig apiclient.HostConfig, data, currentData *AuthorizationResourceModel, userIndex int) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
+
+	// We will now check if there is any user like that in the current state,
+	// if not we will create it otherwise we will just update the id
+	for i, claim := range data.Users[userIndex].Claims {
+		found := false
+		for _, currentUserClaim := range currentData.Users[userIndex].Claims {
+			if claim == currentUserClaim {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			claimResponse, diag := apiclient.AddClaimToUser(ctx, hostConfig, data.Users[userIndex].Id.ValueString(), claim.Name.ValueString())
+			if diag.HasError() {
+				diag := apiclient.DeleteUser(ctx, hostConfig, data.Users[i].Id.ValueString())
+				if diag.HasError() {
+					diagnostics.Append(diag...)
+					continue
+				}
+			} else {
+				data.Users[userIndex].Claims[i].Id = types.StringValue(claimResponse.ID)
+			}
+		} else {
+			claimExists, diag := apiclient.GetClaim(ctx, hostConfig, claim.Name.ValueString())
+			if diag.HasError() {
+				diagnostics.Append(diag...)
+				continue
+			}
+			if claimExists == nil {
+				diagnostics.AddError("claim not found", fmt.Sprintf("claim %s not found", claim.Name))
+				continue
+			}
+			data.Users[userIndex].Claims[i].Id = types.StringValue(claimExists.ID)
+		}
+	}
+
+	return diagnostics
 }

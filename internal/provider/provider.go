@@ -2,12 +2,14 @@ package provider
 
 import (
 	"context"
-	"terraform-provider-parallels/internal/authorization"
-	deploy "terraform-provider-parallels/internal/depoy"
-	"terraform-provider-parallels/internal/models"
-	packertemplate "terraform-provider-parallels/internal/packer_template"
-	"terraform-provider-parallels/internal/virtualmachine"
-	"terraform-provider-parallels/internal/virtualmachinestate"
+	"terraform-provider-parallels-desktop/internal/authorization"
+	deploy "terraform-provider-parallels-desktop/internal/deploy"
+	"terraform-provider-parallels-desktop/internal/models"
+	packertemplate "terraform-provider-parallels-desktop/internal/packer_template"
+	"terraform-provider-parallels-desktop/internal/remoteimage"
+	"terraform-provider-parallels-desktop/internal/vagrantbox"
+	"terraform-provider-parallels-desktop/internal/virtualmachine"
+	"terraform-provider-parallels-desktop/internal/virtualmachinestate"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -40,7 +42,7 @@ type ParallelsProvider struct {
 
 // Metadata returns the provider type name.
 func (p *ParallelsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "parallels"
+	resp.TypeName = "parallels-desktop"
 	resp.Version = p.version
 }
 
@@ -63,7 +65,6 @@ func (p *ParallelsProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 	}
 }
 
-// Configure prepares a HashiCups API client for data sources and resources.
 func (p *ParallelsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config models.ParallelsProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -98,6 +99,7 @@ func (p *ParallelsProvider) Configure(ctx context.Context, req provider.Configur
 func (p *ParallelsProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		virtualmachine.NewVirtualMachinesDataSource,
+		packertemplate.NewPackerTemplateDataSource,
 	}
 }
 
@@ -108,5 +110,7 @@ func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resou
 		deploy.NewVirtualMachineStateResource,
 		packertemplate.NewPackerTemplateVirtualMachineResource,
 		authorization.NewAuthorizationResource,
+		vagrantbox.NewVagrantBoxResource,
+		remoteimage.NewRemoteVmResource,
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
+	"terraform-provider-parallels-desktop/internal/constants"
 )
 
 func Sha256Hash(input string) string {
@@ -21,4 +23,20 @@ func Base64Decode(input string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+func GetHostUrl(host string) string {
+	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+		host = "http://" + host
+	}
+
+	host = strings.TrimSuffix(host, "/")
+
+	if !strings.Contains(host, ":") {
+		host = host + ":" + constants.DefaultApiPort
+	}
+	return host
+}
+
+func GetHostApiBaseUrl(host string) string {
+	return strings.TrimSuffix(GetHostUrl(host)+constants.API_PREFIX, "/")
 }

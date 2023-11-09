@@ -1,12 +1,19 @@
 package authorization
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // VirtualMachineStateResourceModel describes the resource data model.
 type AuthorizationResourceModel struct {
-	Host    types.String                          `tfsdk:"host"`
-	ApiKeys []AuthorizationApiKeysResourceModel   `tfsdk:"api_key"`
-	Users   []AuthorizationUserBlockResourceModel `tfsdk:"user"`
+	Authenticator *authenticator.Authentication             `tfsdk:"authenticator"`
+	Host          types.String                              `tfsdk:"host"`
+	ApiKeys       []*AuthorizationApiKeysResourceModel      `tfsdk:"api_key"`
+	Users         []*AuthorizationUserBlockResourceModel    `tfsdk:"user"`
+	Claims        []AuthorizationUserGranularResourceModel  `tfsdk:"claim"`
+	Roles         []*AuthorizationUserGranularResourceModel `tfsdk:"role"`
 }
 
 type AuthorizationApiKeysResourceModel struct {

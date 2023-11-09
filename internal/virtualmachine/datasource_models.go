@@ -1,19 +1,18 @@
 package virtualmachine
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+	"terraform-provider-parallels-desktop/internal/schemas/filter"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // virtualMachinesDataSourceModel represents the data source schema for the virtual_machines data source.
 type virtualMachinesDataSourceModel struct {
-	Host     types.String               `tfsdk:"host"`
-	Filter   virtualMachinesFilterModel `tfsdk:"filter"`
-	Machines []virtualMachineModel      `tfsdk:"machines"`
-}
-
-// virtualMachinesFilterModel represents a filter for virtual machines.
-type virtualMachinesFilterModel struct {
-	State types.String `tfsdk:"state"`
-	Id    types.String `tfsdk:"id"`
-	Name  types.String `tfsdk:"name"`
+	Authenticator *authenticator.Authentication `tfsdk:"authenticator"`
+	Host          types.String                  `tfsdk:"host"`
+	Filter        *filter.Filter                `tfsdk:"filter"`
+	Machines      []virtualMachineModel         `tfsdk:"machines"`
 }
 
 // virtualMachineModel represents a virtual machine model with its properties.

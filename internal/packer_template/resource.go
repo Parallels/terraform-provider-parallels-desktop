@@ -3,12 +3,11 @@ package packertemplate
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
-	"terraform-provider-parallels/internal/clientmodels"
-	"terraform-provider-parallels/internal/constants"
-	"terraform-provider-parallels/internal/helpers"
-	"terraform-provider-parallels/internal/models"
+	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
+	"terraform-provider-parallels-desktop/internal/common.go"
+	"terraform-provider-parallels-desktop/internal/models"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -28,25 +27,6 @@ func NewPackerTemplateVirtualMachineResource() resource.Resource {
 // PackerTemplateVirtualMachineResource defines the resource implementation.
 type PackerTemplateVirtualMachineResource struct {
 	provider *models.ParallelsProviderModel
-}
-
-func (r *PackerTemplateVirtualMachineResource) getVms(ctx context.Context, host string, auth helpers.HttpCallerAuth, filterField, filterValue string) ([]clientmodels.VirtualMachine, error) {
-	result := make([]clientmodels.VirtualMachine, 0)
-	client := helpers.NewHttpCaller(ctx)
-
-	filter := map[string]string{
-		filterField: filterValue,
-	}
-	tflog.Info(ctx, "Getting filtered machines using filter "+filterField+" with value "+filterValue+" from "+host+"/api/v1/machines")
-	url := fmt.Sprintf("%s/api/v1/machines", host)
-	_, err := client.GetDataFromClient(url, &filter, auth, &result)
-
-	if err != nil {
-		return nil, err
-	}
-	tflog.Info(ctx, "Got "+strconv.Itoa(len(result))+" machines")
-
-	return result, nil
 }
 
 func (r *PackerTemplateVirtualMachineResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -72,23 +52,19 @@ func (r *PackerTemplateVirtualMachineResource) Configure(ctx context.Context, re
 	}
 
 	r.provider = data
-	return
 }
 
 func (r *PackerTemplateVirtualMachineResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data PackerVirtualMachineResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
-
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -101,73 +77,106 @@ func (r *PackerTemplateVirtualMachineResource) Create(ctx context.Context, req r
 		return
 	}
 
-	auth, err := r.GetAuthenticator(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting authenticator", err.Error())
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
+	if diag.HasError() {
+		diag.Append(diag...)
 		return
 	}
 
-	vm, err := r.getVms(ctx, data.Host.ValueString(), *auth, "Name", data.Name.String())
 	if len(vm) > 0 {
-		resp.Diagnostics.AddError("vm already exists", "vm already exists")
+		resp.Diagnostics.AddError("Vm already exists", "The vm "+data.Name.ValueString()+" already exists")
 		return
 	}
 
-	client := helpers.NewHttpCaller(ctx)
-	machineRequest := clientmodels.NewPackerTemplateVmRequest{
-		Name:     data.Name.ValueString(),
-		Template: data.Template.ValueString(),
+	createVmRequest := apimodels.CreateVmRequest{
+		Name: data.Name.ValueString(),
+		PackerTemplate: &apimodels.CreatePackerVmRequest{
+			Template: data.Template.ValueString(),
+		},
 	}
+
 	if data.Owner.ValueString() != "" {
-		machineRequest.Owner = data.Owner.ValueString()
+		createVmRequest.Owner = data.Owner.ValueString()
 	}
+
 	if data.Specs != nil {
 		if data.Specs.CpuCount.ValueString() != "" {
-			machineRequest.Specs["cpu"] = data.Specs.CpuCount.ValueString()
+			createVmRequest.PackerTemplate.Cpu = data.Specs.CpuCount.ValueString()
 		}
 		if data.Specs.MemorySize.ValueString() != "" {
-			machineRequest.Specs["memory"] = data.Specs.MemorySize.ValueString()
+			createVmRequest.PackerTemplate.Memory = data.Specs.MemorySize.ValueString()
 		}
 		if data.Specs.DiskSize.ValueString() != "" {
-			machineRequest.Specs["disk"] = data.Specs.DiskSize.ValueString()
+			createVmRequest.PackerTemplate.Disk = data.Specs.DiskSize.ValueString()
 		}
 	}
 
-	var machineResponse clientmodels.NewPackerTemplateVmResponse
-	if clientResponse, err := client.PostDataToClient(fmt.Sprintf("%s/api/v1/machines", data.Host.ValueString()), nil, machineRequest, *auth, &machineResponse); err != nil {
-		if clientResponse != nil && clientResponse.ApiError != nil {
-			tflog.Error(ctx, fmt.Sprintf("Error creating vm: %v, api message: %s", err, clientResponse.ApiError.Message))
-		}
-		resp.Diagnostics.AddError("error creating vm", err.Error())
-
+	response, diag := apiclient.CreateVm(ctx, hostConfig, createVmRequest)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
 
-	data.ID = types.StringValue(machineResponse.ID)
+	data.ID = types.StringValue(response.ID)
 	tflog.Info(ctx, "Created vm with id "+data.ID.ValueString())
 
-	createdVM, err := r.getVms(ctx, data.Host.ValueString(), *auth, "ID", machineResponse.ID)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting vm", err.Error())
+	createdVM, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
 
-	if len(createdVM) == 0 {
+	if createdVM == nil {
 		resp.Diagnostics.AddError("vm was not found", "vm was not found")
 		return
 	}
 
-	data.OsType = types.StringValue(createdVM[0].OS)
-	var startResponse map[string]string
+	// Processing shared folders
+	if diag := common.CreateSharedFolders(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
+		return
+	}
+
+	// Running the post processor scripts
+	if diag := common.RunPostProcessorScript(ctx, hostConfig, createdVM, data.PostProcessorScripts); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
+		return
+	}
+
+	data.OsType = types.StringValue(createdVM.OS)
 	if data.RunAfterCreate.ValueBool() {
-		if _, err := client.GetDataFromClient(fmt.Sprintf("%s/api/v1/machines/%s/start", data.Host.ValueString(), data.ID.ValueString()), nil, *auth, &startResponse); err != nil {
-			resp.Diagnostics.AddError("error starting vm", err.Error())
-			return
+		isRunning, diag := apiclient.SetMachineState(ctx, hostConfig, createdVM.ID, apiclient.MachineStateOpStart)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+		}
+		if !isRunning {
+			resp.Diagnostics.AddError("error starting vm", "error starting vm")
 		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
 		return
 	}
 }
@@ -182,9 +191,7 @@ func (r *PackerTemplateVirtualMachineResource) Read(ctx context.Context, req res
 	}
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
-
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -192,23 +199,28 @@ func (r *PackerTemplateVirtualMachineResource) Read(ctx context.Context, req res
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	auth, err := r.GetAuthenticator(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting authenticator", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
-	vms, err := r.getVms(ctx, data.Host.ValueString(), *auth, "ID", data.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("error getting vm", err.Error())
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
-	if len(vms) == 0 {
+	if vm == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	data.Name = types.StringValue(vms[0].Name)
+	data.Name = types.StringValue(vm.Name)
 
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 
@@ -219,22 +231,17 @@ func (r *PackerTemplateVirtualMachineResource) Read(ctx context.Context, req res
 
 func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data PackerVirtualMachineResourceModel
+	var currentData PackerVirtualMachineResourceModel
 
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
-
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -242,70 +249,131 @@ func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req r
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	auth, err := r.GetAuthenticator(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting authenticator", err.Error())
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
-	vms, err := r.getVms(ctx, data.Host.ValueString(), *auth, "ID", data.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("error getting vm", err.Error())
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
-	if len(vms) == 0 {
-		resp.Diagnostics.AddError("vm was not found", "vm was not found")
+	if vm == nil {
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	// Checking if the name is the same
-	if data.Name.ValueString() != vms[0].Name {
-		tflog.Info(ctx, "Updating vm name from "+vms[0].Name+" to "+data.Name.ValueString())
+	changes := apimodels.NewVmConfigRequest(vm.User)
+
+	// Name is not the same, we will need to rename the machine
+	if vm.Name != data.Name.ValueString() {
+		op := apimodels.NewVmConfigRequestOperation(changes)
+		op.WithGroup("machine")
+		op.WithOperation("rename")
+		op.WithValue(data.Name.ValueString())
+		op.Append()
 	}
-	// Checking if the specs are the same
+
 	if data.Specs != nil {
-		client := helpers.NewHttpCaller(ctx)
-		cpuCount := data.Specs.CpuCount.ValueString()
-		memorySize := data.Specs.MemorySize.ValueString()
+		if data.Specs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
+			updateValue := data.Specs.CpuCount.ValueString()
+			if updateValue == "" {
+				updateValue = "2"
+			}
 
-		hasChanges := false
-		changes := clientmodels.VirtualMachineSetRequest{
-			Owner:      vms[0].User,
-			Operations: make([]*clientmodels.VirtualMachineSetOperation, 0),
+			op := apimodels.NewVmConfigRequestOperation(changes)
+			op.WithGroup("cpu")
+			op.WithOperation("set")
+			op.WithValue(updateValue)
+			if currentData.Specs == nil || currentData.Specs.CpuCount.ValueString() != updateValue {
+				op.Append()
+			}
 		}
 
-		vmCpuCount := strconv.Itoa(int(vms[0].Hardware.CPU.Cpus))
-		if cpuCount != "" && vmCpuCount != cpuCount {
-			tflog.Info(ctx, "Updating vm cpu count from "+vmCpuCount+" to "+cpuCount)
-			hasChanges = true
-			changes.Operations = append(changes.Operations, &clientmodels.VirtualMachineSetOperation{
-				Group:     "cpu",
-				Operation: "set",
-				Value:     cpuCount,
-			})
-		}
-		vmMemorySize := strings.ReplaceAll(vms[0].Hardware.Memory.Size, "Mb", "")
-		if memorySize != "" && vmMemorySize != memorySize {
-			tflog.Info(ctx, "Updating vm memory size from "+vmMemorySize+" to "+memorySize)
-			hasChanges = true
-			changes.Operations = append(changes.Operations, &clientmodels.VirtualMachineSetOperation{
-				Group:     "memory",
-				Operation: "set",
-				Value:     memorySize,
-			})
-		}
+		if data.Specs.MemorySize.ValueString() != "" && data.Specs.MemorySize.ValueString() != strings.ReplaceAll(vm.Hardware.Memory.Size, "Mb", "") {
+			updateValue := data.Specs.CpuCount.ValueString()
+			if updateValue == "" {
+				updateValue = "2048"
+			}
 
-		if hasChanges {
-			var clientResponse clientmodels.VirtualMachineSetResponse
-			if _, err := client.PostDataToClient(fmt.Sprintf("%s/api/v1/machines/%s/set", data.Host.ValueString(), data.ID.ValueString()), nil, changes, *auth, &clientResponse); err != nil {
-				resp.Diagnostics.AddError("error updating vm", err.Error())
-				return
+			op := apimodels.NewVmConfigRequestOperation(changes)
+			op.WithGroup("memory")
+			op.WithOperation("set")
+			op.WithValue(updateValue)
+			if currentData.Specs == nil || currentData.Specs.MemorySize.ValueString() != updateValue {
+				op.Append()
 			}
 		}
 	}
 
-	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
+	needsRestart := false
+	if changes.HasChanges() {
+		if vm.State != "stopped" {
+			if data.ForceChanges.ValueBool() {
+				result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStop)
+				if stateDiag.HasError() {
+					resp.Diagnostics.Append(stateDiag...)
+					return
+				}
+				if !result {
+					resp.Diagnostics.AddError("error stopping vm", "error stopping vm")
+					return
+				}
+				needsRestart = true
+			} else {
+				resp.Diagnostics.AddError("vm must be stopped before updating", "Virtual Machine "+vm.Name+" must be stopped before updating, currently "+vm.State)
+				return
+			}
+		}
 
+		tflog.Info(ctx, "Updating vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString()+" with changes: "+changes.String())
+
+		if _, diag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, changes); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		if needsRestart {
+			result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStart)
+			if stateDiag.HasError() {
+				resp.Diagnostics.Append(stateDiag...)
+				return
+			}
+			if !result {
+				resp.Diagnostics.AddError("error starting vm", "error starting vm")
+				return
+			}
+
+			// Sleep for a minute
+			time.Sleep(time.Minute)
+		}
+	}
+
+	// Processing shared folders
+	if diag := common.UpdateSharedFolders(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+
+	// Running post processor changes
+	if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+
+	data.ID = types.StringValue(vm.ID)
+	data.OsType = types.StringValue(vm.OS)
+
+	tflog.Info(ctx, "Updated vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString())
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -322,9 +390,7 @@ func (r *PackerTemplateVirtualMachineResource) Delete(ctx context.Context, req r
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
-
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -332,32 +398,44 @@ func (r *PackerTemplateVirtualMachineResource) Delete(ctx context.Context, req r
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	auth, err := r.GetAuthenticator(ctx, data)
-	if err != nil {
-		resp.Diagnostics.AddError("error getting authenticator", err.Error())
-		return
-	}
-	client := helpers.NewHttpCaller(ctx)
-
-	vms, err := r.getVms(ctx, data.Host.ValueString(), *auth, "ID", data.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("error getting vm", err.Error())
-		return
-	}
-	if len(vms) == 0 {
-		resp.Diagnostics.AddError("vm was not found", "vm was not found")
+	if data.Host.ValueString() == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
-	if vms[0].State != "stopped" {
-		if _, err := client.GetDataFromClient(fmt.Sprintf("%s/api/v1/machines/%s/stop", data.Host.ValueString(), data.ID.ValueString()), nil, *auth, nil); err != nil {
-			resp.Diagnostics.AddError("error stopping vm", err.Error())
+	hostConfig := apiclient.HostConfig{
+		Host:          data.Host.ValueString(),
+		License:       r.provider.License.ValueString(),
+		Authorization: data.Authenticator,
+	}
+
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+
+	// Nothing to do, machine does not exist
+	if vm == nil {
+		resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
+		return
+	}
+
+	if vm.State != "stopped" {
+		result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStop)
+		if stateDiag.HasError() {
+			resp.Diagnostics.Append(stateDiag...)
+			return
+		}
+		if !result {
+			resp.Diagnostics.AddError("error stopping vm", "error stopping vm")
 			return
 		}
 	}
 
-	if _, err := client.DeleteDataFromClient(fmt.Sprintf("%s/api/v1/machines/%s", data.Host.ValueString(), data.ID.ValueString()), nil, *auth, nil); err != nil {
-		resp.Diagnostics.AddError("error deleting vm", err.Error())
+	deleteDiag := apiclient.DeleteVm(ctx, hostConfig, vm.ID)
+	if deleteDiag.HasError() {
+		resp.Diagnostics.Append(deleteDiag...)
 		return
 	}
 
@@ -370,39 +448,4 @@ func (r *PackerTemplateVirtualMachineResource) Delete(ctx context.Context, req r
 
 func (r *PackerTemplateVirtualMachineResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func (r *PackerTemplateVirtualMachineResource) GetAuthenticator(ctx context.Context, state PackerVirtualMachineResourceModel) (*helpers.HttpCallerAuth, error) {
-	client := helpers.NewHttpCaller(ctx)
-	var auth helpers.HttpCallerAuth
-	if state.Authenticator == nil {
-		tflog.Info(ctx, "Authenticator is nil, using root access")
-		password := r.provider.License.ValueString()
-		token, err := client.GetJwtToken(state.Host.ValueString(), constants.RootUser, password)
-		if err != nil {
-			return nil, err
-		}
-
-		auth = helpers.HttpCallerAuth{
-			BearerToken: token,
-		}
-		return &auth, nil
-	} else {
-		if state.Authenticator.Username.ValueString() != "" {
-			password := state.Authenticator.Password.ValueString()
-			token, err := client.GetJwtToken(state.Host.ValueString(), state.Authenticator.Username.ValueString(), password)
-			if err != nil {
-				return nil, err
-			}
-			auth = helpers.HttpCallerAuth{
-				BearerToken: token,
-			}
-		} else {
-			auth = helpers.HttpCallerAuth{
-				ApiKey: state.Authenticator.ApiKey.ValueString(),
-			}
-		}
-		return &auth, nil
-
-	}
 }

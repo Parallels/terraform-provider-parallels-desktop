@@ -8,9 +8,12 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func getSchema(ctx context.Context) schema.Schema {
@@ -49,9 +52,22 @@ func getSchema(ctx context.Context) schema.Schema {
 			},
 			"box_name": schema.StringAttribute{
 				MarkdownDescription: "Vagrant box name",
-				Required:            true,
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
+				},
+			},
+			"vagrant_file_path": schema.StringAttribute{
+				MarkdownDescription: "Vagrant file path",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
 				},
 			},
 			"box_version": schema.StringAttribute{

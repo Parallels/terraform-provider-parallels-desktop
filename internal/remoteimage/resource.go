@@ -3,10 +3,12 @@ package remoteimage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common.go"
+	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/models"
 	"time"
 
@@ -85,6 +87,34 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		Authorization: data.Authenticator,
 	}
 
+	if data.Specs != nil {
+		// checking if we have enough resources for this change
+		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		updateValueInt, err := strconv.Atoi(data.Specs.CpuCount.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("error converting cpu count", err.Error())
+			return
+		}
+		if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
+			resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
+			return
+		}
+		updateMemoryValueInt, err := strconv.Atoi(data.Specs.MemorySize.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("error converting memory size", err.Error())
+			return
+		}
+		if hardwareInfo.TotalAvailable.MemorySize-float64(updateMemoryValueInt) <= 0 {
+			resp.Diagnostics.AddError("not enough memory", "not enough memory")
+			return
+		}
+	}
+
 	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
 	if diag.HasError() {
 		diag.Append(diag...)
@@ -95,12 +125,21 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.AddError("Vm already exists", "The vm "+data.Name.ValueString()+" already exists")
 		return
 	}
+	version := "latest"
+	if data.Version.ValueString() != "" {
+		version = data.Version.ValueString()
+	}
 
 	machineRequest := apimodels.PullCatalogRequest{
 		MachineName: data.Name.ValueString(),
-		ID:          data.CatalogId.ValueString(),
+		CatalogId:   data.CatalogId.ValueString(),
+		Version:     version,
 		Connection:  data.Connection.ValueString(),
 		Path:        data.Path.ValueString(),
+	}
+
+	if data.RunAfterCreate.ValueBool() {
+		machineRequest.StartAfterPull = true
 	}
 
 	if data.Owner.ValueString() != "" {
@@ -296,16 +335,46 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	if data.Specs != nil {
+		// checking if we have enough resources for this change
+		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		if vm.State == "running" {
+			// Because this is an update we need to take into account the already existing cpu and add it to the total available
+			// if the vm is running, otherwise we already added that value to the reserved resources
+			hardwareInfo.TotalAvailable.LogicalCpuCount = hardwareInfo.TotalAvailable.LogicalCpuCount + vm.Hardware.CPU.Cpus
+			currentMemoryUsage, err := helpers.GetSizeByteFromString(vm.Hardware.Memory.Size)
+			if err != nil {
+				resp.Diagnostics.AddError("error getting memory size", err.Error())
+				return
+			}
+			hardwareInfo.TotalAvailable.MemorySize = hardwareInfo.TotalAvailable.MemorySize + helpers.ConvertByteToMegabyte(currentMemoryUsage)
+		}
+
 		if data.Specs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
 			updateValue := data.Specs.CpuCount.ValueString()
 			if updateValue == "" {
 				updateValue = "2"
 			}
 
+			updateValueInt, err := strconv.Atoi(updateValue)
+			if err != nil {
+				resp.Diagnostics.AddError("error converting cpu count", err.Error())
+				return
+			}
+
+			if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
+				resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
+				return
+			}
+
 			op := apimodels.NewVmConfigRequestOperation(changes)
 			op.WithGroup("cpu")
 			op.WithOperation("set")
-			op.WithValue(data.Specs.CpuCount.ValueString())
+			op.WithValue(updateValue)
 			if currentData.Specs == nil || currentData.Specs.CpuCount.ValueString() != updateValue {
 				op.Append()
 			}
@@ -317,10 +386,21 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 				updateValue = "2048"
 			}
 
+			updateValueInt, err := strconv.Atoi(updateValue)
+			if err != nil {
+				resp.Diagnostics.AddError("error converting memory size", err.Error())
+				return
+			}
+
+			if hardwareInfo.TotalAvailable.MemorySize-float64(updateValueInt) <= 0 {
+				resp.Diagnostics.AddError("not enough memory", "not enough memory")
+				return
+			}
+
 			op := apimodels.NewVmConfigRequestOperation(changes)
 			op.WithGroup("memory")
 			op.WithOperation("set")
-			op.WithValue(data.Specs.MemorySize.ValueString())
+			op.WithValue(updateValue)
 			if currentData.Specs == nil || currentData.Specs.MemorySize.ValueString() != updateValue {
 				op.Append()
 			}
@@ -370,7 +450,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	// Processing shared folders
-	if diag := common.CreateSharedFolders(ctx, hostConfig, vm, data.SharedFolder); diag.HasError() {
+	if diag := common.UpdateSharedFolders(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}

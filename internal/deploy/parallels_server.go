@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
@@ -263,10 +264,15 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	tflog.Info(c.ctx, "PD Api Latest version: "+releaseDetails.TagName)
 
 	tflog.Info(c.ctx, "Getting the url for the correct asset to download")
+
 	// Getting the right asset
 	var assetUrl string
+	os := runtime.GOOS
+	arch := runtime.GOARCH
+	assetSuffix := fmt.Sprintf("%s-%s", os, arch)
+
 	for _, asset := range releaseDetails.Assets {
-		if strings.Contains(asset.Name, "darwin-amd64") {
+		if strings.Contains(asset.Name, assetSuffix) {
 			assetUrl = asset.BrowserDownloadURL
 			break
 		}

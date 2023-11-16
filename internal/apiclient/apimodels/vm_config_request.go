@@ -1,6 +1,6 @@
 package apimodels
 
-import "github.com/goccy/go-json"
+import "encoding/json"
 
 type VmConfigRequest struct {
 	Owner      string                      `json:"owner"`

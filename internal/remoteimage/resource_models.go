@@ -16,6 +16,7 @@ type RemoteVmResourceModel struct {
 	Host                 types.String                               `tfsdk:"host"`
 	ID                   types.String                               `tfsdk:"id"`
 	CatalogId            types.String                               `tfsdk:"catalog_id"`
+	Version              types.String                               `tfsdk:"version"`
 	Name                 types.String                               `tfsdk:"name"`
 	Owner                types.String                               `tfsdk:"owner"`
 	Connection           types.String                               `tfsdk:"host_connection"`

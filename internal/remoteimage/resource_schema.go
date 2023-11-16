@@ -47,6 +47,10 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Virtual Machine Id",
 				Required:            true,
 			},
+			"version": schema.StringAttribute{
+				MarkdownDescription: "Virtual Machine version",
+				Optional:            true,
+			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine name",
 				Required:            true,

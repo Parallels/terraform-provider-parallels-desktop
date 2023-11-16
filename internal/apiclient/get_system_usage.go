@@ -11,28 +11,29 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func PullCatalog(ctx context.Context, config HostConfig, request apimodels.PullCatalogRequest) (*apimodels.PullCatalogResponse, diag.Diagnostics) {
-	diagnostic := diag.Diagnostics{}
-	var response apimodels.PullCatalogResponse
+func GetSystemUsage(ctx context.Context, config HostConfig) (*apimodels.SystemUsageResponse, diag.Diagnostics) {
+	diagnostics := diag.Diagnostics{}
+	var response apimodels.SystemUsageResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/catalog/pull", helpers.GetHostApiBaseUrl(urlHost))
+
+	url := fmt.Sprintf("%s/config/hardware", helpers.GetHostApiBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {
-		diagnostic.AddError("There was an error getting the authenticator", err.Error())
-		return nil, diagnostic
+		diagnostics.AddError("There was an error getting the authenticator", err.Error())
+		return nil, diagnostics
 	}
 
 	client := helpers.NewHttpCaller(ctx)
-	if clientResponse, err := client.PutDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}
-		diagnostic.AddError("There was an error pulling the catalog "+request.CatalogId, err.Error())
-		return nil, diagnostic
+		diagnostics.AddError("There was an error getting the vms", err.Error())
+		return nil, diagnostics
 	}
 
-	tflog.Info(ctx, "Pull catalog "+response.ID)
+	tflog.Info(ctx, "Got hardware info ")
 
-	return &response, diagnostic
+	return &response, diagnostics
 }

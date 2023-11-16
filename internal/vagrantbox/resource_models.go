@@ -18,6 +18,7 @@ type VagrantBoxResourceModel struct {
 	OsType                types.String                               `tfsdk:"os_type"`
 	BoxName               types.String                               `tfsdk:"box_name"`
 	BoxVersion            types.String                               `tfsdk:"box_version"`
+	VagrantFilePath       types.String                               `tfsdk:"vagrant_file_path"`
 	CustomVagrantConfig   types.String                               `tfsdk:"custom_vagrant_config"`
 	CustomParallelsConfig types.String                               `tfsdk:"custom_parallels_config"`
 	Name                  types.String                               `tfsdk:"name"`

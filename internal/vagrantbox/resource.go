@@ -3,10 +3,12 @@ package vagrantbox
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common.go"
+	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/models"
 	"time"
 
@@ -84,6 +86,34 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		Authorization: data.Authenticator,
 	}
 
+	if data.Specs != nil {
+		// checking if we have enough resources for this change
+		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		updateValueInt, err := strconv.Atoi(data.Specs.CpuCount.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("error converting cpu count", err.Error())
+			return
+		}
+		if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
+			resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
+			return
+		}
+		updateMemoryValueInt, err := strconv.Atoi(data.Specs.MemorySize.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("error converting memory size", err.Error())
+			return
+		}
+		if hardwareInfo.TotalAvailable.MemorySize-float64(updateMemoryValueInt) <= 0 {
+			resp.Diagnostics.AddError("not enough memory", "not enough memory")
+			return
+		}
+	}
+
 	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
 	if diag.HasError() {
 		diag.Append(diag...)
@@ -100,6 +130,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		VagrantBox: &apimodels.CreateVagrantVmRequest{
 			Box:                   data.BoxName.ValueString(),
 			Version:               data.BoxVersion.ValueString(),
+			VagrantFilePath:       data.VagrantFilePath.ValueString(),
 			CustomVagrantConfig:   data.CustomVagrantConfig.ValueString(),
 			CustomParallelsConfig: data.CustomParallelsConfig.ValueString(),
 		},
@@ -131,7 +162,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 
 	// Applying the Specs block
 	if data.Specs != nil {
-		diag = data.Specs.Apply(ctx, hostConfig, *createdVM)
+		data.Specs.Apply(ctx, hostConfig, *createdVM)
 		if diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			if data.ID.ValueString() != "" {
@@ -300,10 +331,40 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	if data.Specs != nil {
+		// checking if we have enough resources for this change
+		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		if vm.State == "running" {
+			// Because this is an update we need to take into account the already existing cpu and add it to the total available
+			// if the vm is running, otherwise we already added that value to the reserved resources
+			hardwareInfo.TotalAvailable.LogicalCpuCount = hardwareInfo.TotalAvailable.LogicalCpuCount + vm.Hardware.CPU.Cpus
+			currentMemoryUsage, err := helpers.GetSizeByteFromString(vm.Hardware.Memory.Size)
+			if err != nil {
+				resp.Diagnostics.AddError("error getting memory size", err.Error())
+				return
+			}
+			hardwareInfo.TotalAvailable.MemorySize = hardwareInfo.TotalAvailable.MemorySize + helpers.ConvertByteToMegabyte(currentMemoryUsage)
+		}
+
 		if data.Specs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
 			updateValue := data.Specs.CpuCount.ValueString()
 			if updateValue == "" {
 				updateValue = "2"
+			}
+
+			updateValueInt, err := strconv.Atoi(updateValue)
+			if err != nil {
+				resp.Diagnostics.AddError("error converting cpu count", err.Error())
+				return
+			}
+
+			if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
+				resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
+				return
 			}
 
 			op := apimodels.NewVmConfigRequestOperation(changes)
@@ -319,6 +380,17 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 			updateValue := data.Specs.CpuCount.ValueString()
 			if updateValue == "" {
 				updateValue = "2048"
+			}
+
+			updateValueInt, err := strconv.Atoi(updateValue)
+			if err != nil {
+				resp.Diagnostics.AddError("error converting memory size", err.Error())
+				return
+			}
+
+			if hardwareInfo.TotalAvailable.MemorySize-float64(updateValueInt) <= 0 {
+				resp.Diagnostics.AddError("not enough memory", "not enough memory")
+				return
 			}
 
 			op := apimodels.NewVmConfigRequestOperation(changes)

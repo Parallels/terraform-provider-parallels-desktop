@@ -1,85 +1,121 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package provider
 
 import (
 	"context"
-	"net/http"
+	"terraform-provider-parallels-desktop/internal/authorization"
+	deploy "terraform-provider-parallels-desktop/internal/deploy"
+	"terraform-provider-parallels-desktop/internal/models"
+	"terraform-provider-parallels-desktop/internal/remoteimage"
+	"terraform-provider-parallels-desktop/internal/vagrantbox"
+	"terraform-provider-parallels-desktop/internal/virtualmachine"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
+// Ensure the implementation satisfies the expected interfaces.
+var (
+	_ provider.Provider = &ParallelsProvider{}
+)
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
+// New is a helper function to simplify provider server and testing implementation.
+func New(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &ParallelsProvider{
+			version: version,
+		}
+	}
+}
+
+// ParallelsProvider is the provider implementation.
+type ParallelsProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
-}
-
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
+// Metadata returns the provider type name.
+func (p *ParallelsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "parallels-desktop"
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+// Schema defines the provider-level schema for configuration data.
+func (p *ParallelsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Parallels Desktop provider",
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+			"license": schema.StringAttribute{
+				Required:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Parallels Desktop Pro or Business license",
+				Description:         "Parallels Desktop Pro or Business license",
+			},
+			"my_account_user": schema.StringAttribute{
 				Optional:            true,
+				MarkdownDescription: "Parallels Desktop My Account user",
+				Description:         "Parallels Desktop My Account user",
+			},
+			"my_account_password": schema.StringAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Parallels Desktop My Account password",
+				Description:         "Parallels Desktop My Account password",
 			},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *ParallelsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var config models.ParallelsProviderModel
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if config.License.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("license"),
+			"The license is required",
+			"The provider needs a Parallels Desktop Pro or Business license to work",
+		)
+	}
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
-
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
-	resp.DataSourceData = client
-	resp.ResourceData = client
-}
-
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewExampleResource,
+	data := models.ParallelsProviderModel{
+		License:           config.License,
+		MyAccountUser:     config.MyAccountUser,
+		MyAccountPassword: config.MyAccountPassword,
 	}
+
+	resp.DataSourceData = &data
+	resp.ResourceData = &data
 }
 
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+// DataSources defines the data sources implemented in the provider.
+func (p *ParallelsProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
+		virtualmachine.NewVirtualMachinesDataSource,
+		// packertemplate.NewPackerTemplateDataSource,
 	}
 }
 
-func New(version string) func() provider.Provider {
-	return func() provider.Provider {
-		return &ScaffoldingProvider{
-			version: version,
-		}
+// Resources defines the resources implemented in the provider.
+func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		// virtualmachinestate.NewVirtualMachineStateResource,
+		deploy.NewVirtualMachineStateResource,
+		// packertemplate.NewPackerTemplateVirtualMachineResource,
+		authorization.NewAuthorizationResource,
+		vagrantbox.NewVagrantBoxResource,
+		remoteimage.NewRemoteVmResource,
 	}
 }

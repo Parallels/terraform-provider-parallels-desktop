@@ -1,0 +1,461 @@
+package deploy
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"runtime"
+	"strings"
+	"terraform-provider-parallels-desktop/internal/clientmodels"
+	"terraform-provider-parallels-desktop/internal/helpers"
+	"terraform-provider-parallels-desktop/internal/ssh"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/pkg/errors"
+)
+
+var installPath = "/usr/local/bin"
+
+type ParallelsServerClient struct {
+	client *ssh.SshClient
+	ctx    context.Context
+}
+
+func NewParallelsServerClient(ctx context.Context, client *ssh.SshClient) *ParallelsServerClient {
+	return &ParallelsServerClient{
+		client: client,
+		ctx:    ctx,
+	}
+}
+
+func (c *ParallelsServerClient) GetInfo() (*clientmodels.ParallelsServerInfo, error) {
+	output, err := c.client.RunCommand("/usr/local/bin/prlsrvctl info --json")
+	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
+	if err != nil {
+		return nil, err
+	}
+	if output == "" {
+		return nil, errors.New("empty output")
+	}
+
+	var parallelsInfo clientmodels.ParallelsServerInfo
+	err = json.Unmarshal([]byte(output), &parallelsInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &parallelsInfo, nil
+}
+
+func (c *ParallelsServerClient) GetVersion() (string, error) {
+	parallelsInfo, err := c.GetInfo()
+	if err != nil {
+		return "", err
+	}
+
+	return parallelsInfo.Version, nil
+}
+
+func (c *ParallelsServerClient) RestartServer() error {
+	restartServiceCmd := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service start && /Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service start"
+	_, err := c.client.RunCommand(restartServiceCmd)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) InstallDependencies() error {
+	// Installing Brew
+	_, err := c.client.RunCommand("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+	if err != nil {
+		return errors.New("Error running brew install command, error: " + err.Error())
+	}
+
+	// Installing Git
+	_, err = c.client.RunCommand("/opt/homebrew/bin/brew install git")
+	if err != nil {
+		return errors.New("Error running git install command, error: " + err.Error())
+	}
+
+	// Installing Packer
+	_, err = c.client.RunCommand("/opt/homebrew/bin/brew install packer")
+	if err != nil {
+		return errors.New("Error running packer install command, error: " + err.Error())
+	}
+
+	// Installing Vagrant
+	out, err := c.client.RunCommand("/opt/homebrew/bin/brew install hashicorp-vagrant")
+	if err != nil {
+		tflog.Info(c.ctx, "Vagrant install output: "+out)
+		return errors.New("Error running vagrant install command, error: " + err.Error())
+	}
+
+	// Installing Vagrant Parallels Plugin
+	_, err = c.client.RunCommand("/usr/local/bin/vagrant plugin install vagrant-parallels")
+	if err != nil {
+		return errors.New("Error running  plugin install command, error: " + err.Error())
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) UninstallDependencies() error {
+	// Uninstalling Git
+	_, err := c.client.RunCommand(" /opt/homebrew/bin/brew uninstall git")
+	if err != nil {
+		return errors.New("Error running git uninstall command, error: " + err.Error())
+	}
+
+	// Uninstalling Packer
+	_, err = c.client.RunCommand("/opt/homebrew/bin/brew uninstall packer")
+	if err != nil {
+		return errors.New("Error running packer uninstall command, error: " + err.Error())
+	}
+
+	// Uninstalling Vagrant Parallels Plugin
+	_, err = c.client.RunCommand("/usr/local/bin/vagrant plugin uninstall vagrant-parallels")
+	if err != nil {
+		return errors.New("Error running vagrant uninstall plugin command, error: " + err.Error())
+	}
+
+	// Uninstalling Vagrant
+	_, err = c.client.RunCommand("/opt/homebrew/bin/brew uninstall hashicorp-vagrant")
+	if err != nil {
+		return errors.New("Error running vagrant uninstall command, error: " + err.Error())
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) InstallParallelsDesktop() error {
+	// Installing parallels desktop using command line
+	_, err := c.client.RunCommand("/opt/homebrew/bin/brew install parallels")
+	if err != nil {
+		return errors.New("Error running parallels install command, error: " + err.Error())
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) UninstallParallelsDesktop() error {
+	// Uninstalling parallels desktop using command line
+	_, err := c.client.RunCommand("/opt/homebrew/bin/brew uninstall parallels")
+	if err != nil {
+		return errors.New("Error running parallels uninstall command, error: " + err.Error())
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) GetLicense() (*ParallelsDesktopLicense, error) {
+	output, err := c.client.RunCommand("/usr/local/bin/prlsrvctl info --json")
+	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
+	if err != nil {
+		return nil, err
+	}
+	if output == "" {
+		return nil, errors.New("empty output")
+	}
+
+	var parallelsInfo clientmodels.ParallelsServerInfo
+	err = json.Unmarshal([]byte(output), &parallelsInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	parallelsLicense := ParallelsDesktopLicense{}
+	parallelsLicense.FromClientModel(parallelsInfo.License)
+	return &parallelsLicense, nil
+}
+
+func (c *ParallelsServerClient) InstallLicense(key string, username, password string) error {
+	cmd := ""
+	installLicense := fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s", key)
+	if username != "" && password != "" {
+		textPassword := fmt.Sprintf("echo %s >~/parallels_password.txt", password)
+		loginCommand := fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl web-portal signin %s --read-passwd ~/parallels_password.txt", username)
+		_, err := c.client.RunCommand(fmt.Sprintf("echo $PARALLELS_USER_PASSWORD >~/parallels_password.txt && /Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s --activate-online-immediately", key))
+		if err != nil {
+			return err
+		}
+		_, err = c.client.RunCommand(fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s --activate-online-immediately", key))
+		if err != nil {
+			return err
+		}
+		cmd = fmt.Sprintf("%s && %s && %s", textPassword, loginCommand, installLicense)
+	} else {
+		cmd = installLicense
+	}
+
+	// Activate Parallels Desktop
+	_, err := c.client.RunCommand(cmd)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) DeactivateLicense() error {
+	deactivateLicense := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl deactivate-license --skip-network-errors"
+	// Deactivate Parallels Desktop
+	_, err := c.client.RunCommand(deactivateLicense)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) CompareLicenses(license string) (bool, error) {
+	currentLicense, err := c.GetLicense()
+	tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
+	if err != nil {
+		return false, err
+	}
+
+	if currentLicense == nil && license == "" {
+		tflog.Info(c.ctx, "No license found")
+		return true, nil
+	}
+
+	if currentLicense.Key.ValueString() == "" && license == "" {
+		tflog.Info(c.ctx, "No license found1")
+		return true, nil
+	}
+
+	currentLicenseKeyParts := strings.Split(currentLicense.Key.ValueString(), "-")
+	licenseKeyParts := strings.Split(license, "-")
+	if len(currentLicenseKeyParts) != len(licenseKeyParts) {
+		tflog.Info(c.ctx, "License key parts not equal")
+		return false, nil
+	}
+	if strings.EqualFold(currentLicenseKeyParts[0], licenseKeyParts[0]) &&
+		strings.EqualFold(currentLicenseKeyParts[len(currentLicenseKeyParts)-1], licenseKeyParts[len(licenseKeyParts)-1]) {
+		tflog.Info(c.ctx, "License key parts equal")
+		return true, nil
+	}
+
+	tflog.Info(c.ctx, "License key parts not equal1")
+	return false, nil
+}
+
+func (c *ParallelsServerClient) InstallApiService(license string, config ParallelsDesktopApiConfig) (string, error) {
+	var releaseDetails clientmodels.GithubRelease
+	var baseUrl string
+
+	if config.InstallVersion.ValueString() == "" || config.InstallVersion.ValueString() == "latest" {
+		tflog.Info(c.ctx, "PD Api version not specified, installing latest version")
+		baseUrl = "https://api.github.com/repos/Parallels/pd-api-service/releases/latest"
+	} else {
+		tflog.Info(c.ctx, "PD Api version specified, installing version: "+config.InstallVersion.ValueString())
+		baseUrl = "https://api.github.com/repos/Parallels/pd-api-service/releases/tags/" + config.InstallVersion.ValueString()
+	}
+
+	caller := helpers.NewHttpCaller(c.ctx)
+	if _, err := caller.GetDataFromClient(baseUrl, nil, nil, &releaseDetails); err != nil {
+		return "", err
+	}
+
+	finalVersion := strings.ReplaceAll(releaseDetails.TagName, "v", "")
+	tflog.Info(c.ctx, "PD Api Latest version: "+releaseDetails.TagName)
+
+	tflog.Info(c.ctx, "Getting the url for the correct asset to download")
+
+	// Getting the right asset
+	var assetUrl string
+	os := runtime.GOOS
+	arch := runtime.GOARCH
+	assetSuffix := fmt.Sprintf("%s-%s", os, arch)
+
+	for _, asset := range releaseDetails.Assets {
+		if strings.Contains(asset.Name, assetSuffix) {
+			assetUrl = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	if assetUrl == "" {
+		tflog.Error(c.ctx, "Error getting asset url")
+		return "", errors.New("Error getting asset url")
+	}
+
+	tflog.Info(c.ctx, "Downloading the asset")
+	// Downloading the asset
+	_, err := c.client.RunCommand(fmt.Sprintf("curl -L -o /tmp/pd-api-service.tar.gz %s", assetUrl))
+	if err != nil {
+		return "", err
+	}
+
+	tflog.Info(c.ctx, "Extracting the asset")
+	_, err = c.client.RunCommand("sudo tar -xzf /tmp/pd-api-service.tar.gz -C " + installPath)
+	if err != nil {
+		return "", err
+	}
+	_, err = c.client.RunCommand("sudo rm -f /tmp/pd-api-service.tar.gz")
+	if err != nil {
+		return "", err
+	}
+
+	tflog.Info(c.ctx, "Installing the service")
+	if os == "darwin" {
+		tflog.Info(c.ctx, "Generating installation config file")
+		configPath := "/tmp/config.json"
+		err = c.generateConfigFile(configPath, config)
+		if err != nil {
+			return "", err
+		}
+
+		tflog.Info(c.ctx, "Installing service in the launchd daemon")
+		installCmd := fmt.Sprintf("sudo %s/pd-api-service --install --file=%s", installPath, configPath)
+		out, err := c.client.RunCommand(installCmd)
+		if err != nil {
+			tflog.Info(c.ctx, "Error installing service: \n"+out)
+			return "", err
+		}
+
+		tflog.Info(c.ctx, "Cleaning configuration")
+		_, err = c.client.RunCommand("sudo rm -f " + configPath)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		tflog.Error(c.ctx, "Unsupported OS: "+os)
+	}
+
+	tflog.Info(c.ctx, "Done")
+	return finalVersion, nil
+}
+
+func (c *ParallelsServerClient) UninstallApiService() error {
+	tflog.Info(c.ctx, "Uninstalling the API Service")
+	unInstallCmd := fmt.Sprintf("sudo %s/pd-api-service --uninstall", installPath)
+	uninstallOut, err := c.client.RunCommand(unInstallCmd)
+	if err != nil {
+		tflog.Error(c.ctx, "Error uninstalling service: \n"+uninstallOut)
+		return err
+	}
+
+	rmExecCmd := "sudo rm -f /usr/local/bin/pd-api-service"
+	rmLogsCmd := "sudo rm -f /tmp/api-service.job.*"
+	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s", rmExecCmd, rmLogsCmd))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ParallelsServerClient) GetApiVersion() (string, error) {
+	output, err := c.client.RunCommand("/usr/local/bin/pd-api-service --version")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.ReplaceAll(output, "\n", ""), nil
+}
+
+func (c *ParallelsServerClient) GetPackerVersion() (string, error) {
+	output, err := c.client.RunCommand("/opt/homebrew/bin/packer --version")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.ReplaceAll(output, "\n", ""), nil
+}
+
+func (c *ParallelsServerClient) GetVagrantVersion() (string, error) {
+	output, err := c.client.RunCommand("/usr/local/bin/vagrant --version")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.ReplaceAll(strings.ReplaceAll(output, "\n", ""), "Vagrant  ", ""), nil
+}
+
+func (c *ParallelsServerClient) GetGitVersion() (string, error) {
+	output, err := c.client.RunCommand("/opt/homebrew/bin/git --version")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.ReplaceAll(strings.ReplaceAll(output, "\n", ""), "git version ", ""), nil
+}
+
+func (c *ParallelsServerClient) GenerateDefaultRootPassword() (string, error) {
+	info, err := c.GetInfo()
+	if err != nil {
+		return "", err
+	}
+
+	key := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(info.License.Key, "-", ""), "*", ""))
+	hid := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(info.HardwareID, "-", ""), "{", ""), "}", ""))
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", key, hid)))
+
+	return encoded, nil
+}
+
+func (c *ParallelsServerClient) generateConfigFile(path string, config ParallelsDesktopApiConfig) error {
+	configJson := make(map[string]interface{})
+	if config.Port.ValueString() != "" {
+		configJson["port"] = config.Port.ValueString()
+	}
+	if config.Prefix.ValueString() != "" {
+		configJson["prefix"] = config.Prefix.ValueString()
+	}
+	if config.RootPassword.ValueString() != "" {
+		configJson["root_password"] = config.RootPassword.ValueString()
+	}
+	if config.HmacSecret.ValueString() != "" {
+		configJson["hmac_secret"] = config.HmacSecret.ValueString()
+	}
+	if config.EncryptionRsaKey.ValueString() != "" {
+		configJson["encryption_rsa_key"] = config.EncryptionRsaKey.ValueString()
+	}
+	if config.LogLevel.ValueString() != "" {
+		configJson["log_level"] = config.LogLevel.ValueString()
+	}
+	if config.EnableTLS.ValueBool() {
+		configJson["enable_tls"] = true
+	}
+	if config.TLSPort.ValueString() != "" {
+		configJson["tls_port"] = config.TLSPort.ValueString()
+	}
+	if config.TLSCertificate.ValueString() != "" {
+		configJson["tls_certificate"] = config.TLSCertificate.ValueString()
+	}
+	if config.TLSPrivateKey.ValueString() != "" {
+		configJson["tls_private_key"] = config.TLSPrivateKey.ValueString()
+	}
+	if config.DisableCatalogCaching.ValueBool() {
+		configJson["disable_catalog_caching"] = true
+	}
+	if config.TokenDurationMinutes.ValueString() != "" {
+		configJson["token_duration_minutes"] = config.TokenDurationMinutes.ValueString()
+	}
+	if config.Mode.ValueString() != "" {
+		configJson["mode"] = config.Mode.ValueString()
+	}
+	if config.UseOrchestratorResources.ValueBool() {
+		configJson["use_orchestrator_resources"] = true
+	}
+
+	confJson, err := json.Marshal(configJson)
+	if err != nil {
+		return err
+	}
+
+	if _, err := c.client.RunCommand("touch " + path); err != nil {
+		return err
+	}
+
+	if _, err := c.client.RunCommand("echo  '" + string(confJson) + "' > " + path); err != nil {
+		return err
+	}
+
+	return nil
+}

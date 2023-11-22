@@ -18,7 +18,6 @@ type SshAuthorization struct {
 }
 
 type SshClient struct {
-	client *ssh.Client
 	config *ssh.ClientConfig
 	Host   string
 	Port   string
@@ -47,6 +46,9 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 		}
 
 		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			return nil, err
+		}
 		config = &ssh.ClientConfig{
 			User: globalSshClient.Auth.User,
 			Auth: []ssh.AuthMethod{

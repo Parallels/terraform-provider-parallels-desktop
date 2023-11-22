@@ -763,8 +763,14 @@ func updateUsers(ctx context.Context, hostConfig apiclient.HostConfig, data, cur
 				continue
 			} else {
 				tflog.Info(ctx, fmt.Sprintf("User %s created", user.Username.ValueString()))
-				updateUserClaims(ctx, hostConfig, data, currentData, i)
-				updateUserRoles(ctx, hostConfig, data, currentData, i)
+				if diag := updateUserClaims(ctx, hostConfig, data, currentData, i); diag.HasError() {
+					diagnostics.Append(diag...)
+					continue
+				}
+				if diag := updateUserRoles(ctx, hostConfig, data, currentData, i); diag.HasError() {
+					diagnostics.Append(diag...)
+					continue
+				}
 				data.Users[i].Id = types.StringValue(response.ID)
 			}
 		} else {
@@ -779,8 +785,14 @@ func updateUsers(ctx context.Context, hostConfig apiclient.HostConfig, data, cur
 				continue
 			}
 			tflog.Info(ctx, fmt.Sprintf("User %s found, updating id %v", userExists.Name, userExists.ID))
-			updateUserClaims(ctx, hostConfig, data, currentData, i)
-			updateUserRoles(ctx, hostConfig, data, currentData, i)
+			if diag := updateUserClaims(ctx, hostConfig, data, currentData, i); diag.HasError() {
+				diagnostics.Append(diag...)
+				continue
+			}
+			if diag := updateUserRoles(ctx, hostConfig, data, currentData, i); diag.HasError() {
+				diagnostics.Append(diag...)
+				continue
+			}
 			data.Users[i].Id = types.StringValue(userExists.ID)
 		}
 	}

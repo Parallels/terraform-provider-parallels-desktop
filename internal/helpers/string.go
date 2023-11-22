@@ -45,12 +45,12 @@ func GetHostApiBaseUrl(host string) string {
 }
 
 func ConvertByteToGigabyte(bytes float64) float64 {
-	gb := float64(bytes) / 1024 / 1024 / 1024
+	gb := bytes / 1024 / 1024 / 1024
 	return math.Round(gb*100) / 100
 }
 
 func ConvertByteToMegabyte(bytes float64) float64 {
-	mb := float64(bytes) / 1024 / 1024
+	mb := bytes / 1024 / 1024
 	return math.Round(mb*100) / 100
 }
 

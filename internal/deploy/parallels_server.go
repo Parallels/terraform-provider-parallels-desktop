@@ -15,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var installPath = "/usr/local/bin"
+
 type ParallelsServerClient struct {
 	client *ssh.SshClient
 	ctx    context.Context
@@ -253,8 +255,6 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 		baseUrl = "https://api.github.com/repos/Parallels/pd-api-service/releases/tags/" + config.InstallVersion.ValueString()
 	}
 
-	path := "/usr/local/bin"
-
 	caller := helpers.NewHttpCaller(c.ctx)
 	if _, err := caller.GetDataFromClient(baseUrl, nil, nil, &releaseDetails); err != nil {
 		return "", err
@@ -291,7 +291,7 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	}
 
 	tflog.Info(c.ctx, "Extracting the asset")
-	_, err = c.client.RunCommand("sudo tar -xzf /tmp/pd-api-service.tar.gz -C " + path)
+	_, err = c.client.RunCommand("sudo tar -xzf /tmp/pd-api-service.tar.gz -C " + installPath)
 	if err != nil {
 		return "", err
 	}
@@ -301,57 +301,47 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	}
 
 	tflog.Info(c.ctx, "Installing the service")
-	plist, err := getApiServicePlist(path, config)
-	if err != nil {
-		tflog.Error(c.ctx, "Error getting plist template")
-		return "", err
+	if os == "darwin" {
+		tflog.Info(c.ctx, "Generating installation config file")
+		configPath := "/tmp/config.json"
+		err = c.generateConfigFile(configPath, config)
+		if err != nil {
+			return "", err
+		}
+
+		tflog.Info(c.ctx, "Installing service in the launchd daemon")
+		installCmd := fmt.Sprintf("sudo %s/pd-api-service --install --file=%s", installPath, configPath)
+		out, err := c.client.RunCommand(installCmd)
+		if err != nil {
+			tflog.Info(c.ctx, "Error installing service: \n"+out)
+			return "", err
+		}
+
+		tflog.Info(c.ctx, "Cleaning configuration")
+		_, err = c.client.RunCommand("sudo rm -f " + configPath)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		tflog.Error(c.ctx, "Unsupported OS: "+os)
 	}
-
-	tflog.Info(c.ctx, "Creating plist file")
-
-	echoCmd := fmt.Sprintf("sudo echo '%s' > /tmp/com.parallels.api-service.plist", plist)
-	mvCmd := "sudo mv /tmp/com.parallels.api-service.plist /Library/LaunchDaemons/com.parallels.api-service.plist"
-	rmCmd := "sudo rm -f /tmp/com.parallels.api-service.plist"
-	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s && %s", echoCmd, mvCmd, rmCmd))
-	if err != nil {
-		return "", err
-	}
-
-	tflog.Info(c.ctx, "Starting server")
-	chownCmd := "sudo chown root:wheel /Library/LaunchDaemons/com.parallels.api-service.plist"
-	chmodCmd := "sudo chmod 644 /Library/LaunchDaemons/com.parallels.api-service.plist"
-	unloadCmd := "sudo launchctl unload /Library/LaunchDaemons/com.parallels.api-service.plist"
-	loadCmd := "sudo launchctl load /Library/LaunchDaemons/com.parallels.api-service.plist"
-	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s && %s && %s", chownCmd, chmodCmd, unloadCmd, loadCmd))
-	if err != nil {
-		return "", err
-	}
-
-	// password := license
-	// changePassCmd := fmt.Sprintf("sudo %s/pd-api-service --update-root-pass --password=%s", path, password)
-	// cmd := fmt.Sprintf("%s && %s && %s > /tmp/change_password.log", unloadCmd, changePassCmd, loadCmd)
-	// tflog.Info(c.ctx, "Changing root password cmd: "+cmd)
-	// // change the root password for the license one
-	// out, err := c.client.RunCommand(cmd)
-	// if err != nil {
-	// 	return "", errors.New("Error changing root password, out: " + out + " error: " + err.Error())
-	// }
 
 	tflog.Info(c.ctx, "Done")
 	return finalVersion, nil
 }
 
 func (c *ParallelsServerClient) UninstallApiService() error {
-	unloadCmd := "sudo launchctl unload /Library/LaunchDaemons/com.parallels.api-service.plist"
-	_, err := c.client.RunCommand(unloadCmd)
+	tflog.Info(c.ctx, "Uninstalling the API Service")
+	unInstallCmd := fmt.Sprintf("sudo %s/pd-api-service --uninstall", installPath)
+	uninstallOut, err := c.client.RunCommand(unInstallCmd)
 	if err != nil {
+		tflog.Error(c.ctx, "Error uninstalling service: \n"+uninstallOut)
 		return err
 	}
 
-	rmPlistCmd := "sudo rm -f /tmp/com.parallels.api-service.plist"
 	rmExecCmd := "sudo rm -f /usr/local/bin/pd-api-service"
 	rmLogsCmd := "sudo rm -f /tmp/api-service.job.*"
-	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s && %s", rmPlistCmd, rmExecCmd, rmLogsCmd))
+	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s", rmExecCmd, rmLogsCmd))
 	if err != nil {
 		return err
 	}
@@ -407,4 +397,65 @@ func (c *ParallelsServerClient) GenerateDefaultRootPassword() (string, error) {
 	encoded := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", key, hid)))
 
 	return encoded, nil
+}
+
+func (c *ParallelsServerClient) generateConfigFile(path string, config ParallelsDesktopApiConfig) error {
+	configJson := make(map[string]interface{})
+	if config.Port.ValueString() != "" {
+		configJson["port"] = config.Port.ValueString()
+	}
+	if config.Prefix.ValueString() != "" {
+		configJson["prefix"] = config.Prefix.ValueString()
+	}
+	if config.RootPassword.ValueString() != "" {
+		configJson["root_password"] = config.RootPassword.ValueString()
+	}
+	if config.HmacSecret.ValueString() != "" {
+		configJson["hmac_secret"] = config.HmacSecret.ValueString()
+	}
+	if config.EncryptionRsaKey.ValueString() != "" {
+		configJson["encryption_rsa_key"] = config.EncryptionRsaKey.ValueString()
+	}
+	if config.LogLevel.ValueString() != "" {
+		configJson["log_level"] = config.LogLevel.ValueString()
+	}
+	if config.EnableTLS.ValueBool() {
+		configJson["enable_tls"] = true
+	}
+	if config.TLSPort.ValueString() != "" {
+		configJson["tls_port"] = config.TLSPort.ValueString()
+	}
+	if config.TLSCertificate.ValueString() != "" {
+		configJson["tls_certificate"] = config.TLSCertificate.ValueString()
+	}
+	if config.TLSPrivateKey.ValueString() != "" {
+		configJson["tls_private_key"] = config.TLSPrivateKey.ValueString()
+	}
+	if config.DisableCatalogCaching.ValueBool() {
+		configJson["disable_catalog_caching"] = true
+	}
+	if config.TokenDurationMinutes.ValueString() != "" {
+		configJson["token_duration_minutes"] = config.TokenDurationMinutes.ValueString()
+	}
+	if config.Mode.ValueString() != "" {
+		configJson["mode"] = config.Mode.ValueString()
+	}
+	if config.UseOrchestratorResources.ValueBool() {
+		configJson["use_orchestrator_resources"] = true
+	}
+
+	confJson, err := json.Marshal(configJson)
+	if err != nil {
+		return err
+	}
+
+	if _, err := c.client.RunCommand("touch " + path); err != nil {
+		return err
+	}
+
+	if _, err := c.client.RunCommand("echo  '" + string(confJson) + "' > " + path); err != nil {
+		return err
+	}
+
+	return nil
 }

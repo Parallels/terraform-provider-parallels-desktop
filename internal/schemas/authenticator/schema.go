@@ -9,11 +9,11 @@ import (
 
 var SchemaName = "authenticator"
 var SchemaBlock = schema.SingleNestedBlock{
-	MarkdownDescription: "Authenticator",
-
+	MarkdownDescription: "Authenticator block, this is used to authenticate with the Parallels Desktop API, if empty it will try to use the root password",
+	Description:         "Authenticator block, this is used to authenticate with the Parallels Desktop API, if empty it will try to use the root password",
 	Attributes: map[string]schema.Attribute{
 		"username": schema.StringAttribute{
-			MarkdownDescription: "Username",
+			MarkdownDescription: "Parallels desktop API Username",
 			Optional:            true,
 			Validators: []validator.String{
 				stringvalidator.AlsoRequires(path.Expressions{
@@ -22,7 +22,7 @@ var SchemaBlock = schema.SingleNestedBlock{
 			},
 		},
 		"password": schema.StringAttribute{
-			MarkdownDescription: "Password",
+			MarkdownDescription: "Parallels desktop API Password",
 			Optional:            true,
 			Sensitive:           true,
 			Validators: []validator.String{
@@ -32,7 +32,7 @@ var SchemaBlock = schema.SingleNestedBlock{
 			},
 		},
 		"api_key": schema.StringAttribute{
-			MarkdownDescription: "API Key",
+			MarkdownDescription: "Parallels desktop API API Key",
 			Optional:            true,
 			Sensitive:           true,
 		},

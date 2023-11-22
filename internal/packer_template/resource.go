@@ -6,7 +6,7 @@ import (
 	"strings"
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
-	"terraform-provider-parallels-desktop/internal/common.go"
+	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
 	"time"
 

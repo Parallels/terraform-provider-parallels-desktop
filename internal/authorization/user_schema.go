@@ -9,7 +9,7 @@ import (
 
 var UserSchemaBlockName = "user"
 var UserSchemaBlock = schema.ListNestedBlock{
-	MarkdownDescription: "User",
+	MarkdownDescription: "Creates a new user in the Parallels Desktop API",
 	PlanModifiers: []planmodifier.List{
 		listplanmodifier.RequiresReplace(),
 	},

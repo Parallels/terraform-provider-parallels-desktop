@@ -29,7 +29,7 @@ func RunPostProcessorScript(ctx context.Context, hostConfig apiclient.HostConfig
 		}
 
 		tflog.Info(ctx, "Waiting for vm to start...")
-		time.Sleep(time.Minute * 2)
+		time.Sleep(time.Minute * 1)
 	}
 
 	for _, script := range scripts {

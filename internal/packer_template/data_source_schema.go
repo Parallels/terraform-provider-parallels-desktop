@@ -16,7 +16,8 @@ var packerTemplateDataSourceSchema = schema.Schema{
 	},
 	Attributes: map[string]schema.Attribute{
 		"host": schema.StringAttribute{
-			MarkdownDescription: "Parallels server host",
+			MarkdownDescription: "Parallels Desktop Api host",
+			Description:         "Parallels Desktop Api host",
 			Required:            true,
 		},
 		"templates": schema.ListNestedAttribute{

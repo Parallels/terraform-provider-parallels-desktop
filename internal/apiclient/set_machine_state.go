@@ -52,7 +52,7 @@ func SetMachineState(ctx context.Context, config HostConfig, machineId string, o
 
 	client := helpers.NewHttpCaller(ctx)
 	var response apimodels.VmConfigResponse
-	if clientResponse, err := client.PostDataToClient(url, nil, configSet, auth, &response); err != nil {
+	if clientResponse, err := client.PutDataToClient(url, nil, configSet, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error configuring vm: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

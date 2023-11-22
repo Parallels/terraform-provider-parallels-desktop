@@ -4,8 +4,8 @@ import "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 
 var SchemaName = "shared_folder"
 var SchemaBlock = schema.ListNestedBlock{
-	MarkdownDescription: "Shared Folders",
-	Description:         "Shared Folders",
+	MarkdownDescription: "Shared Folders Block, this is used to share folders with the virtual machine",
+	Description:         "Shared Folders Block, this is used to share folders with the virtual machine",
 	NestedObject: schema.NestedBlockObject{
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{

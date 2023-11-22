@@ -33,7 +33,7 @@ func getSchema(ctx context.Context) schema.Schema {
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
-				MarkdownDescription: "Parallels server host",
+				MarkdownDescription: "Parallels Desktop API host",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -44,15 +44,17 @@ func getSchema(ctx context.Context) schema.Schema {
 				Computed:            true,
 			},
 			"catalog_id": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine Id",
+				MarkdownDescription: "Catalog Id to pull",
+				Description:         "Catalog Id to pull",
 				Required:            true,
 			},
 			"version": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine version",
+				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
+				Description:         "Catalog version to pull, if empty will pull the 'latest' version",
 				Optional:            true,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine name",
+				MarkdownDescription: "Virtual Machine name to create, this needs to be unique in the host",
 				Required:            true,
 			},
 			"owner": schema.StringAttribute{
@@ -77,7 +79,7 @@ func getSchema(ctx context.Context) schema.Schema {
 				},
 			},
 			"run_after_create": schema.BoolAttribute{
-				MarkdownDescription: "Run after create",
+				MarkdownDescription: "Run after create, this will make the VM to run after creation",
 				Optional:            true,
 			},
 		},

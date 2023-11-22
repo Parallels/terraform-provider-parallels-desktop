@@ -84,16 +84,21 @@ func (p *ParallelsDesktopApi) MapObject() basetypes.ObjectValue {
 }
 
 type ParallelsDesktopApiConfig struct {
-	Port             types.String `tfsdk:"port"`
-	InstallVersion   types.String `tfsdk:"install_version"`
-	RootPassword     types.String `tfsdk:"root_password"`
-	HmacSecret       types.String `tfsdk:"hmac_secret"`
-	EncryptionRsaKey types.String `tfsdk:"encryption_rsa_key"`
-	LogLevel         types.String `tfsdk:"log_level"`
-	EnableTLS        types.Bool   `tfsdk:"enable_tls"`
-	TLSPort          types.String `tfsdk:"tls_port"`
-	TLSCertificate   types.String `tfsdk:"tls_certificate"`
-	TLSPrivateKey    types.String `tfsdk:"tls_private_key"`
+	Port                     types.String `tfsdk:"port" json:"port,omitempty"`
+	Prefix                   types.String `tfsdk:"prefix" json:"prefix,omitempty"`
+	InstallVersion           types.String `tfsdk:"install_version" json:"install_version,omitempty"`
+	RootPassword             types.String `tfsdk:"root_password" json:"root_password,omitempty"`
+	HmacSecret               types.String `tfsdk:"hmac_secret" json:"hmac_secret,omitempty"`
+	EncryptionRsaKey         types.String `tfsdk:"encryption_rsa_key" json:"encryption_rsa_key,omitempty"`
+	LogLevel                 types.String `tfsdk:"log_level" json:"log_level,omitempty"`
+	EnableTLS                types.Bool   `tfsdk:"enable_tls" json:"enable_tls,omitempty"`
+	TLSPort                  types.String `tfsdk:"tls_port" json:"tls_port,omitempty"`
+	TLSCertificate           types.String `tfsdk:"tls_certificate" json:"tls_certificate,omitempty"`
+	TLSPrivateKey            types.String `tfsdk:"tls_private_key" json:"tls_private_key,omitempty"`
+	DisableCatalogCaching    types.Bool   `tfsdk:"disable_catalog_caching" json:"disable_catalog_caching,omitempty"`
+	TokenDurationMinutes     types.String `tfsdk:"token_duration_minutes" json:"token_duration_minutes,omitempty"`
+	Mode                     types.String `tfsdk:"mode" json:"mode,omitempty"`
+	UseOrchestratorResources types.Bool   `tfsdk:"use_orchestrator_resources"`
 }
 
 func (p *ParallelsDesktopApiConfig) MapObject() basetypes.ObjectValue {

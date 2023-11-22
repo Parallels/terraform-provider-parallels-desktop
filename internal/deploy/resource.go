@@ -381,10 +381,6 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		config = data.ApiConfig
 	}
 
-	if config.RootPassword.ValueString() == "" {
-		config.RootPassword = r.provider.License
-	}
-
 	hasChangesInApi := false
 	if data.ApiConfig != nil {
 		if currentData.ApiConfig == nil {
@@ -411,10 +407,36 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 			if data.ApiConfig.EnableTLS.ValueBool() != currentData.ApiConfig.EnableTLS.ValueBool() {
 				hasChangesInApi = true
 			}
+			if data.ApiConfig.TLSPort.ValueString() != currentData.ApiConfig.TLSPort.ValueString() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.TLSCertificate.ValueString() != currentData.ApiConfig.TLSCertificate.ValueString() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.TLSPrivateKey.ValueString() != currentData.ApiConfig.TLSPrivateKey.ValueString() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.DisableCatalogCaching.ValueBool() != currentData.ApiConfig.DisableCatalogCaching.ValueBool() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.TokenDurationMinutes.ValueString() != currentData.ApiConfig.TokenDurationMinutes.ValueString() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.Mode.ValueString() != currentData.ApiConfig.Mode.ValueString() {
+				hasChangesInApi = true
+			}
+			if data.ApiConfig.UseOrchestratorResources.ValueBool() != currentData.ApiConfig.UseOrchestratorResources.ValueBool() {
+				hasChangesInApi = true
+			}
 		}
 	}
 
 	if hasChangesInApi {
+		err = parallelsClient.UninstallApiService()
+		if err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+			return
+		}
 		_, err = parallelsClient.InstallApiService(r.provider.License.ValueString(), *config)
 		if err != nil {
 			resp.Diagnostics.AddError("Error installing parallels api service", err.Error())

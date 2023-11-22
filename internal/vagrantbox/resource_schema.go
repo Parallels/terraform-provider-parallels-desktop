@@ -36,7 +36,7 @@ func getSchema(ctx context.Context) schema.Schema {
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
-				MarkdownDescription: "Parallels server host",
+				MarkdownDescription: "Parallels Desktop API host",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

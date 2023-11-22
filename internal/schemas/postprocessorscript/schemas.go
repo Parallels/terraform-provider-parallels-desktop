@@ -18,8 +18,8 @@ var SchemaBlock = schema.ListNestedBlock{
 				ElementType:         types.StringType,
 			},
 			"result": schema.ListNestedAttribute{
-				MarkdownDescription: "Inline script",
-				Description:         "Inline script",
+				MarkdownDescription: "Result of the script",
+				Description:         "Result of the script",
 				Computed:            true,
 				Sensitive:           true,
 				NestedObject: schema.NestedAttributeObject{

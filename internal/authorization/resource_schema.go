@@ -7,8 +7,8 @@ import (
 )
 
 var authorizationResourceSchema = schema.Schema{
-	// This description is used by the documentation generator and the language server.
-	MarkdownDescription: "Parallels Api Authorization Resource",
+	MarkdownDescription: "Parallels Api Authorization Resource, use this to create additional users, api keys, claims and roles in the host Parallel Desktop instance",
+	Description:         "Parallels Api Authorization Resource, use this to create additional users, api keys, claims and roles in the host Parallel Desktop instance",
 
 	Blocks: map[string]schema.Block{
 		authenticator.SchemaName: authenticator.SchemaBlock,
@@ -19,7 +19,8 @@ var authorizationResourceSchema = schema.Schema{
 	},
 	Attributes: map[string]schema.Attribute{
 		"host": schema.StringAttribute{
-			MarkdownDescription: "Parallels server host",
+			MarkdownDescription: "Parallels Desktop Api host",
+			Description:         "Parallels Desktop Api host",
 			Required:            true,
 		},
 	},

@@ -5,11 +5,9 @@ import (
 	"terraform-provider-parallels-desktop/internal/authorization"
 	deploy "terraform-provider-parallels-desktop/internal/deploy"
 	"terraform-provider-parallels-desktop/internal/models"
-	packertemplate "terraform-provider-parallels-desktop/internal/packer_template"
 	"terraform-provider-parallels-desktop/internal/remoteimage"
 	"terraform-provider-parallels-desktop/internal/vagrantbox"
 	"terraform-provider-parallels-desktop/internal/virtualmachine"
-	"terraform-provider-parallels-desktop/internal/virtualmachinestate"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -49,17 +47,24 @@ func (p *ParallelsProvider) Metadata(_ context.Context, _ provider.MetadataReque
 // Schema defines the provider-level schema for configuration data.
 func (p *ParallelsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Parallels Desktop provider",
 		Attributes: map[string]schema.Attribute{
 			"license": schema.StringAttribute{
-				Required:  true,
-				Sensitive: true,
+				Required:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Parallels Desktop Pro or Business license",
+				Description:         "Parallels Desktop Pro or Business license",
 			},
 			"my_account_user": schema.StringAttribute{
-				Optional: true,
+				Optional:            true,
+				MarkdownDescription: "Parallels Desktop My Account user",
+				Description:         "Parallels Desktop My Account user",
 			},
 			"my_account_password": schema.StringAttribute{
-				Optional:  true,
-				Sensitive: true,
+				Optional:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Parallels Desktop My Account password",
+				Description:         "Parallels Desktop My Account password",
 			},
 		},
 	}
@@ -99,16 +104,16 @@ func (p *ParallelsProvider) Configure(ctx context.Context, req provider.Configur
 func (p *ParallelsProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		virtualmachine.NewVirtualMachinesDataSource,
-		packertemplate.NewPackerTemplateDataSource,
+		// packertemplate.NewPackerTemplateDataSource,
 	}
 }
 
 // Resources defines the resources implemented in the provider.
 func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		virtualmachinestate.NewVirtualMachineStateResource,
+		// virtualmachinestate.NewVirtualMachineStateResource,
 		deploy.NewVirtualMachineStateResource,
-		packertemplate.NewPackerTemplateVirtualMachineResource,
+		// packertemplate.NewPackerTemplateVirtualMachineResource,
 		authorization.NewAuthorizationResource,
 		vagrantbox.NewVagrantBoxResource,
 		remoteimage.NewRemoteVmResource,

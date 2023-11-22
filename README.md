@@ -43,7 +43,7 @@ Then commit the changes to `go.mod` and `go.sum`.
 
 ## Using the provider
 
-Check the latest examples in the terraform registry [here](https://registry.terraform.io/providers/Parallels/parallels/latest/docs).
+Check the latest examples in the terraform registry [here](https://registry.terraform.io/providers/Parallels/parallels-desktop/latest/docs).
 
 ## Developing the Provider
 

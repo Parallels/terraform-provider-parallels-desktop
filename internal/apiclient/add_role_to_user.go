@@ -21,7 +21,7 @@ func AddRoleToUser(ctx context.Context, config HostConfig, userId string, role s
 
 	tflog.Info(ctx, "Adding Role "+role+" to User "+userId)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users/%s/roles", helpers.GetHostApiBaseUrl(urlHost), userId)
+	url := fmt.Sprintf("%s/auth/users/%s/roles", helpers.GetHostApiVersionedBaseUrl(urlHost), userId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

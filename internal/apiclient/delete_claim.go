@@ -18,7 +18,7 @@ func DeleteClaim(ctx context.Context, config HostConfig, claimId string) diag.Di
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/auth/claims/%s", helpers.GetHostApiBaseUrl(urlHost), claimId)
+	url := fmt.Sprintf("%s/auth/claims/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), claimId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

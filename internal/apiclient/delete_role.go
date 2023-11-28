@@ -18,7 +18,7 @@ func DeleteRole(ctx context.Context, config HostConfig, roleId string) diag.Diag
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/auth/roles/%s", helpers.GetHostApiBaseUrl(urlHost), roleId)
+	url := fmt.Sprintf("%s/auth/roles/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), roleId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

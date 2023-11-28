@@ -138,7 +138,7 @@ func (r *PackerTemplateVirtualMachineResource) Create(ctx context.Context, req r
 	}
 
 	// Processing shared folders
-	if diag := common.CreateSharedFolders(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
+	if diag := common.SharedFoldersBlockOnCreate(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
@@ -357,7 +357,7 @@ func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req r
 	}
 
 	// Processing shared folders
-	if diag := common.UpdateSharedFolders(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
+	if diag := common.SharedFoldersBlockOnUpdate(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}

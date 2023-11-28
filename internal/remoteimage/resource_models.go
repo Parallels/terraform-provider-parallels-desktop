@@ -3,7 +3,9 @@ package remoteimage
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
+	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
 	"terraform-provider-parallels-desktop/internal/schemas/sharedfolder"
+	"terraform-provider-parallels-desktop/internal/schemas/vmconfig"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -15,6 +17,7 @@ type RemoteVmResourceModel struct {
 	Authenticator        *authenticator.Authentication              `tfsdk:"authenticator"`
 	Host                 types.String                               `tfsdk:"host"`
 	ID                   types.String                               `tfsdk:"id"`
+	OsType               types.String                               `tfsdk:"os_type"`
 	CatalogId            types.String                               `tfsdk:"catalog_id"`
 	Version              types.String                               `tfsdk:"version"`
 	Name                 types.String                               `tfsdk:"name"`
@@ -23,7 +26,10 @@ type RemoteVmResourceModel struct {
 	Path                 types.String                               `tfsdk:"path"`
 	Specs                *vmspecs.VmSpecs                           `tfsdk:"specs"`
 	PostProcessorScripts []*postprocessorscript.PostProcessorScript `tfsdk:"post_processor_script"`
+	OnDestroyScript      []*postprocessorscript.PostProcessorScript `tfsdk:"on_destroy_script"`
 	SharedFolder         []*sharedfolder.SharedFolder               `tfsdk:"shared_folder"`
+	Config               *vmconfig.VmConfig                         `tfsdk:"config"`
+	PrlCtl               []*prlctl.PrlCtlCmd                        `tfsdk:"prlctl"`
 	RunAfterCreate       types.Bool                                 `tfsdk:"run_after_create"`
 	Timeouts             timeouts.Value                             `tfsdk:"timeouts"`
 	ForceChanges         types.Bool                                 `tfsdk:"force_changes"`

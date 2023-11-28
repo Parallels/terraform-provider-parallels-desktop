@@ -18,7 +18,7 @@ func DeleteVm(ctx context.Context, config HostConfig, machineId string) diag.Dia
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiBaseUrl(urlHost), machineId)
+	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

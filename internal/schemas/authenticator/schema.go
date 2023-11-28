@@ -17,7 +17,7 @@ var SchemaBlock = schema.SingleNestedBlock{
 			Optional:            true,
 			Validators: []validator.String{
 				stringvalidator.AlsoRequires(path.Expressions{
-					path.MatchRoot("password"),
+					path.MatchRelative().AtName("password").AtParent(),
 				}...),
 			},
 		},
@@ -27,7 +27,7 @@ var SchemaBlock = schema.SingleNestedBlock{
 			Sensitive:           true,
 			Validators: []validator.String{
 				stringvalidator.AlsoRequires(path.Expressions{
-					path.MatchRoot("username"),
+					path.MatchRelative().AtName("username").AtParent(),
 				}...),
 			},
 		},

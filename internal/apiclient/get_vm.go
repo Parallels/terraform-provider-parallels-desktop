@@ -20,7 +20,7 @@ func GetVm(ctx context.Context, config HostConfig, machineId string) (*apimodels
 		return nil, diagnostics
 	}
 
-	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiBaseUrl(urlHost), machineId)
+	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

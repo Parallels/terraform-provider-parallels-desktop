@@ -21,7 +21,7 @@ func AddClaimToUser(ctx context.Context, config HostConfig, userId string, claim
 
 	tflog.Info(ctx, "Adding Claim "+claim+" to User "+userId)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users/%s/claims", helpers.GetHostApiBaseUrl(urlHost), userId)
+	url := fmt.Sprintf("%s/auth/users/%s/claims", helpers.GetHostApiVersionedBaseUrl(urlHost), userId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

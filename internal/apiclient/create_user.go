@@ -21,7 +21,7 @@ func CreateUser(ctx context.Context, config HostConfig, request apimodels.UserRe
 
 	tflog.Info(ctx, "Creating User "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

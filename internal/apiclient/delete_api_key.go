@@ -18,7 +18,7 @@ func DeleteApiKey(ctx context.Context, config HostConfig, apiKeyId string) diag.
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/auth/api_keys/%s", helpers.GetHostApiBaseUrl(urlHost), apiKeyId)
+	url := fmt.Sprintf("%s/auth/api_keys/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), apiKeyId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

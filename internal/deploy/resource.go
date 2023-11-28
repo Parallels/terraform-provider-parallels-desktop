@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"terraform-provider-parallels-desktop/internal/interfaces"
+	"terraform-provider-parallels-desktop/internal/localclient"
 	"terraform-provider-parallels-desktop/internal/models"
+	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 	"terraform-provider-parallels-desktop/internal/ssh"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -64,13 +68,20 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	sshClient, err := r.getSshClient(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Error creating SSH client", err.Error())
-		return
+	var runClient interfaces.CommandClient
+	var runClientError error
+
+	if data.InstallLocal.ValueBool() {
+		runClient = localclient.NewLocalClient()
+	} else {
+		runClient, runClientError = r.getSshClient(data)
+		if runClientError != nil {
+			resp.Diagnostics.AddError("Error creating SSH client", runClientError.Error())
+			return
+		}
 	}
 
-	parallelsClient := NewParallelsServerClient(ctx, sshClient)
+	parallelsClient := NewParallelsServerClient(ctx, runClient)
 
 	// installing dependencies
 	if err := parallelsClient.InstallDependencies(); err != nil {
@@ -120,7 +131,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		config.RootPassword = r.provider.License
 	}
 
-	_, err = parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
+	_, err := parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
 	if err != nil {
 		resp.Diagnostics.AddError("Error installing parallels api service", err.Error())
 		return
@@ -186,6 +197,36 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		data.License = license.MapObject()
 	}
 
+	// Register with orchestrator if needed
+	if data.Orchestrator != nil {
+		orch := *data.Orchestrator
+
+		if data.Orchestrator.Host.ValueString() == "" {
+			orch.Host = apiData.Host
+		}
+		if data.Orchestrator.Port.ValueString() == "" {
+			orch.Port = apiData.Port
+		}
+
+		if data.Orchestrator.HostCredentials == nil {
+			orch.HostCredentials = &authenticator.Authentication{
+				Username: apiData.User,
+				Password: apiData.Password,
+			}
+		}
+		if data.Orchestrator.Schema.ValueString() == "" {
+			orch.Schema = apiData.Protocol
+		}
+
+		id, diag := orchestrator.RegisterWithHost(ctx, orch)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		data.Orchestrator.HostId = types.StringValue(id)
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -200,13 +241,19 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 		return
 	}
 
-	sshClient, err := r.getSshClient(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Error creating SSH client", err.Error())
-		return
-	}
+	var runClient interfaces.CommandClient
+	var runClientError error
 
-	parallelsClient := NewParallelsServerClient(ctx, sshClient)
+	if data.InstallLocal.ValueBool() {
+		runClient = localclient.NewLocalClient()
+	} else {
+		runClient, runClientError = r.getSshClient(data)
+		if runClientError != nil {
+			resp.Diagnostics.AddError("Error creating SSH client", runClientError.Error())
+			return
+		}
+	}
+	parallelsClient := NewParallelsServerClient(ctx, runClient)
 
 	// getting parallels version
 	if version, err := parallelsClient.GetVersion(); err != nil {
@@ -266,13 +313,20 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	sshClient, err := r.getSshClient(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Error creating SSH client", err.Error())
-		return
+	var runClient interfaces.CommandClient
+	var runClientError error
+
+	if data.InstallLocal.ValueBool() {
+		runClient = localclient.NewLocalClient()
+	} else {
+		runClient, runClientError = r.getSshClient(data)
+		if runClientError != nil {
+			resp.Diagnostics.AddError("Error creating SSH client", runClientError.Error())
+			return
+		}
 	}
 
-	parallelsClient := NewParallelsServerClient(ctx, sshClient)
+	parallelsClient := NewParallelsServerClient(ctx, runClient)
 
 	// restart parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
@@ -432,7 +486,7 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 	}
 
 	if hasChangesInApi {
-		err = parallelsClient.UninstallApiService()
+		err := parallelsClient.UninstallApiService()
 		if err != nil {
 			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
 			return
@@ -466,8 +520,56 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		apiData.Protocol = types.StringValue("http")
 	}
 
-	apiData.Password = config.RootPassword
+	if config.RootPassword.ValueString() == "" {
+		apiData.Password = r.provider.License
+	} else {
+		apiData.Password = config.RootPassword
+	}
 	data.Api = apiData.MapObject()
+
+	if data.Orchestrator != nil {
+		if orchestrator.HasChanges(ctx, data.Orchestrator, currentData.Orchestrator) {
+			// checking if we already registered with orchestrator
+			if currentData.Orchestrator != nil && currentData.Orchestrator.HostId.ValueString() != "" {
+				if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
+			}
+			orch := *data.Orchestrator
+
+			if data.Orchestrator.Host.ValueString() == "" {
+				orch.Host = apiData.Host
+			}
+			if data.Orchestrator.Port.ValueString() == "" {
+				orch.Port = apiData.Port
+			}
+
+			if data.Orchestrator.HostCredentials == nil {
+				orch.HostCredentials = &authenticator.Authentication{
+					Username: apiData.User,
+					Password: apiData.Password,
+				}
+			}
+			if data.Orchestrator.Schema.ValueString() == "" {
+				orch.Schema = apiData.Protocol
+			}
+			id, diag := orchestrator.RegisterWithHost(ctx, orch)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			data.Orchestrator.HostId = types.StringValue(id)
+		}
+	} else if currentData.Orchestrator != nil {
+		if currentData.Orchestrator.HostId.ValueString() != "" {
+			if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator); diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+		}
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, data)...)
 	if resp.Diagnostics.HasError() {
@@ -481,13 +583,20 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	sshClient, err := r.getSshClient(data)
-	if err != nil {
-		resp.Diagnostics.AddError("Error creating SSH client", err.Error())
-		return
+	var runClient interfaces.CommandClient
+	var runClientError error
+
+	if data.InstallLocal.ValueBool() {
+		runClient = localclient.NewLocalClient()
+	} else {
+		runClient, runClientError = r.getSshClient(data)
+		if runClientError != nil {
+			resp.Diagnostics.AddError("Error creating SSH client", runClientError.Error())
+			return
+		}
 	}
 
-	parallelsService := NewParallelsServerClient(ctx, sshClient)
+	parallelsService := NewParallelsServerClient(ctx, runClient)
 
 	// deactivating parallels license
 	if err := parallelsService.DeactivateLicense(); err != nil {
@@ -526,6 +635,13 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 		"user":     types.StringType,
 		"password": types.StringType,
 	})
+
+	if data.Orchestrator != nil {
+		if diag := orchestrator.UnregisterWithHost(ctx, *data.Orchestrator); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	}
 
 	if resp.Diagnostics.HasError() {
 		return

@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type VmSpecs struct {
@@ -63,25 +62,13 @@ func (s *VmSpecs) MapObject() (basetypes.ObjectValue, diag.Diagnostics) {
 
 func (s *VmSpecs) Apply(ctx context.Context, config apiclient.HostConfig, vm apimodels.VirtualMachine) diag.Diagnostics {
 	diagnostic := diag.Diagnostics{}
-	diagnostics := diag.Diagnostics{}
-	refreshVm, diag := apiclient.GetVm(ctx, config, vm.ID)
-	if diag.HasError() {
-		diagnostics.Append(diag...)
-		return diagnostics
+
+	if vm.State != "stopped" {
+		diagnostic.AddError("vm must be stopped", "vm must be stopped")
+		return diagnostic
 	}
 
-	if refreshVm.State != "stopped" {
-		result, stateDiag := apiclient.SetMachineState(ctx, config, refreshVm.ID, apiclient.MachineStateOpStop)
-		if stateDiag.HasError() {
-			diagnostic.Append(stateDiag...)
-		}
-		if !result {
-			diagnostic.AddError("error stopping vm", "error stopping vm")
-		}
-		tflog.Info(ctx, "Waiting for vm "+refreshVm.Name+" to stop")
-	}
-
-	vmConfigRequest := apimodels.NewVmConfigRequest(refreshVm.User)
+	vmConfigRequest := apimodels.NewVmConfigRequest(vm.User)
 	if s.CpuCount.ValueString() != "" {
 		op := apimodels.NewVmConfigRequestOperation(vmConfigRequest)
 		op.WithGroup("cpu")
@@ -98,7 +85,7 @@ func (s *VmSpecs) Apply(ctx context.Context, config apiclient.HostConfig, vm api
 		op.Append()
 	}
 
-	_, resultDiagnostic := apiclient.ConfigureMachine(ctx, config, refreshVm.ID, vmConfigRequest)
+	_, resultDiagnostic := apiclient.ConfigureMachine(ctx, config, vm.ID, vmConfigRequest)
 	if resultDiagnostic.HasError() {
 		diagnostic.Append(resultDiagnostic...)
 		return diagnostic

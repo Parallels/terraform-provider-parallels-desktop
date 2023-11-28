@@ -5,12 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
-	"terraform-provider-parallels-desktop/internal/ssh"
+	"terraform-provider-parallels-desktop/internal/interfaces"
+	"terraform-provider-parallels-desktop/internal/localclient"
 
+	"github.com/cjlapao/common-go/commands"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pkg/errors"
 )
@@ -18,11 +21,11 @@ import (
 var installPath = "/usr/local/bin"
 
 type ParallelsServerClient struct {
-	client *ssh.SshClient
+	client interfaces.CommandClient
 	ctx    context.Context
 }
 
-func NewParallelsServerClient(ctx context.Context, client *ssh.SshClient) *ParallelsServerClient {
+func NewParallelsServerClient(ctx context.Context, client interfaces.CommandClient) *ParallelsServerClient {
 	return &ParallelsServerClient{
 		client: client,
 		ctx:    ctx,
@@ -30,7 +33,9 @@ func NewParallelsServerClient(ctx context.Context, client *ssh.SshClient) *Paral
 }
 
 func (c *ParallelsServerClient) GetInfo() (*clientmodels.ParallelsServerInfo, error) {
-	output, err := c.client.RunCommand("/usr/local/bin/prlsrvctl info --json")
+	cmd := c.findPath("prlsrvctl")
+	arguments := []string{"info", "--json"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
 	if err != nil {
 		return nil, err
@@ -58,8 +63,14 @@ func (c *ParallelsServerClient) GetVersion() (string, error) {
 }
 
 func (c *ParallelsServerClient) RestartServer() error {
-	restartServiceCmd := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service start && /Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service start"
-	_, err := c.client.RunCommand(restartServiceCmd)
+	cmd := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service"
+	arguments := []string{"start"}
+	_, err := c.client.RunCommand(cmd, arguments)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return err
 	}
@@ -68,35 +79,54 @@ func (c *ParallelsServerClient) RestartServer() error {
 }
 
 func (c *ParallelsServerClient) InstallDependencies() error {
+
 	// Installing Brew
-	_, err := c.client.RunCommand("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-	if err != nil {
-		return errors.New("Error running brew install command, error: " + err.Error())
+	var cmd string
+	var arguments []string
+
+	_, ok := c.client.(*localclient.LocalClient)
+	if !ok {
+		cmd = "/bin/bash"
+		arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
+		_, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running brew install command, error: " + err.Error())
+		}
 	}
 
 	// Installing Git
-	_, err = c.client.RunCommand("/opt/homebrew/bin/brew install git")
+	cmd = c.findPath("brew")
+	arguments = []string{"install", "git"}
+	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running git install command, error: " + err.Error())
 	}
 
 	// Installing Packer
-	_, err = c.client.RunCommand("/opt/homebrew/bin/brew install packer")
+	cmd = c.findPath("brew")
+	arguments = []string{"install", "packer"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running packer install command, error: " + err.Error())
 	}
 
 	// Installing Vagrant
-	out, err := c.client.RunCommand("/opt/homebrew/bin/brew install hashicorp-vagrant")
-	if err != nil {
-		tflog.Info(c.ctx, "Vagrant install output: "+out)
-		return errors.New("Error running vagrant install command, error: " + err.Error())
-	}
+	if !ok {
+		cmd = c.findPath("brew")
+		arguments = []string{"install", "vagrant"}
+		out, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			tflog.Info(c.ctx, "Vagrant install output: "+out)
+			return errors.New("Error running vagrant install command, error: " + err.Error())
+		}
 
-	// Installing Vagrant Parallels Plugin
-	_, err = c.client.RunCommand("/usr/local/bin/vagrant plugin install vagrant-parallels")
-	if err != nil {
-		return errors.New("Error running  plugin install command, error: " + err.Error())
+		// Installing Vagrant Parallels Plugin
+		cmd = "/usr/local/bin/vagrant"
+		arguments = []string{"plugin", "install", "vagrant-parallels"}
+		_, err = c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running  plugin install command, error: " + err.Error())
+		}
 	}
 
 	return nil
@@ -104,25 +134,33 @@ func (c *ParallelsServerClient) InstallDependencies() error {
 
 func (c *ParallelsServerClient) UninstallDependencies() error {
 	// Uninstalling Git
-	_, err := c.client.RunCommand(" /opt/homebrew/bin/brew uninstall git")
+	cmd := c.findPath("brew")
+	arguments := []string{"uninstall", "git"}
+	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running git uninstall command, error: " + err.Error())
 	}
 
 	// Uninstalling Packer
-	_, err = c.client.RunCommand("/opt/homebrew/bin/brew uninstall packer")
+	cmd = c.findPath("brew")
+	arguments = []string{"uninstall", "packer"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running packer uninstall command, error: " + err.Error())
 	}
 
 	// Uninstalling Vagrant Parallels Plugin
-	_, err = c.client.RunCommand("/usr/local/bin/vagrant plugin uninstall vagrant-parallels")
+	cmd = c.findPath("vagrant")
+	arguments = []string{"plugin", "uninstall", "vagrant-parallels"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running vagrant uninstall plugin command, error: " + err.Error())
 	}
 
 	// Uninstalling Vagrant
-	_, err = c.client.RunCommand("/opt/homebrew/bin/brew uninstall hashicorp-vagrant")
+	cmd = c.findPath("brew")
+	arguments = []string{"uninstall", "hashicorp-vagrant"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running vagrant uninstall command, error: " + err.Error())
 	}
@@ -132,7 +170,9 @@ func (c *ParallelsServerClient) UninstallDependencies() error {
 
 func (c *ParallelsServerClient) InstallParallelsDesktop() error {
 	// Installing parallels desktop using command line
-	_, err := c.client.RunCommand("/opt/homebrew/bin/brew install parallels")
+	cmd := c.findPath("brew")
+	arguments := []string{"install", "parallels"}
+	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running parallels install command, error: " + err.Error())
 	}
@@ -142,7 +182,9 @@ func (c *ParallelsServerClient) InstallParallelsDesktop() error {
 
 func (c *ParallelsServerClient) UninstallParallelsDesktop() error {
 	// Uninstalling parallels desktop using command line
-	_, err := c.client.RunCommand("/opt/homebrew/bin/brew uninstall parallels")
+	cmd := c.findPath("brew")
+	arguments := []string{"uninstall", "parallels"}
+	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running parallels uninstall command, error: " + err.Error())
 	}
@@ -151,7 +193,9 @@ func (c *ParallelsServerClient) UninstallParallelsDesktop() error {
 }
 
 func (c *ParallelsServerClient) GetLicense() (*ParallelsDesktopLicense, error) {
-	output, err := c.client.RunCommand("/usr/local/bin/prlsrvctl info --json")
+	cmd := c.findPath("prlsrvctl")
+	arguments := []string{"info", "--json"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
 	if err != nil {
 		return nil, err
@@ -172,27 +216,24 @@ func (c *ParallelsServerClient) GetLicense() (*ParallelsDesktopLicense, error) {
 }
 
 func (c *ParallelsServerClient) InstallLicense(key string, username, password string) error {
-	cmd := ""
-	installLicense := fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s", key)
 	if username != "" && password != "" {
-		textPassword := fmt.Sprintf("echo %s >~/parallels_password.txt", password)
-		loginCommand := fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl web-portal signin %s --read-passwd ~/parallels_password.txt", username)
-		_, err := c.client.RunCommand(fmt.Sprintf("echo $PARALLELS_USER_PASSWORD >~/parallels_password.txt && /Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s --activate-online-immediately", key))
-		if err != nil {
+		// Generating the license password file
+		cmd := "echo"
+		arguments := []string{password, ">", "~/parallels_password.txt"}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 			return err
 		}
-		_, err = c.client.RunCommand(fmt.Sprintf("/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl install-license --key %s --activate-online-immediately", key))
-		if err != nil {
+
+		cmd = c.findPath("prlsrvctl")
+		arguments = []string{"web-portal", "signin", username, "--read-passwd", "~/parallels_password.txt"}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 			return err
 		}
-		cmd = fmt.Sprintf("%s && %s && %s", textPassword, loginCommand, installLicense)
-	} else {
-		cmd = installLicense
 	}
 
-	// Activate Parallels Desktop
-	_, err := c.client.RunCommand(cmd)
-	if err != nil {
+	cmd := c.findPath("prlsrvctl")
+	arguments := []string{"install-license", "--key", key, "--activate-online-immediately"}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
 
@@ -200,10 +241,10 @@ func (c *ParallelsServerClient) InstallLicense(key string, username, password st
 }
 
 func (c *ParallelsServerClient) DeactivateLicense() error {
-	deactivateLicense := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/prlsrvctl deactivate-license --skip-network-errors"
-	// Deactivate Parallels Desktop
-	_, err := c.client.RunCommand(deactivateLicense)
-	if err != nil {
+	cmd := c.findPath("prlsrvctl")
+	arguments := []string{"deactivate-license", "--skip-network-errors"}
+
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
 
@@ -285,18 +326,24 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 
 	tflog.Info(c.ctx, "Downloading the asset")
 	// Downloading the asset
-	_, err := c.client.RunCommand(fmt.Sprintf("curl -L -o /tmp/pd-api-service.tar.gz %s", assetUrl))
+	cmd := c.findPath("curl")
+	arguments := []string{"-L", "-o", "/tmp/pd-api-service.tar.gz", assetUrl}
+	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
 	}
 
 	tflog.Info(c.ctx, "Extracting the asset")
-	_, err = c.client.RunCommand("sudo tar -xzf /tmp/pd-api-service.tar.gz -C " + installPath)
-	if err != nil {
+	// Extracting the asset
+	cmd = "sudo"
+	arguments = []string{c.findPath("tar"), "-xzf", "/tmp/pd-api-service.tar.gz", "-C", installPath}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}
-	_, err = c.client.RunCommand("sudo rm -f /tmp/pd-api-service.tar.gz")
-	if err != nil {
+
+	cmd = "sudo"
+	arguments = []string{"rm", "-f", "/tmp/pd-api-service.tar.gz"}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}
 
@@ -310,15 +357,18 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 		}
 
 		tflog.Info(c.ctx, "Installing service in the launchd daemon")
-		installCmd := fmt.Sprintf("sudo %s/pd-api-service --install --file=%s", installPath, configPath)
-		out, err := c.client.RunCommand(installCmd)
+		cmd = "sudo"
+		arguments = []string{installPath + "/pd-api-service", "--install", "--file=" + configPath}
+		out, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			tflog.Info(c.ctx, "Error installing service: \n"+out)
 			return "", err
 		}
 
 		tflog.Info(c.ctx, "Cleaning configuration")
-		_, err = c.client.RunCommand("sudo rm -f " + configPath)
+		cmd = "sudo"
+		arguments = []string{"rm", "-f", configPath}
+		_, err = c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return "", err
 		}
@@ -332,17 +382,23 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 
 func (c *ParallelsServerClient) UninstallApiService() error {
 	tflog.Info(c.ctx, "Uninstalling the API Service")
-	unInstallCmd := fmt.Sprintf("sudo %s/pd-api-service --uninstall", installPath)
-	uninstallOut, err := c.client.RunCommand(unInstallCmd)
+	cmd := "sudo"
+	arguments := []string{installPath + "/pd-api-service", "--uninstall"}
+	uninstallOut, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		tflog.Error(c.ctx, "Error uninstalling service: \n"+uninstallOut)
 		return err
 	}
 
-	rmExecCmd := "sudo rm -f /usr/local/bin/pd-api-service"
-	rmLogsCmd := "sudo rm -f /tmp/api-service.job.*"
-	_, err = c.client.RunCommand(fmt.Sprintf("%s && %s", rmExecCmd, rmLogsCmd))
-	if err != nil {
+	cmd = "sudo"
+	arguments = []string{"rm", "-f", installPath + "/pd-api-service"}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+		return err
+	}
+
+	cmd = "sudo"
+	arguments = []string{"rm", "-f", "/tmp/api-service.job.*"}
+	if _, err = c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
 
@@ -350,7 +406,9 @@ func (c *ParallelsServerClient) UninstallApiService() error {
 }
 
 func (c *ParallelsServerClient) GetApiVersion() (string, error) {
-	output, err := c.client.RunCommand("/usr/local/bin/pd-api-service --version")
+	cmd := installPath + "/pd-api-service"
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
 	}
@@ -359,7 +417,9 @@ func (c *ParallelsServerClient) GetApiVersion() (string, error) {
 }
 
 func (c *ParallelsServerClient) GetPackerVersion() (string, error) {
-	output, err := c.client.RunCommand("/opt/homebrew/bin/packer --version")
+	cmd := c.findPath("packer")
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
 	}
@@ -368,7 +428,9 @@ func (c *ParallelsServerClient) GetPackerVersion() (string, error) {
 }
 
 func (c *ParallelsServerClient) GetVagrantVersion() (string, error) {
-	output, err := c.client.RunCommand("/usr/local/bin/vagrant --version")
+	cmd := c.findPath("vagrant")
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
 	}
@@ -377,7 +439,9 @@ func (c *ParallelsServerClient) GetVagrantVersion() (string, error) {
 }
 
 func (c *ParallelsServerClient) GetGitVersion() (string, error) {
-	output, err := c.client.RunCommand("/opt/homebrew/bin/git --version")
+	cmd := c.findPath("git")
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
 	}
@@ -449,13 +513,36 @@ func (c *ParallelsServerClient) generateConfigFile(path string, config Parallels
 		return err
 	}
 
-	if _, err := c.client.RunCommand("touch " + path); err != nil {
+	cmd := "touch"
+	arguments := []string{path}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
 
-	if _, err := c.client.RunCommand("echo  '" + string(confJson) + "' > " + path); err != nil {
+	cmd = "echo"
+	arguments = []string{"'" + string(confJson) + "' ", ">", path}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *ParallelsServerClient) findPath(cmd string) string {
+	tflog.Info(s.ctx, "Getting "+cmd+" executable")
+	out, err := commands.ExecuteWithNoOutput("which", cmd)
+	path := strings.ReplaceAll(strings.TrimSpace(out), "\n", "")
+	if err != nil || path == "" {
+		tflog.Info(s.ctx, cmd+" executable not found, trying to find it in the default locations")
+	}
+	folders := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin"}
+
+	for _, folder := range folders {
+		if _, err := os.Stat(folder + "/" + cmd); err == nil {
+			path = folder + "/" + cmd
+			break
+		}
+	}
+
+	return path
 }

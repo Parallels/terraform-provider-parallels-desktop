@@ -17,7 +17,7 @@ func GetUsers(ctx context.Context, config HostConfig, filterField, filterValue s
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.UserResponse, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

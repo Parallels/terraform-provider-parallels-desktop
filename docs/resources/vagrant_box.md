@@ -13,35 +13,87 @@ Parallels Virtual Machine State Resource
 ## Example Usage
 
 ```terraform
-resource "parallels-desktop_remote_vm" "example" {
-  host            = "https://example.com:8080"
-  name            = "example"
-  owner           = "ec2-user"
-  catalog_id      = "example-machine"
-  host_connection = "host=user:password@catalog.example.com"
-  path            = "/Users/example/Parallels"
+resource "parallels-desktop_remote_vm" "example_vagrant_file" {
+  host  = "https://example.com:8080"
+  name  = "example"
+  owner = "ec2-user"
+  # you can use your own local vagrant file 
+  vagrant_file_path = "/path/to/Vagrantfile"
+  #or use the box name/version to download the box from the vagrant cloud
+  box_name    = "example/fedora-aarch64"
+  box_version = "0.0.1"
 
+  # These two fields will allow you to pass custom configuration to the vagrant file
+  custom_parallels_config = "some config"
+  custom_vagrant_config   = "some config"
+
+  # This will tell how should we authenticate with the host API
+  # you can either use it or leave it empty, if left empty then
+  # we will use the default root user and password
   authenticator {
     api_key = "host api key"
   }
 
+  # This will contain some common configuration for the VM
+  # like if we should start it headless or not
+  config {
+    start_headless     = false
+    enable_rosetta     = false
+    pause_idle         = false
+    auto_start_on_host = false
+  }
+
+  # This will contain a configuration for the specs of the VM
   specs {
     cpu_count   = "2"
     memory_size = "2048"
   }
 
+  # this will allow you to fine grain the configuration of the VM
+  # you can pass any command that is compatible with the prlctl command
+  # directly to the VM
+  # Attention: the prlctl will not keep the state, meaning it will always
+  # execute the action and if you remove it it will not bring the machine
+  # to the previous state before setting that configuration
+  prlctl {
+    operation = "set"
+    flags = [
+      "some-flag"
+    ]
+
+    options = [
+      {
+        flag  = "description"
+        value = "some description"
+      }
+    ]
+  }
+
   force_changes = true
 
+  # This will contain the configuration for the shared folders
   shared_folder {
     name = "user_download_folder"
     path = "/Users/example/Downloads"
   }
 
+  # This will contain the configuration for the post processor script
+  # allowing you to run any command on the VM after it has been deployed
+  # you can have multiple lines and they will be executed in order
   post_processor_script {
     inline = [
       "ls -la"
     ]
   }
+
+  # This is a special block that will allow you to undo any changes your scripts have done
+  # if you are destroying a VM, like unregistering from a service where the VM was registered
+  on_destroy_script {
+    inline = [
+      "rm -rf /tmp/*"
+    ]
+  }
+
 }
 ```
 
@@ -58,11 +110,14 @@ resource "parallels-desktop_remote_vm" "example" {
 - `authenticator` (Block, Optional) Authenticator block, this is used to authenticate with the Parallels Desktop API, if empty it will try to use the root password (see [below for nested schema](#nestedblock--authenticator))
 - `box_name` (String) Vagrant box name
 - `box_version` (String) Vagrant box version
+- `config` (Block, Optional) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--config))
 - `custom_parallels_config` (String) Custom Parallels config
 - `custom_vagrant_config` (String) Custom Vagrant config
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
+- `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `owner` (String) Virtual Machine owner
 - `post_processor_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--post_processor_script))
+- `prlctl` (Block List) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--prlctl))
 - `run_after_create` (Boolean) Run after create
 - `shared_folder` (Block List) Shared Folders Block, this is used to share folders with the virtual machine (see [below for nested schema](#nestedblock--shared_folder))
 - `specs` (Block, Optional) Virtual Machine Specs block, this is used to set the specs of the virtual machine (see [below for nested schema](#nestedblock--specs))
@@ -82,6 +137,40 @@ Optional:
 - `api_key` (String, Sensitive) Parallels desktop API API Key
 - `password` (String, Sensitive) Parallels desktop API Password
 - `username` (String) Parallels desktop API Username
+
+
+<a id="nestedblock--config"></a>
+### Nested Schema for `config`
+
+Optional:
+
+- `auto_start_on_host` (Boolean) Start the VM when the host starts, this will stop the VM if it is running
+- `enable_rosetta` (Boolean) Enable Rosetta on Apple Silicon, this will stop the VM if it is running
+- `pause_idle` (Boolean) Pause the VM when the host is idle, this will stop the VM if it is running
+- `start_headless` (Boolean) Set the VM to start headless, this will stop the VM if it is running
+
+
+<a id="nestedblock--on_destroy_script"></a>
+### Nested Schema for `on_destroy_script`
+
+Optional:
+
+- `inline` (List of String) Inline script
+
+Read-Only:
+
+- `result` (Attributes List, Sensitive) Result of the script (see [below for nested schema](#nestedatt--on_destroy_script--result))
+
+<a id="nestedatt--on_destroy_script--result"></a>
+### Nested Schema for `on_destroy_script.result`
+
+Optional:
+
+- `exit_code` (String) Exit code
+- `script` (String) Script
+- `stderr` (String) Stderr
+- `stdout` (String) Stdout
+
 
 
 <a id="nestedblock--post_processor_script"></a>
@@ -104,6 +193,25 @@ Optional:
 - `script` (String) Script
 - `stderr` (String) Stderr
 - `stdout` (String) Stdout
+
+
+
+<a id="nestedblock--prlctl"></a>
+### Nested Schema for `prlctl`
+
+Optional:
+
+- `flags` (List of String) Set the VM flags, this will stop the VM if it is running
+- `operation` (String) Set the VM to start headless, this will stop the VM if it is running
+- `options` (Attributes List) Set the VM options, this will stop the VM if it is running (see [below for nested schema](#nestedatt--prlctl--options))
+
+<a id="nestedatt--prlctl--options"></a>
+### Nested Schema for `prlctl.options`
+
+Optional:
+
+- `flag` (String) Set the VM option flag, this will stop the VM if it is running
+- `value` (String) Set the VM option value, this will stop the VM if it is running
 
 
 

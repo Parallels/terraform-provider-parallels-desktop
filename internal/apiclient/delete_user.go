@@ -18,7 +18,7 @@ func DeleteUser(ctx context.Context, config HostConfig, userId string) diag.Diag
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/auth/users/%s", helpers.GetHostApiBaseUrl(urlHost), userId)
+	url := fmt.Sprintf("%s/auth/users/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), userId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

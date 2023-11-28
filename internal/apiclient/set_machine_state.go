@@ -25,7 +25,7 @@ const (
 func SetMachineState(ctx context.Context, config HostConfig, machineId string, op MachineStateOp) (bool, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiBaseUrl(urlHost), machineId)
+	url := fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

@@ -15,7 +15,7 @@ func GetClaim(ctx context.Context, config HostConfig, claimId string) (*apimodel
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.ClaimRoleResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/claims/%s", helpers.GetHostApiBaseUrl(urlHost), claimId)
+	url := fmt.Sprintf("%s/auth/claims/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), claimId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

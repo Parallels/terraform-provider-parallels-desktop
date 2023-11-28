@@ -15,7 +15,7 @@ func GetUser(ctx context.Context, config HostConfig, userId string) (*apimodels.
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.UserResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users/%s", helpers.GetHostApiBaseUrl(urlHost), userId)
+	url := fmt.Sprintf("%s/auth/users/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), userId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

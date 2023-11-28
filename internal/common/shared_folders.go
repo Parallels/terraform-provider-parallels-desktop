@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func CreateSharedFolders(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, planSharedFolder []*sharedfolder.SharedFolder) diag.Diagnostics {
+func SharedFoldersBlockOnCreate(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, planSharedFolder []*sharedfolder.SharedFolder) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
 	for _, sharedFolder := range planSharedFolder {
@@ -25,7 +25,7 @@ func CreateSharedFolders(ctx context.Context, hostConfig apiclient.HostConfig, v
 	return diagnostics
 }
 
-func UpdateSharedFolders(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, planSharedFolder, stateSharedFolder []*sharedfolder.SharedFolder) diag.Diagnostics {
+func SharedFoldersBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, planSharedFolder, stateSharedFolder []*sharedfolder.SharedFolder) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
 	// First lets remove the current shared folders in the current state that do not exist in the new state

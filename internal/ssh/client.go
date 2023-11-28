@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/cjlapao/common-go/helper"
 	"github.com/pkg/sftp"
@@ -109,7 +110,8 @@ func (c *SshClient) BaseAddress() string {
 	return baseAddress
 }
 
-func (c *SshClient) RunCommand(command string) (string, error) {
+func (c *SshClient) RunCommand(command string, arguments []string) (string, error) {
+	cmd := command + " " + strings.Join(arguments, " ")
 	conn, err := ssh.Dial("tcp", c.BaseAddress(), c.config)
 	if err != nil {
 		return "", err
@@ -124,7 +126,7 @@ func (c *SshClient) RunCommand(command string) (string, error) {
 	defer session.Close()
 
 	// Run the command
-	output, err := session.CombinedOutput(command)
+	output, err := session.CombinedOutput(cmd)
 	if err != nil {
 		return string(output), err
 	}

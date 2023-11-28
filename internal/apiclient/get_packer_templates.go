@@ -17,7 +17,7 @@ func GetPackerTemplates(ctx context.Context, config HostConfig, filterField, fil
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.PackerTemplate, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/templates/packer", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/templates/packer", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

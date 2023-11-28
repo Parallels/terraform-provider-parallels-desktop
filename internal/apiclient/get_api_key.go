@@ -15,7 +15,7 @@ func GetApiKey(ctx context.Context, config HostConfig, apiKeyId string) (*apimod
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.ApiKeyResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/api_keys/%s", helpers.GetHostApiBaseUrl(urlHost), apiKeyId)
+	url := fmt.Sprintf("%s/auth/api_keys/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), apiKeyId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

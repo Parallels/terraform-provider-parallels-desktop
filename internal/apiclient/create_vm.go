@@ -14,7 +14,7 @@ import (
 func CreateVm(ctx context.Context, config HostConfig, request apimodels.CreateVmRequest) (*apimodels.CreateVmResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/machines", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/machines", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

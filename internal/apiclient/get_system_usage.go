@@ -16,7 +16,7 @@ func GetSystemUsage(ctx context.Context, config HostConfig) (*apimodels.SystemUs
 	var response apimodels.SystemUsageResponse
 	urlHost := helpers.GetHostUrl(config.Host)
 
-	url := fmt.Sprintf("%s/config/hardware", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/config/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

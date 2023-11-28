@@ -1,4 +1,6 @@
 resource "parallels-desktop_deploy" "example" {
+
+  # This will contain the configuration for the Parallels Desktop API
   api_config {
     port                       = "8080"
     prefix                     = "/api"
@@ -16,7 +18,31 @@ resource "parallels-desktop_deploy" "example" {
     use_orchestrator_resources = false
   }
 
-  ssh_connection = {
+  # This will contain the configuration for the Parallels Desktop Orchestrator
+  # and how to register this instance with it
+  orchestrator_registration {
+    tags = [
+      "any identifying tags for this instance"
+    ]
+    description = "some description for this instance"
+
+    # this block will contain the configuration for the orchestrator
+    orchestrator {
+      schema = "http"
+      host   = "example.com"
+      port   = "80"
+      authentication {
+        username = "user@example.com"
+        password = "VerySecretPassword"
+      }
+    }
+  }
+
+  # This will contain the ssg configuration required to deploy Parallels Desktop to the remote
+  # machine, if you are deploying this locally then you can omit this block and use the flag instead
+  # but we will not be able to install all required dependencies so we still advise you to use this
+  # and set a ssh server up on the local machine
+  ssh_connection {
     type        = "ssh"
     user        = "ec2-user"
     private_key = "the private ssh key"

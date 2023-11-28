@@ -25,7 +25,7 @@ func CreateClaim(ctx context.Context, config HostConfig, claimName string) (*api
 
 	tflog.Info(ctx, "Creating Claim "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/claims", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/auth/claims", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

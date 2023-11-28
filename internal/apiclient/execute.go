@@ -14,7 +14,7 @@ import (
 func ExecuteScript(ctx context.Context, config HostConfig, machineId string, script string) (*apimodels.VmExecuteCommandResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiBaseUrl(urlHost), machineId)
+	url := fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

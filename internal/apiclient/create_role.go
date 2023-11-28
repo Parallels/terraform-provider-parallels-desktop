@@ -25,7 +25,7 @@ func CreateRole(ctx context.Context, config HostConfig, roleName string) (*apimo
 
 	tflog.Info(ctx, "Creating Role "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/roles", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/auth/roles", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

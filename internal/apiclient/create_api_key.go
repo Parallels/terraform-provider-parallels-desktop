@@ -22,7 +22,7 @@ func CreateApiKey(ctx context.Context, config HostConfig, request apimodels.ApiK
 
 	tflog.Info(ctx, "Creating API Key "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/api_keys", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/auth/api_keys", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

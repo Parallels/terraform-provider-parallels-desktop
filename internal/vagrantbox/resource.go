@@ -3,15 +3,14 @@ package vagrantbox
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common"
-	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/models"
+	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -86,30 +85,11 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		Authorization: data.Authenticator,
 	}
 
+	// before creating, if we have enough data we will be checking if we have enough resources
+	// in the current host
 	if data.Specs != nil {
-		// checking if we have enough resources for this change
-		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
-			return
-		}
-
-		updateValueInt, err := strconv.Atoi(data.Specs.CpuCount.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("error converting cpu count", err.Error())
-			return
-		}
-		if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
-			resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
-			return
-		}
-		updateMemoryValueInt, err := strconv.Atoi(data.Specs.MemorySize.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("error converting memory size", err.Error())
-			return
-		}
-		if hardwareInfo.TotalAvailable.MemorySize-float64(updateMemoryValueInt) <= 0 {
-			resp.Diagnostics.AddError("not enough memory", "not enough memory")
+		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
 			return
 		}
 	}
@@ -160,11 +140,18 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// stopping the machine as it might need some operations where the machine needs to be stopped
+	// add anything here in sequence that needs to be done before the machine is started
+	// so we do not loose time waiting for the machine to stop
+	stoppedVm, diag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+	}
+
 	// Applying the Specs block
 	if data.Specs != nil {
-		data.Specs.Apply(ctx, hostConfig, *createdVM)
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
+		if diags := common.SpecsBlockOnCreate(ctx, hostConfig, stoppedVm, data.Specs); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
 			if data.ID.ValueString() != "" {
 				// If we have an ID, we need to delete the machine
 				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
@@ -174,8 +161,30 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
+	// Configuring the machine if there is any configuration
+	if diag := common.VmConfigBlockOnCreate(ctx, hostConfig, stoppedVm, data.Config); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
+		return
+	}
+
+	// Applying any prlctl commands
+	if diag := common.PrlCtlBlockOnCreate(ctx, hostConfig, stoppedVm, data.PrlCtl); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
+		return
+	}
+
 	// Processing shared folders
-	if diag := common.CreateSharedFolders(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
+	if diag := common.SharedFoldersBlockOnCreate(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
@@ -196,10 +205,9 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	data.OsType = types.StringValue(createdVM.OS)
+	// Starting the vm if requested
 	if data.RunAfterCreate.ValueBool() {
-		isRunning, diag := apiclient.SetMachineState(ctx, hostConfig, createdVM.ID, apiclient.MachineStateOpStart)
-		if diag.HasError() {
+		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, stoppedVm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			if data.ID.ValueString() != "" {
 				// If we have an ID, we need to delete the machine
@@ -208,14 +216,38 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 			}
 			return
 		}
-		if !isRunning {
-			resp.Diagnostics.AddError("error starting vm", "error starting vm")
-			if data.ID.ValueString() != "" {
-				// If we have an ID, we need to delete the machine
-				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
-			}
+
+		_, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
 			return
+		}
+	}
+
+	data.OsType = types.StringValue(createdVM.OS)
+	if data.OnDestroyScript != nil {
+		for _, script := range data.OnDestroyScript {
+			elements := make([]attr.Value, 0)
+			result := postprocessorscript.PostProcessorScriptRunResult{
+				ExitCode: types.StringValue("0"),
+				Stdout:   types.StringValue(""),
+				Stderr:   types.StringValue(""),
+				Script:   types.StringValue(""),
+			}
+			mappedObject, diag := result.MapObject(ctx)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			elements = append(elements, mappedObject)
+			listValue, diag := types.ListValue(result.ElementType(ctx), elements)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			script.Result = listValue
 		}
 	}
 
@@ -319,135 +351,79 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	changes := apimodels.NewVmConfigRequest(vm.User)
+	nameChanges := apimodels.NewVmConfigRequest(vm.User)
+	currentState := vm.State
+	needsRestart := false
+	requireShutdown := false
 
 	// Name is not the same, we will need to rename the machine
 	if vm.Name != data.Name.ValueString() {
-		op := apimodels.NewVmConfigRequestOperation(changes)
+		op := apimodels.NewVmConfigRequestOperation(nameChanges)
 		op.WithGroup("machine")
 		op.WithOperation("rename")
 		op.WithValue(data.Name.ValueString())
 		op.Append()
 	}
 
-	if data.Specs != nil {
-		// checking if we have enough resources for this change
-		hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
+	configChanges := common.VmConfigBlockHasChanges(ctx, hostConfig, vm, data.Config, currentData.Config)
+	specsChanges := common.SpecsBlockHasChanges(ctx, hostConfig, vm, data.Specs, currentData.Specs)
+	prlctlChanges := common.PrlCtlBlockHasChanges(ctx, hostConfig, vm, data.PrlCtl, currentData.PrlCtl)
+	if specsChanges || configChanges || prlctlChanges || nameChanges.HasChanges() {
+		requireShutdown = true
+	}
+
+	if requireShutdown && vm.State != "stopped" {
+		if data.ForceChanges.ValueBool() {
+			if newVm, stopDiag := common.EnsureMachineStopped(ctx, hostConfig, vm); stopDiag.HasError() {
+				resp.Diagnostics.Append(stopDiag...)
+				return
+			} else {
+				vm = newVm
+			}
+
+			needsRestart = true
+		} else {
+			resp.Diagnostics.AddError("vm must be stopped before updating", "Virtual Machine "+vm.Name+" must be stopped before updating, currently "+vm.State)
 			return
-		}
-
-		if vm.State == "running" {
-			// Because this is an update we need to take into account the already existing cpu and add it to the total available
-			// if the vm is running, otherwise we already added that value to the reserved resources
-			hardwareInfo.TotalAvailable.LogicalCpuCount = hardwareInfo.TotalAvailable.LogicalCpuCount + vm.Hardware.CPU.Cpus
-			currentMemoryUsage, err := helpers.GetSizeByteFromString(vm.Hardware.Memory.Size)
-			if err != nil {
-				resp.Diagnostics.AddError("error getting memory size", err.Error())
-				return
-			}
-			hardwareInfo.TotalAvailable.MemorySize = hardwareInfo.TotalAvailable.MemorySize + helpers.ConvertByteToMegabyte(currentMemoryUsage)
-		}
-
-		if data.Specs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
-			updateValue := data.Specs.CpuCount.ValueString()
-			if updateValue == "" {
-				updateValue = "2"
-			}
-
-			updateValueInt, err := strconv.Atoi(updateValue)
-			if err != nil {
-				resp.Diagnostics.AddError("error converting cpu count", err.Error())
-				return
-			}
-
-			if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
-				resp.Diagnostics.AddError("not enough cpus", "not enough cpus")
-				return
-			}
-
-			op := apimodels.NewVmConfigRequestOperation(changes)
-			op.WithGroup("cpu")
-			op.WithOperation("set")
-			op.WithValue(updateValue)
-			if currentData.Specs == nil || currentData.Specs.CpuCount.ValueString() != updateValue {
-				op.Append()
-			}
-		}
-
-		if data.Specs.MemorySize.ValueString() != "" && data.Specs.MemorySize.ValueString() != strings.ReplaceAll(vm.Hardware.Memory.Size, "Mb", "") {
-			updateValue := data.Specs.CpuCount.ValueString()
-			if updateValue == "" {
-				updateValue = "2048"
-			}
-
-			updateValueInt, err := strconv.Atoi(updateValue)
-			if err != nil {
-				resp.Diagnostics.AddError("error converting memory size", err.Error())
-				return
-			}
-
-			if hardwareInfo.TotalAvailable.MemorySize-float64(updateValueInt) <= 0 {
-				resp.Diagnostics.AddError("not enough memory", "not enough memory")
-				return
-			}
-
-			op := apimodels.NewVmConfigRequestOperation(changes)
-			op.WithGroup("memory")
-			op.WithOperation("set")
-			op.WithValue(updateValue)
-			if currentData.Specs == nil || currentData.Specs.MemorySize.ValueString() != updateValue {
-				op.Append()
-			}
 		}
 	}
 
-	needsRestart := false
-	if changes.HasChanges() {
-		if vm.State != "stopped" {
-			if data.ForceChanges.ValueBool() {
-				result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStop)
-				if stateDiag.HasError() {
-					resp.Diagnostics.Append(stateDiag...)
-					return
-				}
-				if !result {
-					resp.Diagnostics.AddError("error stopping vm", "error stopping vm")
-					return
-				}
-				needsRestart = true
-			} else {
-				resp.Diagnostics.AddError("vm must be stopped before updating", "Virtual Machine "+vm.Name+" must be stopped before updating, currently "+vm.State)
-				return
-			}
+	// Applying the Specs block
+	if specsChanges {
+		if diags := common.SpecsBlockOnUpdate(ctx, hostConfig, vm, data.Specs, currentData.Specs); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
 		}
+	}
 
-		tflog.Info(ctx, "Updating vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString()+" with changes: "+changes.String())
-
-		if _, diag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, changes); diag.HasError() {
+	// Configuring the machine if there is any configuration
+	if configChanges {
+		if diag := common.VmConfigBlockOnUpdate(ctx, hostConfig, vm, data.Config, currentData.Config); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return
 		}
+	}
 
-		if needsRestart {
-			result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStart)
-			if stateDiag.HasError() {
-				resp.Diagnostics.Append(stateDiag...)
-				return
-			}
-			if !result {
-				resp.Diagnostics.AddError("error starting vm", "error starting vm")
-				return
-			}
+	// Applying any prlctl commands
+	if prlctlChanges {
+		if diag := common.PrlCtlBlockOnUpdate(ctx, hostConfig, vm, data.PrlCtl); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	}
 
-			// Sleep for a minute
-			time.Sleep(time.Minute)
+	// Restarting the machine if needed
+	if needsRestart || (vm.State == "stopped" && currentState == "running") {
+		if newVm, startDiags := common.EnsureMachineRunning(ctx, hostConfig, vm); startDiags.HasError() {
+			resp.Diagnostics.Append(startDiags...)
+			return
+		} else {
+			vm = newVm
 		}
 	}
 
 	// Processing shared folders
-	if diag := common.UpdateSharedFolders(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
+	if diag := common.SharedFoldersBlockOnUpdate(ctx, hostConfig, vm, data.SharedFolder, currentData.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
@@ -459,7 +435,31 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	data.ID = types.StringValue(vm.ID)
-	data.OsType = types.StringValue(vm.OS)
+	if data.OnDestroyScript != nil {
+		for _, script := range data.OnDestroyScript {
+			elements := make([]attr.Value, 0)
+			result := postprocessorscript.PostProcessorScriptRunResult{
+				ExitCode: types.StringValue("0"),
+				Stdout:   types.StringValue(""),
+				Stderr:   types.StringValue(""),
+				Script:   types.StringValue(""),
+			}
+			mappedObject, diag := result.MapObject(ctx)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			elements = append(elements, mappedObject)
+			listValue, diag := types.ListValue(result.ElementType(ctx), elements)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+
+			script.Result = listValue
+		}
+	}
 
 	tflog.Info(ctx, "Updated vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString())
 
@@ -511,16 +511,18 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	if vm.State != "stopped" {
-		result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, vm.ID, apiclient.MachineStateOpStop)
-		if stateDiag.HasError() {
-			resp.Diagnostics.Append(stateDiag...)
+	// Running cleanup script if any
+	if data.OnDestroyScript != nil {
+		if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.OnDestroyScript); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
 			return
 		}
-		if !result {
-			resp.Diagnostics.AddError("error stopping vm", "error stopping vm")
-			return
-		}
+	}
+
+	// Stopping the machine
+	if _, stopDiag := common.EnsureMachineStopped(ctx, hostConfig, vm); stopDiag.HasError() {
+		resp.Diagnostics.Append(stopDiag...)
+		return
 	}
 
 	deleteDiag := apiclient.DeleteVm(ctx, hostConfig, vm.ID)

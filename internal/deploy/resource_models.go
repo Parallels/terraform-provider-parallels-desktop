@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"terraform-provider-parallels-desktop/internal/clientmodels"
+	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -10,14 +11,16 @@ import (
 
 // DeployResourceModel describes the resource data model.
 type DeployResourceModel struct {
-	SshConnection         *DeployResourceSshConnection `tfsdk:"ssh_connection"`
-	CurrentVersion        types.String                 `tfsdk:"current_version"`
-	CurrentPackerVersion  types.String                 `tfsdk:"current_packer_version"`
-	CurrentVagrantVersion types.String                 `tfsdk:"current_vagrant_version"`
-	CurrentGitVersion     types.String                 `tfsdk:"current_git_version"`
-	License               types.Object                 `tfsdk:"license"`
-	ApiConfig             *ParallelsDesktopApiConfig   `tfsdk:"api_config"`
-	Api                   types.Object                 `tfsdk:"api"`
+	SshConnection         *DeployResourceSshConnection           `tfsdk:"ssh_connection"`
+	CurrentVersion        types.String                           `tfsdk:"current_version"`
+	CurrentPackerVersion  types.String                           `tfsdk:"current_packer_version"`
+	CurrentVagrantVersion types.String                           `tfsdk:"current_vagrant_version"`
+	CurrentGitVersion     types.String                           `tfsdk:"current_git_version"`
+	License               types.Object                           `tfsdk:"license"`
+	Orchestrator          *orchestrator.OrchestratorRegistration `tfsdk:"orchestrator_registration"`
+	ApiConfig             *ParallelsDesktopApiConfig             `tfsdk:"api_config"`
+	Api                   types.Object                           `tfsdk:"api"`
+	InstallLocal          types.Bool                             `tfsdk:"install_local"`
 }
 
 type DeployResourceSshConnection struct {

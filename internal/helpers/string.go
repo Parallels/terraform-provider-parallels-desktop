@@ -44,6 +44,10 @@ func GetHostApiBaseUrl(host string) string {
 	return strings.TrimSuffix(GetHostUrl(host)+constants.API_PREFIX, "/")
 }
 
+func GetHostApiVersionedBaseUrl(host string) string {
+	return strings.TrimSuffix(GetHostUrl(host)+constants.API_PREFIX_VERSION, "/")
+}
+
 func ConvertByteToGigabyte(bytes float64) float64 {
 	gb := bytes / 1024 / 1024 / 1024
 	return math.Round(gb*100) / 100

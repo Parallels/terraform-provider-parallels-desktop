@@ -4,7 +4,9 @@ import (
 	"context"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
+	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
 	"terraform-provider-parallels-desktop/internal/schemas/sharedfolder"
+	"terraform-provider-parallels-desktop/internal/schemas/vmconfig"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -21,7 +23,10 @@ func getSchema(ctx context.Context) schema.Schema {
 			authenticator.SchemaName:       authenticator.SchemaBlock,
 			vmspecs.SchemaName:             vmspecs.SchemaBlock,
 			postprocessorscript.SchemaName: postprocessorscript.SchemaBlock,
+			"on_destroy_script":            postprocessorscript.SchemaBlock,
 			sharedfolder.SchemaName:        sharedfolder.SchemaBlock,
+			vmconfig.SchemaName:            vmconfig.SchemaBlock,
+			prlctl.SchemaName:              prlctl.SchemaBlock,
 		},
 		Attributes: map[string]schema.Attribute{
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
@@ -41,6 +46,10 @@ func getSchema(ctx context.Context) schema.Schema {
 			},
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine Id",
+				Computed:            true,
+			},
+			"os_type": schema.StringAttribute{
+				MarkdownDescription: "Virtual Machine OS type",
 				Computed:            true,
 			},
 			"catalog_id": schema.StringAttribute{

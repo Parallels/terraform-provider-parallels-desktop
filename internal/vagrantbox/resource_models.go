@@ -3,7 +3,9 @@ package vagrantbox
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
+	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
 	"terraform-provider-parallels-desktop/internal/schemas/sharedfolder"
+	"terraform-provider-parallels-desktop/internal/schemas/vmconfig"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -27,6 +29,9 @@ type VagrantBoxResourceModel struct {
 	Timeouts              timeouts.Value                             `tfsdk:"timeouts"`
 	Specs                 *vmspecs.VmSpecs                           `tfsdk:"specs"`
 	PostProcessorScripts  []*postprocessorscript.PostProcessorScript `tfsdk:"post_processor_script"`
+	OnDestroyScript       []*postprocessorscript.PostProcessorScript `tfsdk:"on_destroy_script"`
 	SharedFolder          []*sharedfolder.SharedFolder               `tfsdk:"shared_folder"`
 	ForceChanges          types.Bool                                 `tfsdk:"force_changes"`
+	Config                *vmconfig.VmConfig                         `tfsdk:"config"`
+	PrlCtl                []*prlctl.PrlCtlCmd                        `tfsdk:"prlctl"`
 }

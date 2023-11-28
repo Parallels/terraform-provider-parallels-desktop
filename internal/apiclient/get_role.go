@@ -15,7 +15,7 @@ func GetRole(ctx context.Context, config HostConfig, roleId string) (*apimodels.
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.ClaimRoleResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/roles/%s", helpers.GetHostApiBaseUrl(urlHost), roleId)
+	url := fmt.Sprintf("%s/auth/roles/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), roleId)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

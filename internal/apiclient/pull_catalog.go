@@ -15,7 +15,7 @@ func PullCatalog(ctx context.Context, config HostConfig, request apimodels.PullC
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.PullCatalogResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/catalog/pull", helpers.GetHostApiBaseUrl(urlHost))
+	url := fmt.Sprintf("%s/catalog/pull", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
 	if err != nil {

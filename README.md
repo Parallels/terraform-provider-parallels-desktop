@@ -9,7 +9,7 @@
 
 ## Maintainers
 
-This provider plugin is maintained by Linode and the community, please check the [Code of Conduct](./CODE_OF_CONDUCT.md) if you want to participate.
+This provider plugin is maintained by Parallels and the community, please check the [Code of Conduct](./CODE_OF_CONDUCT.md) if you want to participate.
 
 
 ## Requirements

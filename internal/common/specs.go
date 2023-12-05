@@ -16,6 +16,10 @@ import (
 func SpecsBlockOnCreate(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, specs *vmspecs.VmSpecs) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
+	if specs == nil {
+		return diagnostics
+	}
+
 	refreshVm, diag := EnsureMachineStopped(ctx, hostConfig, vm)
 	if diag.HasError() {
 		diagnostics.Append(diag...)

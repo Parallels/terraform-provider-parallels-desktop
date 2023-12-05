@@ -14,11 +14,13 @@ Parallels Virtual Machine State Resource
 
 ```terraform
 resource "parallels-desktop_remote_vm" "example_box" {
-  host        = "https://example.com:8080"
-  name        = "example"
-  owner       = "ec2-user"
-  box_name    = "example/fedora-aarch64"
-  box_version = "0.0.1"
+  host            = "https://example.com:8080"
+  name            = "example-vm"
+  owner           = "example"
+  catalog_id      = "example-catalog-id"
+  version         = "v1"
+  host_connection = "host=user:VerySecretPassword@example.com"
+  path            = "/Users/example/Parallels"
 
   # This will tell how should we authenticate with the host API
   # you can either use it or leave it empty, if left empty then
@@ -74,6 +76,12 @@ resource "parallels-desktop_remote_vm" "example_box" {
   # allowing you to run any command on the VM after it has been deployed
   # you can have multiple lines and they will be executed in order
   post_processor_script {
+    // Retry the script 4 times with 10 seconds between each attempt
+    retry {
+      attempts              = 4
+      wait_between_attempts = "10s"
+    }
+
     inline = [
       "ls -la"
     ]
@@ -82,6 +90,12 @@ resource "parallels-desktop_remote_vm" "example_box" {
   # This is a special block that will allow you to undo any changes your scripts have done
   # if you are destroying a VM, like unregistering from a service where the VM was registered
   on_destroy_script {
+    // Retry the script 4 times with 10 seconds between each attempt
+    retry {
+      attempts              = 4
+      wait_between_attempts = "10s"
+    }
+
     inline = [
       "rm -rf /tmp/*"
     ]
@@ -147,10 +161,20 @@ Optional:
 Optional:
 
 - `inline` (List of String) Inline script
+- `retry` (Block, Optional) Retry settings (see [below for nested schema](#nestedblock--on_destroy_script--retry))
 
 Read-Only:
 
 - `result` (Attributes List, Sensitive) Result of the script (see [below for nested schema](#nestedatt--on_destroy_script--result))
+
+<a id="nestedblock--on_destroy_script--retry"></a>
+### Nested Schema for `on_destroy_script.retry`
+
+Optional:
+
+- `attempts` (Number) Number of attempts
+- `wait_between_attempts` (String) Wait between attempts, you can use the suffixes 's' for seconds, 'm' for minutes
+
 
 <a id="nestedatt--on_destroy_script--result"></a>
 ### Nested Schema for `on_destroy_script.result`
@@ -170,10 +194,20 @@ Optional:
 Optional:
 
 - `inline` (List of String) Inline script
+- `retry` (Block, Optional) Retry settings (see [below for nested schema](#nestedblock--post_processor_script--retry))
 
 Read-Only:
 
 - `result` (Attributes List, Sensitive) Result of the script (see [below for nested schema](#nestedatt--post_processor_script--result))
+
+<a id="nestedblock--post_processor_script--retry"></a>
+### Nested Schema for `post_processor_script.retry`
+
+Optional:
+
+- `attempts` (Number) Number of attempts
+- `wait_between_attempts` (String) Wait between attempts, you can use the suffixes 's' for seconds, 'm' for minutes
+
 
 <a id="nestedatt--post_processor_script--result"></a>
 ### Nested Schema for `post_processor_script.result`

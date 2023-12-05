@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"terraform-provider-parallels-desktop/internal/authorization"
+	clonevm "terraform-provider-parallels-desktop/internal/clone_vm"
 	deploy "terraform-provider-parallels-desktop/internal/deploy"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/remoteimage"
@@ -117,5 +118,6 @@ func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resou
 		authorization.NewAuthorizationResource,
 		vagrantbox.NewVagrantBoxResource,
 		remoteimage.NewRemoteVmResource,
+		clonevm.NewCloneVmResource,
 	}
 }

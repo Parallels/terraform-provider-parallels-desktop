@@ -1,4 +1,4 @@
-package vagrantbox
+package clonevm
 
 import (
 	"context"
@@ -18,27 +18,27 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &VagrantBoxResource{}
-var _ resource.ResourceWithImportState = &VagrantBoxResource{}
+var _ resource.Resource = &CloneVmResource{}
+var _ resource.ResourceWithImportState = &CloneVmResource{}
 
-func NewVagrantBoxResource() resource.Resource {
-	return &VagrantBoxResource{}
+func NewCloneVmResource() resource.Resource {
+	return &CloneVmResource{}
 }
 
-// VagrantBoxResource defines the resource implementation.
-type VagrantBoxResource struct {
+// CloneVmResource defines the resource implementation.
+type CloneVmResource struct {
 	provider *models.ParallelsProviderModel
 }
 
-func (r *VagrantBoxResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_vagrant_box"
+func (r *CloneVmResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_clone_vm"
 }
 
-func (r *VagrantBoxResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *CloneVmResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = getSchema(ctx)
 }
 
-func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *CloneVmResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -55,18 +55,19 @@ func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.Configu
 	r.provider = data
 }
 
-func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data VagrantBoxResourceModel
+func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data CloneVmResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+
 	resp.Diagnostics.Append(diags...)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -94,56 +95,67 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
-	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
+	// Checking if the name is already in use
+	existingVms, diag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
+	if diag.HasError() {
+		diag.Append(diag...)
+		return
+	}
+	if len(existingVms) > 0 {
+		resp.Diagnostics.AddError("Name already in use", "A VM with the name "+data.Name.ValueString()+" already exists in the host")
+		return
+	}
+
+	// Checking if we can find the base vm to clone
+	vm, diag := apiclient.GetVm(ctx, hostConfig, data.BaseVmId.ValueString())
 	if diag.HasError() {
 		diag.Append(diag...)
 		return
 	}
 
-	if len(vm) > 0 {
-		resp.Diagnostics.AddError("Vm already exists", "The vm "+data.Name.ValueString()+" already exists")
+	if vm == nil {
+		resp.Diagnostics.AddError("Base VM does not exist", "Could not find a base VM with ID "+data.BaseVmId.ValueString()+" in the host")
 		return
 	}
 
-	createVmRequest := apimodels.CreateVmRequest{
-		Name: data.Name.ValueString(),
-		VagrantBox: &apimodels.CreateVagrantVmRequest{
-			Box:                   data.BoxName.ValueString(),
-			Version:               data.BoxVersion.ValueString(),
-			VagrantFilePath:       data.VagrantFilePath.ValueString(),
-			CustomVagrantConfig:   data.CustomVagrantConfig.ValueString(),
-			CustomParallelsConfig: data.CustomParallelsConfig.ValueString(),
-		},
+	cloneRequest := apimodels.NewVmConfigRequest(vm.User)
+	op := apimodels.NewVmConfigRequestOperation(cloneRequest)
+	op.WithGroup("machine")
+	op.WithOperation("clone")
+	op.WithValue(data.Name.ValueString())
+
+	if data.Path.ValueString() != "" {
+		op.WithOption("dst", data.Path.ValueString())
 	}
 
-	if data.Owner.ValueString() != "" {
-		createVmRequest.Owner = data.Owner.ValueString()
+	op.WithFlag("regenerate-src-uuid")
+	op.Append()
+
+	_, createdVmDiag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, cloneRequest)
+	if createdVmDiag.HasError() {
+		resp.Diagnostics.Append(createdVmDiag...)
+		return
 	}
 
-	response, diag := apiclient.CreateVm(ctx, hostConfig, createVmRequest)
+	// Checking if we can find the base vm to clone
+	createdVms, diag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
 	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+		diag.Append(diag...)
 		return
 	}
-
-	data.ID = types.StringValue(response.ID)
-	tflog.Info(ctx, "Created vm with id "+data.ID.ValueString())
-
-	createdVM, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	if len(createdVms) != 1 {
+		resp.Diagnostics.AddError("Cloned Machine not Found", "Could not find the created clone machine of "+data.BaseVmId.ValueString()+" in the host")
 		return
 	}
+	clonedVm := createdVms[0]
 
-	if createdVM == nil {
-		resp.Diagnostics.AddError("vm was not found", "vm was not found")
-		return
-	}
+	data.ID = types.StringValue(clonedVm.ID)
+	tflog.Info(ctx, "Cloned base vm "+data.BaseVmId.ValueString()+" with new id "+data.ID.ValueString())
 
 	// stopping the machine as it might need some operations where the machine needs to be stopped
 	// add anything here in sequence that needs to be done before the machine is started
 	// so we do not loose time waiting for the machine to stop
-	stoppedVm, diag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
+	stoppedVm, diag := common.EnsureMachineStopped(ctx, hostConfig, &clonedVm)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 	}
@@ -184,7 +196,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Processing shared folders
-	if diag := common.SharedFoldersBlockOnCreate(ctx, hostConfig, createdVM, data.SharedFolder); diag.HasError() {
+	if diag := common.SharedFoldersBlockOnCreate(ctx, hostConfig, stoppedVm, data.SharedFolder); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
@@ -195,7 +207,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Running the post processor scripts
-	if diag := common.RunPostProcessorScript(ctx, hostConfig, createdVM, data.PostProcessorScripts); diag.HasError() {
+	if diag := common.RunPostProcessorScript(ctx, hostConfig, stoppedVm, data.PostProcessorScripts); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
@@ -217,14 +229,14 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 			return
 		}
 
-		_, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
+		_, diag := apiclient.GetVm(ctx, hostConfig, clonedVm.ID)
 		if diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return
 		}
 	}
 
-	data.OsType = types.StringValue(createdVM.OS)
+	data.OsType = types.StringValue(clonedVm.OS)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
 			elements := make([]attr.Value, 0)
@@ -258,20 +270,23 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
 			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}
+
 		return
 	}
 }
 
-func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data VagrantBoxResourceModel
+func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data CloneVmResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -310,9 +325,9 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 }
 
-func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data VagrantBoxResourceModel
-	var currentData VagrantBoxResourceModel
+func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data CloneVmResourceModel
+	var currentData CloneVmResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -322,6 +337,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -428,13 +444,14 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	// Running post processor changes
+	// Running the post processor scripts
 	if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 
 	data.ID = types.StringValue(vm.ID)
+	data.OsType = types.StringValue(vm.OS)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
 			elements := make([]attr.Value, 0)
@@ -469,8 +486,8 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 }
 
-func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data VagrantBoxResourceModel
+func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data CloneVmResourceModel
 	//Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -480,7 +497,9 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	// Setting the default timeout
 	createTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+
 	resp.Diagnostics.Append(diags...)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -513,10 +532,7 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	// Running cleanup script if any
 	if data.OnDestroyScript != nil {
-		if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.OnDestroyScript); diag.HasError() {
-			resp.Diagnostics.Append(diag...)
-			return
-		}
+		_ = common.RunPostProcessorScript(ctx, hostConfig, vm, data.OnDestroyScript)
 	}
 
 	// Stopping the machine
@@ -531,27 +547,6 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	retryCount := 0
-	for {
-		vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
-			break
-		}
-
-		if vm == nil {
-			break
-		}
-
-		retryCount += 1
-		if retryCount >= 10 {
-			resp.Diagnostics.AddError("error deleting vm", "error deleting vm")
-			return
-		}
-
-		time.Sleep(10 * time.Second)
-	}
-
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
@@ -559,6 +554,6 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 }
 
-func (r *VagrantBoxResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *CloneVmResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

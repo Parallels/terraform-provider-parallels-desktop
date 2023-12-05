@@ -536,6 +536,27 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
+	retryCount := 0
+	for {
+		vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			break
+		}
+
+		if vm == nil {
+			break
+		}
+
+		retryCount += 1
+		if retryCount >= 10 {
+			resp.Diagnostics.AddError("error deleting vm", "error deleting vm")
+			return
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {

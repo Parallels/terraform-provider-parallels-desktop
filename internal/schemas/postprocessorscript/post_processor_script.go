@@ -13,38 +13,9 @@ import (
 )
 
 type PostProcessorScript struct {
-	Inline types.List          `tfsdk:"inline"`
-	Result basetypes.ListValue `tfsdk:"result"`
-}
-
-func (s *PostProcessorScript) Elements(ctx context.Context) []attr.Value {
-	attrs := []attr.Value{
-		s.Inline,
-		s.Result,
-	}
-
-	return attrs
-}
-
-func (s *PostProcessorScript) ElementType(ctx context.Context) attr.Type {
-	return basetypes.ObjectType{
-		AttrTypes: map[string]attr.Type{
-			"inline": s.Inline.ElementType(ctx),
-			"result": s.Result.ElementType(ctx),
-		},
-	}
-}
-
-func (s *PostProcessorScript) MapObject(ctx context.Context) (basetypes.ObjectValue, diag.Diagnostics) {
-	attributeTypes := make(map[string]attr.Type)
-	attributeTypes["inline"] = s.Inline.ElementType(ctx)
-	attributeTypes["result"] = s.Result.ElementType(ctx)
-
-	attrs := map[string]attr.Value{}
-	attrs["inline"] = s.Inline
-	attrs["result"] = s.Result
-
-	return types.ObjectValue(attributeTypes, attrs)
+	Inline types.List                `tfsdk:"inline"`
+	Retry  *PostProcessorScriptRetry `tfsdk:"retry"`
+	Result basetypes.ListValue       `tfsdk:"result"`
 }
 
 func (s *PostProcessorScript) Apply(ctx context.Context, config apiclient.HostConfig, vmId string) diag.Diagnostics {

@@ -76,10 +76,18 @@ func UnregisterWithHost(context context.Context, data OrchestratorRegistration) 
 		},
 	}
 
-	diag := apiclient.UnregisterWithOrchestrator(context, hostConfig, data.HostId.ValueString())
-	if diag.HasError() {
-		diagnostics.Append(diag...)
-		return diagnostics
+	if data.HostId.ValueString() == "" {
+		diag := apiclient.UnregisterWithOrchestrator(context, hostConfig, data.HostId.ValueString())
+		if diag.HasError() {
+			diagnostics.Append(diag...)
+			return diagnostics
+		}
+	} else {
+		diag := apiclient.UnregisterWithOrchestrator(context, hostConfig, data.Orchestrator.Host.ValueString())
+		if diag.HasError() {
+			diagnostics.Append(diag...)
+			return diagnostics
+		}
 	}
 
 	return diagnostics

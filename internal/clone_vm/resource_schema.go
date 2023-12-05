@@ -1,4 +1,4 @@
-package remoteimage
+package clonevm
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 func getSchema(ctx context.Context) schema.Schema {
 	return schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Parallels Virtual Machine State Resource",
+		MarkdownDescription: "Parallels Desktop Clone VM resource",
 		Blocks: map[string]schema.Block{
 			authenticator.SchemaName:       authenticator.SchemaBlock,
 			vmspecs.SchemaName:             vmspecs.SchemaBlock,
@@ -51,16 +51,12 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Virtual Machine OS type",
 				Computed:            true,
 			},
-			"catalog_id": schema.StringAttribute{
-				MarkdownDescription: "Catalog Id to pull",
+			"base_vm_id": schema.StringAttribute{
+				MarkdownDescription: "Base Virtual Machine Id to clone",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
-			},
-			"version": schema.StringAttribute{
-				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
-				Optional:            true,
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine name to create, this needs to be unique in the host",
@@ -69,13 +65,6 @@ func getSchema(ctx context.Context) schema.Schema {
 			"owner": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine owner",
 				Optional:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"host_connection": schema.StringAttribute{
-				MarkdownDescription: "Connection",
-				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

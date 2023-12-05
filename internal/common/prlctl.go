@@ -13,6 +13,10 @@ import (
 func PrlCtlBlockOnCreate(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, planPrlCtl []*prlctl.PrlCtlCmd) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
+	if planPrlCtl == nil {
+		return diagnostics
+	}
+
 	for _, cmd := range planPrlCtl {
 		tflog.Info(ctx, "PrlCtl running command "+cmd.Operation.ValueString())
 		diag := cmd.Apply(ctx, hostConfig, *vm)

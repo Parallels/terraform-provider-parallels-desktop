@@ -1,37 +1,22 @@
-resource "parallels-desktop_remote_vm" "example_vagrant_file" {
-  host  = "https://example.com:8080"
-  name  = "example"
-  owner = "ec2-user"
-  # you can use your own local vagrant file 
-  vagrant_file_path = "/path/to/Vagrantfile"
-  #or use the box name/version to download the box from the vagrant cloud
-  box_name    = "example/fedora-aarch64"
-  box_version = "0.0.1"
+data "parallels-desktop_vm" "example" {
+  host = "https://example.com:8080"
 
-  # These two fields will allow you to pass custom configuration to the vagrant file
-  custom_parallels_config = "some config"
-  custom_vagrant_config   = "some config"
+  filter {
+    field_name       = "name"
+    value            = "some-machine-name"
+    case_insensitive = true
+  }
+}
 
-  # This will tell how should we authenticate with the host API
-  # you can either use it or leave it empty, if left empty then
-  # we will use the default root user and password
+resource "parallels-desktop_clone_vm" "example" {
+  host       = "https://example.com:8080"
+  name       = "example-vm"
+  owner      = "example"
+  base_vm_id = data.parallels-desktop_vm.example.machines[count.index].id
+  path       = "/some/folder/path"
+
   authenticator {
-    api_key = "host api key"
-  }
-
-  # This will contain some common configuration for the VM
-  # like if we should start it headless or not
-  config {
-    start_headless     = false
-    enable_rosetta     = false
-    pause_idle         = false
-    auto_start_on_host = false
-  }
-
-  # This will contain a configuration for the specs of the VM
-  specs {
-    cpu_count   = "2"
-    memory_size = "2048"
+    api_key = "some api key"
   }
 
   # this will allow you to fine grain the configuration of the VM
@@ -90,5 +75,4 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
       "rm -rf /tmp/*"
     ]
   }
-
 }

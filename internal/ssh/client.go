@@ -25,23 +25,17 @@ type SshClient struct {
 	Auth   SshAuthorization
 }
 
-var globalSshClient *SshClient
-
 func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) {
-	if globalSshClient != nil {
-		return globalSshClient, nil
-	}
-
-	globalSshClient = &SshClient{
+	sslClient := &SshClient{
 		Host: host,
 		Port: port,
 		Auth: auth,
 	}
 
 	var config *ssh.ClientConfig
-	if globalSshClient.Auth.KeyFile != "" {
+	if sslClient.Auth.KeyFile != "" {
 
-		key, err := helper.ReadFromFile(globalSshClient.Auth.KeyFile)
+		key, err := helper.ReadFromFile(sslClient.Auth.KeyFile)
 		if err != nil {
 			return nil, err
 		}
@@ -51,18 +45,18 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 			return nil, err
 		}
 		config = &ssh.ClientConfig{
-			User: globalSshClient.Auth.User,
+			User: sslClient.Auth.User,
 			Auth: []ssh.AuthMethod{
 				ssh.PublicKeys(signer),
 			},
 		}
-	} else if globalSshClient.Auth.PrivateKey != "" {
-		key, err := ssh.ParsePrivateKey([]byte(globalSshClient.Auth.PrivateKey))
+	} else if sslClient.Auth.PrivateKey != "" {
+		key, err := ssh.ParsePrivateKey([]byte(sslClient.Auth.PrivateKey))
 		if err != nil {
 			return nil, err
 		}
 		config = &ssh.ClientConfig{
-			User: globalSshClient.Auth.User,
+			User: sslClient.Auth.User,
 			Auth: []ssh.AuthMethod{
 				ssh.PublicKeys(key),
 			},
@@ -70,18 +64,18 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 	} else {
 		// Connect to the remote host
 		config = &ssh.ClientConfig{
-			User: globalSshClient.Auth.User,
+			User: sslClient.Auth.User,
 			Auth: []ssh.AuthMethod{
-				ssh.Password(globalSshClient.Auth.Password),
+				ssh.Password(sslClient.Auth.Password),
 			},
 		}
 	}
 
 	config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 
-	globalSshClient.config = config
+	sslClient.config = config
 
-	return globalSshClient, nil
+	return sslClient, nil
 }
 
 func (c *SshClient) Connect() error {

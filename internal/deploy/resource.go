@@ -85,18 +85,33 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	// installing dependencies
 	if err := parallelsClient.InstallDependencies(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
 		resp.Diagnostics.AddError("Error installing dependencies", err.Error())
 		return
 	}
 
 	// installing parallels desktop
 	if err := parallelsClient.InstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
 		resp.Diagnostics.AddError("Error installing parallels desktop", err.Error())
 		return
 	}
 
 	// restarting parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
 		resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
 		return
 	}
@@ -107,6 +122,12 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	// installing parallels license
 	if err := parallelsClient.InstallLicense(key, username, password); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
 		resp.Diagnostics.AddError("Error installing parallels license", err.Error())
 		return
 	}
@@ -133,12 +154,30 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	_, err := parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
 	if err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallApiService(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+		}
 		resp.Diagnostics.AddError("Error installing parallels api service", err.Error())
 		return
 	}
 
 	currentVersion, err := parallelsClient.GetApiVersion()
 	if err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallApiService(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+		}
 		resp.Diagnostics.AddError("Error getting parallels api version", err.Error())
 		return
 	}
@@ -191,6 +230,15 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	// getting parallels license
 	if license, err := parallelsClient.GetLicense(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallApiService(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+		}
 		resp.Diagnostics.AddError("Error getting parallels license", err.Error())
 		return
 	} else {
@@ -220,7 +268,18 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 		id, diag := orchestrator.RegisterWithHost(ctx, orch)
 		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
+			if err := parallelsClient.UninstallDependencies(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+			}
+			if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+			}
+			if err := parallelsClient.UninstallApiService(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+			}
+			if diag := orchestrator.UnregisterWithHost(ctx, orch); diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+			}
 			return
 		}
 
@@ -257,7 +316,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 
 	// getting parallels version
 	if version, err := parallelsClient.GetVersion(); err != nil {
-		resp.Diagnostics.AddError("Error getting parallels version", err.Error())
+		resp.Diagnostics.AddWarning("Error getting parallels version", err.Error())
 		return
 	} else {
 		data.CurrentVersion = types.StringValue(version)
@@ -265,7 +324,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 
 	// getting parallels license
 	if license, err := parallelsClient.GetLicense(); err != nil {
-		resp.Diagnostics.AddError("Error getting parallels license", err.Error())
+		resp.Diagnostics.AddWarning("Error getting parallels license", err.Error())
 		return
 	} else {
 		data.License = license.MapObject()
@@ -600,19 +659,19 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 
 	// deactivating parallels license
 	if err := parallelsService.DeactivateLicense(); err != nil {
-		resp.Diagnostics.AddError("Error deactivating parallels license", err.Error())
+		resp.Diagnostics.AddWarning("Error deactivating parallels license", err.Error())
 		return
 	}
 
 	// uninstalling parallels desktop
 	if err := parallelsService.UninstallParallelsDesktop(); err != nil {
-		resp.Diagnostics.AddError("Error uninstalling parallels desktop", err.Error())
+		resp.Diagnostics.AddWarning("Error uninstalling parallels desktop", err.Error())
 		return
 	}
 
 	// uninstalling dependencies
 	if err := parallelsService.UninstallDependencies(); err != nil {
-		resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		resp.Diagnostics.AddWarning("Error uninstalling dependencies", err.Error())
 		return
 	}
 

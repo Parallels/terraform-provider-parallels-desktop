@@ -1,9 +1,11 @@
 resource "parallels-desktop_remote_vm" "example_box" {
-  host        = "https://example.com:8080"
-  name        = "example"
-  owner       = "ec2-user"
-  box_name    = "example/fedora-aarch64"
-  box_version = "0.0.1"
+  host            = "https://example.com:8080"
+  name            = "example-vm"
+  owner           = "example"
+  catalog_id      = "example-catalog-id"
+  version         = "v1"
+  host_connection = "host=user:VerySecretPassword@example.com"
+  path            = "/Users/example/Parallels"
 
   # This will tell how should we authenticate with the host API
   # you can either use it or leave it empty, if left empty then
@@ -59,6 +61,12 @@ resource "parallels-desktop_remote_vm" "example_box" {
   # allowing you to run any command on the VM after it has been deployed
   # you can have multiple lines and they will be executed in order
   post_processor_script {
+    // Retry the script 4 times with 10 seconds between each attempt
+    retry {
+      attempts              = 4
+      wait_between_attempts = "10s"
+    }
+
     inline = [
       "ls -la"
     ]
@@ -67,6 +75,12 @@ resource "parallels-desktop_remote_vm" "example_box" {
   # This is a special block that will allow you to undo any changes your scripts have done
   # if you are destroying a VM, like unregistering from a service where the VM was registered
   on_destroy_script {
+    // Retry the script 4 times with 10 seconds between each attempt
+    retry {
+      attempts              = 4
+      wait_between_attempts = "10s"
+    }
+
     inline = [
       "rm -rf /tmp/*"
     ]

@@ -169,10 +169,18 @@ func (c *ParallelsServerClient) UninstallDependencies() error {
 }
 
 func (c *ParallelsServerClient) InstallParallelsDesktop() error {
-	// Installing parallels desktop using command line
-	cmd := c.findPath("brew")
-	arguments := []string{"install", "parallels"}
+	// checking if is already installed
+	cmd := c.findPath("prlctl")
+	arguments := []string{"--version"}
 	_, err := c.client.RunCommand(cmd, arguments)
+	if err == nil {
+		return nil
+	}
+
+	// Installing parallels desktop using command line
+	cmd = c.findPath("brew")
+	arguments = []string{"install", "parallels"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running parallels install command, error: " + err.Error())
 	}
@@ -181,10 +189,17 @@ func (c *ParallelsServerClient) InstallParallelsDesktop() error {
 }
 
 func (c *ParallelsServerClient) UninstallParallelsDesktop() error {
-	// Uninstalling parallels desktop using command line
-	cmd := c.findPath("brew")
-	arguments := []string{"uninstall", "parallels"}
+	// checking if the prlctl is indeed installed, if not we do not need to do anything
+	cmd := c.findPath("prlctl")
+	arguments := []string{"--version"}
 	_, err := c.client.RunCommand(cmd, arguments)
+	if err != nil {
+		return nil
+	}
+
+	cmd = c.findPath("brew")
+	arguments = []string{"uninstall", "parallels"}
+	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return errors.New("Error running parallels uninstall command, error: " + err.Error())
 	}

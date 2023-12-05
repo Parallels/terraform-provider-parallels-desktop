@@ -194,7 +194,7 @@ func (c *ParallelsServerClient) UninstallParallelsDesktop() error {
 	arguments := []string{"--version"}
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	cmd = c.findPath("brew")

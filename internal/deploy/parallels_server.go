@@ -363,18 +363,21 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 		systemOs, err := c.client.RunCommand("uname", []string{"-s"})
 		if err != nil {
 			os = "darwin"
+		} else {
+			os = strings.ReplaceAll(strings.ToLower(systemOs), "\n", "")
 		}
-		os = strings.ReplaceAll(strings.ToLower(systemOs), "\n", "")
 
 		systemArchitecture, err := c.client.RunCommand("uname", []string{"-m"})
 		systemArchitecture = strings.ReplaceAll(systemArchitecture, "\n", "")
 		if err != nil {
 			arch = "arm64"
+		} else {
+			if systemArchitecture != "arm64" {
+				arch = "amd64"
+			} else {
+				arch = systemArchitecture
+			}
 		}
-		if systemArchitecture != "arm64" {
-			arch = "amd64"
-		}
-		arch = systemArchitecture
 	}
 	assetSuffix := fmt.Sprintf("%s-%s", os, arch)
 

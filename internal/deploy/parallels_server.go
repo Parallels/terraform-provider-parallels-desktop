@@ -5,15 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
+	"terraform-provider-parallels-desktop/internal/ssh"
 
-	"github.com/cjlapao/common-go/commands"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pkg/errors"
 )
@@ -82,48 +82,66 @@ func (c *ParallelsServerClient) InstallDependencies() error {
 
 	// Installing Brew
 	var cmd string
+	var brewPath string
 	var arguments []string
 
 	_, ok := c.client.(*localclient.LocalClient)
 	if !ok {
-		cmd = "/bin/bash"
-		arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
-		_, err := c.client.RunCommand(cmd, arguments)
-		if err != nil {
-			return errors.New("Error running brew install command, error: " + err.Error())
+		brewPath = c.findPath("brew")
+		if brewPath == "" {
+			cmd = "/bin/bash"
+			arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
+			_, err := c.client.RunCommand(cmd, arguments)
+			if err != nil {
+				return errors.New("Error running brew install command, error: " + err.Error())
+			}
 		}
 	}
 
+	if c.findPath("brew") == "" {
+		return errors.New("Error running brew install command, error: brew not found")
+	}
+
 	// Installing Git
-	cmd = c.findPath("brew")
-	arguments = []string{"install", "git"}
-	_, err := c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running git install command, error: " + err.Error())
+	cmd = brewPath
+	gitPresent := c.findPath("git")
+	if gitPresent == "" {
+		arguments = []string{"install", "git"}
+		out, err := c.client.RunCommand(cmd, arguments)
+		tflog.Info(c.ctx, out)
+		if err != nil {
+			return errors.New("Error running git install command, error: " + err.Error())
+		}
 	}
 
 	// Installing Packer
-	cmd = c.findPath("brew")
-	arguments = []string{"install", "packer"}
-	_, err = c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running packer install command, error: " + err.Error())
+	cmd = brewPath
+	packerPresent := c.findPath("packer")
+	if packerPresent == "" {
+		arguments = []string{"install", "packer"}
+		_, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running packer install command, error: " + err.Error())
+		}
 	}
 
 	// Installing Vagrant
 	if !ok {
-		cmd = c.findPath("brew")
-		arguments = []string{"install", "vagrant"}
-		out, err := c.client.RunCommand(cmd, arguments)
-		if err != nil {
-			tflog.Info(c.ctx, "Vagrant install output: "+out)
-			return errors.New("Error running vagrant install command, error: " + err.Error())
+		cmd = brewPath
+		vagrantPresent := c.findPath("vagrant")
+		if vagrantPresent == "" {
+			arguments = []string{"install", "vagrant"}
+			out, err := c.client.RunCommand(cmd, arguments)
+			if err != nil {
+				tflog.Info(c.ctx, "Vagrant install output: "+out)
+				return errors.New("Error running vagrant install command, error: " + err.Error())
+			}
 		}
 
 		// Installing Vagrant Parallels Plugin
 		cmd = "/usr/local/bin/vagrant"
 		arguments = []string{"plugin", "install", "vagrant-parallels"}
-		_, err = c.client.RunCommand(cmd, arguments)
+		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return errors.New("Error running  plugin install command, error: " + err.Error())
 		}
@@ -135,34 +153,46 @@ func (c *ParallelsServerClient) InstallDependencies() error {
 func (c *ParallelsServerClient) UninstallDependencies() error {
 	// Uninstalling Git
 	cmd := c.findPath("brew")
-	arguments := []string{"uninstall", "git"}
-	_, err := c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running git uninstall command, error: " + err.Error())
+	if c.findPath("brew") == "" {
+		return nil
+	}
+
+	gitPresent := c.findPath("git")
+	if gitPresent != "" {
+		arguments := []string{"uninstall", "git"}
+		_, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running git uninstall command, error: " + err.Error())
+		}
 	}
 
 	// Uninstalling Packer
-	cmd = c.findPath("brew")
-	arguments = []string{"uninstall", "packer"}
-	_, err = c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running packer uninstall command, error: " + err.Error())
+	packerPresent := c.findPath("packer")
+	if packerPresent != "" {
+		arguments := []string{"uninstall", "packer"}
+		_, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running packer uninstall command, error: " + err.Error())
+		}
 	}
 
 	// Uninstalling Vagrant Parallels Plugin
-	cmd = c.findPath("vagrant")
-	arguments = []string{"plugin", "uninstall", "vagrant-parallels"}
-	_, err = c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running vagrant uninstall plugin command, error: " + err.Error())
-	}
+	vagrantPresent := c.findPath("vagrant")
+	if vagrantPresent != "" {
+		cmd = c.findPath("vagrant")
+		arguments := []string{"plugin", "uninstall", "vagrant-parallels"}
+		_, err := c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running vagrant uninstall plugin command, error: " + err.Error())
+		}
 
-	// Uninstalling Vagrant
-	cmd = c.findPath("brew")
-	arguments = []string{"uninstall", "hashicorp-vagrant"}
-	_, err = c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return errors.New("Error running vagrant uninstall command, error: " + err.Error())
+		// Uninstalling Vagrant
+		cmd = c.findPath("brew")
+		arguments = []string{"uninstall", "hashicorp-vagrant"}
+		_, err = c.client.RunCommand(cmd, arguments)
+		if err != nil {
+			return errors.New("Error running vagrant uninstall command, error: " + err.Error())
+		}
 	}
 
 	return nil
@@ -323,8 +353,29 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 
 	// Getting the right asset
 	var assetUrl string
-	os := runtime.GOOS
-	arch := runtime.GOARCH
+	var os string
+	var arch string
+	_, ok := c.client.(*ssh.SshClient)
+	if !ok {
+		os = runtime.GOOS
+		arch = runtime.GOARCH
+	} else {
+		systemOs, err := c.client.RunCommand("uname", []string{"-s"})
+		if err != nil {
+			os = "darwin"
+		}
+		os = strings.ReplaceAll(strings.ToLower(systemOs), "\n", "")
+
+		systemArchitecture, err := c.client.RunCommand("uname", []string{"-m"})
+		systemArchitecture = strings.ReplaceAll(systemArchitecture, "\n", "")
+		if err != nil {
+			arch = "arm64"
+		}
+		if systemArchitecture != "arm64" {
+			arch = "amd64"
+		}
+		arch = systemArchitecture
+	}
 	assetSuffix := fmt.Sprintf("%s-%s", os, arch)
 
 	for _, asset := range releaseDetails.Assets {
@@ -545,16 +596,18 @@ func (c *ParallelsServerClient) generateConfigFile(path string, config Parallels
 
 func (s *ParallelsServerClient) findPath(cmd string) string {
 	tflog.Info(s.ctx, "Getting "+cmd+" executable")
-	out, err := commands.ExecuteWithNoOutput("which", cmd)
+	out, err := s.client.RunCommand("which", []string{cmd})
 	path := strings.ReplaceAll(strings.TrimSpace(out), "\n", "")
 	if err != nil || path == "" {
 		tflog.Info(s.ctx, cmd+" executable not found, trying to find it in the default locations")
+		path = ""
 	}
+
 	folders := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin"}
 
 	for _, folder := range folders {
-		if _, err := os.Stat(folder + "/" + cmd); err == nil {
-			path = folder + "/" + cmd
+		if _, err := s.client.RunCommand("ls", []string{filepath.Join(folder, cmd)}); err == nil {
+			path = filepath.Join(folder, cmd)
 			break
 		}
 	}

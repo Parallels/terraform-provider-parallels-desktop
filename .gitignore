@@ -36,3 +36,4 @@ website/vendor
 
 terraform-provider-*
 .local/
+__debug*

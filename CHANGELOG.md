@@ -1,4 +1,9 @@
-## 0.2.0 (Unreleased)
+## v0.2.2
+
+* Fixed an issue that was preventing the deployment from linux machines
+* Removed some unnecessary files
+ 
+## 0.2.0
 
 FEATURES:
 

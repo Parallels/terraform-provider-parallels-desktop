@@ -3,12 +3,17 @@
 page_title: "parallels-desktop Provider"
 subcategory: ""
 description: |-
-  Parallels Desktop provider
+  Parallels Desktop provider allows you to manage Parallels Desktop virtual machines in a remote environment.
+  You will need a business edition license to use this provider. To get your license, please visit Parallels Desktop https://www.parallels.com/products/desktop/.
+  You can also join our community on Discord https://discord.gg/aFsrjbkN channel.
 ---
 
 # parallels-desktop Provider
 
-Parallels Desktop provider
+Parallels Desktop provider allows you to manage Parallels Desktop virtual machines in a remote environment.
+You will need a business edition license to use this provider. To get your license, please visit [Parallels Desktop](https://www.parallels.com/products/desktop/).
+
+You can also join our community on [Discord](https://discord.gg/aFsrjbkN) channel.
 
 ## Example Usage
 

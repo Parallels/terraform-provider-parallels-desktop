@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/interfaces"
@@ -18,7 +19,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var installPath = "/usr/local/bin"
+var (
+	installPath     = "/usr/local/bin"
+	executableNames = []string{"prldevops", "pd-api-service"}
+)
 
 type ParallelsServerClient struct {
 	client interfaces.CommandClient
@@ -79,7 +83,6 @@ func (c *ParallelsServerClient) RestartServer() error {
 }
 
 func (c *ParallelsServerClient) InstallDependencies() error {
-
 	// Installing Brew
 	var cmd string
 	var brewPath string
@@ -334,11 +337,11 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	var baseUrl string
 
 	if config.InstallVersion.ValueString() == "" || config.InstallVersion.ValueString() == "latest" {
-		tflog.Info(c.ctx, "PD Api version not specified, installing latest version")
-		baseUrl = "https://api.github.com/repos/Parallels/pd-api-service/releases/latest"
+		tflog.Info(c.ctx, "Parallels Desktop DevOps Service version not specified, installing latest version")
+		baseUrl = "https://api.github.com/repos/Parallels/prl-devops-service/releases/latest"
 	} else {
-		tflog.Info(c.ctx, "PD Api version specified, installing version: "+config.InstallVersion.ValueString())
-		baseUrl = "https://api.github.com/repos/Parallels/pd-api-service/releases/tags/" + config.InstallVersion.ValueString()
+		tflog.Info(c.ctx, "Parallels Desktop DevOps Service version specified, installing version: "+config.InstallVersion.ValueString())
+		baseUrl = "https://api.github.com/repos/Parallels/prl-devops-service/releases/tags/" + config.InstallVersion.ValueString()
 	}
 
 	caller := helpers.NewHttpCaller(c.ctx)
@@ -347,7 +350,7 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	}
 
 	finalVersion := strings.ReplaceAll(releaseDetails.TagName, "v", "")
-	tflog.Info(c.ctx, "PD Api Latest version: "+releaseDetails.TagName)
+	tflog.Info(c.ctx, "Parallels Desktop DevOps Service Latest version: "+releaseDetails.TagName)
 
 	tflog.Info(c.ctx, "Getting the url for the correct asset to download")
 
@@ -396,7 +399,7 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	tflog.Info(c.ctx, "Downloading the asset")
 	// Downloading the asset
 	cmd := c.findPath("curl")
-	arguments := []string{"-L", "-o", "/tmp/pd-api-service.tar.gz", assetUrl}
+	arguments := []string{"-L", "-o", "/tmp/prl-devops-service.tar.gz", assetUrl}
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
@@ -405,13 +408,13 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 	tflog.Info(c.ctx, "Extracting the asset")
 	// Extracting the asset
 	cmd = "sudo"
-	arguments = []string{c.findPath("tar"), "-xzf", "/tmp/pd-api-service.tar.gz", "-C", installPath}
+	arguments = []string{c.findPath("tar"), "-xzf", "/tmp/prl-devops-service.tar.gz", "-C", installPath}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}
 
 	cmd = "sudo"
-	arguments = []string{"rm", "-f", "/tmp/pd-api-service.tar.gz"}
+	arguments = []string{"rm", "-f", "/tmp/prl-devops-service.tar.gz"}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}
@@ -427,7 +430,8 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 
 		tflog.Info(c.ctx, "Installing service in the launchd daemon")
 		cmd = "sudo"
-		arguments = []string{installPath + "/pd-api-service", "--install", "--file=" + configPath}
+
+		arguments = []string{installPath + "/prldevops", "install", "--file=" + configPath}
 		out, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			tflog.Info(c.ctx, "Error installing service: \n"+out)
@@ -435,12 +439,12 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 		}
 
 		tflog.Info(c.ctx, "Cleaning configuration")
-		cmd = "sudo"
-		arguments = []string{"rm", "-f", configPath}
-		_, err = c.client.RunCommand(cmd, arguments)
-		if err != nil {
-			return "", err
-		}
+		// cmd = "sudo"
+		// arguments = []string{"rm", "-f", configPath}
+		// _, err = c.client.RunCommand(cmd, arguments)
+		// if err != nil {
+		// 	return "", err
+		// }
 	} else {
 		tflog.Error(c.ctx, "Unsupported OS: "+os)
 	}
@@ -450,9 +454,20 @@ func (c *ParallelsServerClient) InstallApiService(license string, config Paralle
 }
 
 func (c *ParallelsServerClient) UninstallApiService() error {
-	tflog.Info(c.ctx, "Uninstalling the API Service")
+	tflog.Info(c.ctx, "Uninstalling the Parallels Desktop DevOps Service")
+	executableName, err := c.getExecutableName(installPath)
+	if err != nil {
+		return err
+	}
+
 	cmd := "sudo"
-	arguments := []string{installPath + "/pd-api-service", "--uninstall"}
+	executablePath := filepath.Join(installPath, executableName)
+	arguments := []string{executablePath, "uninstall"}
+	if executableName == "pd-api-service" {
+		arguments = []string{executablePath, "uninstall"}
+	} else {
+		arguments = append(arguments, "--full")
+	}
 	uninstallOut, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		tflog.Error(c.ctx, "Error uninstalling service: \n"+uninstallOut)
@@ -460,7 +475,7 @@ func (c *ParallelsServerClient) UninstallApiService() error {
 	}
 
 	cmd = "sudo"
-	arguments = []string{"rm", "-f", installPath + "/pd-api-service"}
+	arguments = []string{"rm", "-f", executablePath}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
 	}
@@ -471,12 +486,30 @@ func (c *ParallelsServerClient) UninstallApiService() error {
 		return err
 	}
 
+	// Removing database directory
+	if c.fileExists("/etc/prl-devops-service") {
+		cmd = "sudo"
+		arguments = []string{"rm", "-rf", "/etc/prl-devops-service"}
+		if _, err = c.client.RunCommand(cmd, arguments); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (c *ParallelsServerClient) GetApiVersion() (string, error) {
-	cmd := installPath + "/pd-api-service"
-	arguments := []string{"--version"}
+	executableName, err := c.getExecutableName(installPath)
+	if err != nil {
+		return "", err
+	}
+
+	executablePath := filepath.Join(installPath, executableName)
+	cmd := executablePath
+	arguments := []string{"version"}
+	if executableName == "pd-api-service" {
+		arguments = []string{"--version"}
+	}
 	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return "", err
@@ -616,4 +649,31 @@ func (s *ParallelsServerClient) findPath(cmd string) string {
 	}
 
 	return path
+}
+
+func (c *ParallelsServerClient) getExecutableName(installPath string) (string, error) {
+	executableName := ""
+	for _, exec := range executableNames {
+		execPath := filepath.Join(installPath, exec)
+		if c.fileExists(execPath) {
+			executableName = exec
+			break
+		}
+	}
+
+	if executableName == "" {
+		return "", errors.New("Parallels Desktop DevOps Service not found")
+	}
+
+	return executableName, nil
+}
+
+func (c *ParallelsServerClient) fileExists(filepath string) bool {
+	cmd := "ls"
+	arguments := []string{filepath}
+	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+		return false
+	}
+
+	return true
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
 	"terraform-provider-parallels-desktop/internal/models"
@@ -12,6 +13,7 @@ import (
 	"terraform-provider-parallels-desktop/internal/ssh"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -20,8 +22,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &VirtualMachineStateResource{}
-var _ resource.ResourceWithImportState = &VirtualMachineStateResource{}
+var (
+	_ resource.Resource                = &VirtualMachineStateResource{}
+	_ resource.ResourceWithImportState = &VirtualMachineStateResource{}
+)
 
 func NewVirtualMachineStateResource() resource.Resource {
 	return &VirtualMachineStateResource{}
@@ -83,121 +87,16 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	parallelsClient := NewParallelsServerClient(ctx, runClient)
 
-	// installing dependencies
-	if err := parallelsClient.InstallDependencies(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		resp.Diagnostics.AddError("Error installing dependencies", err.Error())
+	if diag := r.installParallelsDesktop(parallelsClient); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
 
-	// installing parallels desktop
-	if err := parallelsClient.InstallParallelsDesktop(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		resp.Diagnostics.AddError("Error installing parallels desktop", err.Error())
+	apiData, diag := r.installApi(&data, parallelsClient)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
-
-	// restarting parallels service
-	if err := parallelsClient.RestartServer(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
-		return
-	}
-
-	key := r.provider.License.ValueString()
-	username := r.provider.MyAccountUser.ValueString()
-	password := r.provider.MyAccountPassword.ValueString()
-
-	// installing parallels license
-	if err := parallelsClient.InstallLicense(key, username, password); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		resp.Diagnostics.AddError("Error installing parallels license", err.Error())
-		return
-	}
-
-	targetPort := "8080"
-	targetTlsPort := "8443"
-	apiVersion := "latest"
-
-	// Installing parallels api service
-	var config ParallelsDesktopApiConfig
-	if data.ApiConfig == nil {
-		config = ParallelsDesktopApiConfig{
-			InstallVersion: types.StringValue(apiVersion),
-			Port:           types.StringValue(targetPort),
-			TLSPort:        types.StringValue(targetTlsPort),
-		}
-	} else {
-		config = *data.ApiConfig
-	}
-
-	if config.RootPassword.ValueString() == "" {
-		config.RootPassword = r.provider.License
-	}
-
-	_, err := parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
-	if err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallApiService(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
-		}
-		resp.Diagnostics.AddError("Error installing parallels api service", err.Error())
-		return
-	}
-
-	currentVersion, err := parallelsClient.GetApiVersion()
-	if err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
-		}
-		if err := parallelsClient.UninstallApiService(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
-		}
-		resp.Diagnostics.AddError("Error getting parallels api version", err.Error())
-		return
-	}
-
-	apiData := ParallelsDesktopApi{
-		Version: types.StringValue(currentVersion),
-		Host:    types.StringValue(data.SshConnection.Host.ValueString()),
-		Port:    types.StringValue(targetPort),
-		User:    types.StringValue("root@localhost"),
-	}
-
-	if config.EnableTLS.ValueBool() {
-		apiData.Protocol = types.StringValue("https")
-	} else {
-		apiData.Protocol = types.StringValue("http")
-	}
-
-	apiData.Password = config.RootPassword
-
-	data.Api = apiData.MapObject()
 
 	// getting parallels version
 	if version, err := parallelsClient.GetVersion(); err != nil {
@@ -340,6 +239,9 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 			}
 			planVersion.Version = types.StringValue("-")
 			data.Api = planVersion.MapObject()
+		} else {
+			planVersion.Version = types.StringValue("-")
+			data.Api = planVersion.MapObject()
 		}
 	} else {
 		planVersion := ParallelsDesktopApi{}
@@ -349,6 +251,9 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 				return
 			}
 			planVersion.Version = types.StringValue(version)
+			data.Api = planVersion.MapObject()
+		} else {
+			planVersion.Version = types.StringValue("-")
 			data.Api = planVersion.MapObject()
 		}
 	}
@@ -389,8 +294,10 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 
 	// restart parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
-		resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
-		return
+		if diag := r.installParallelsDesktop(parallelsClient); diag.HasError() {
+			resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
+			return
+		}
 	}
 
 	if r.provider.License.ValueString() != "" {
@@ -478,22 +385,6 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		data.License = license.MapObject()
 	}
 
-	targetPort := "8080"
-	targetTlsPort := "8443"
-	apiVersion := "latest"
-
-	// Installing parallels api service
-	var config *ParallelsDesktopApiConfig
-	if data.ApiConfig == nil {
-		config = &ParallelsDesktopApiConfig{
-			InstallVersion: types.StringValue(apiVersion),
-			Port:           types.StringValue(targetPort),
-			TLSPort:        types.StringValue(targetTlsPort),
-		}
-	} else {
-		config = data.ApiConfig
-	}
-
 	hasChangesInApi := false
 	if data.ApiConfig != nil {
 		if currentData.ApiConfig == nil {
@@ -550,9 +441,8 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
 			return
 		}
-		_, err = parallelsClient.InstallApiService(r.provider.License.ValueString(), *config)
-		if err != nil {
-			resp.Diagnostics.AddError("Error installing parallels api service", err.Error())
+		if _, diag := r.installApi(&data, parallelsClient); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
 			return
 		}
 		tflog.Info(ctx, "Changes in api service, restarting parallels service")
@@ -560,31 +450,21 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		tflog.Info(ctx, "No changes in api service")
 	}
 
-	currentVersion, err := parallelsClient.GetApiVersion()
-	if err != nil {
-		resp.Diagnostics.AddError("Error getting parallels api version", err.Error())
-		return
+	var apiData *ParallelsDesktopApi
+	var apiDiag diag.Diagnostics
+	_, diag := parallelsClient.GetApiVersion()
+	if diag != nil {
+		if diag.Error() == "Parallels Desktop DevOps Service not found" {
+			apiData, apiDiag = r.installApi(&data, parallelsClient)
+			if apiDiag.HasError() {
+				resp.Diagnostics.Append(apiDiag...)
+				return
+			}
+		} else {
+			resp.Diagnostics.AddError("Error getting parallels api version", diag.Error())
+			return
+		}
 	}
-
-	apiData := ParallelsDesktopApi{
-		Version: types.StringValue(currentVersion),
-		Host:    types.StringValue(data.SshConnection.Host.ValueString()),
-		Port:    types.StringValue(targetPort),
-		User:    types.StringValue("root@localhost"),
-	}
-
-	if config.EnableTLS.ValueBool() {
-		apiData.Protocol = types.StringValue("https")
-	} else {
-		apiData.Protocol = types.StringValue("http")
-	}
-
-	if config.RootPassword.ValueString() == "" {
-		apiData.Password = r.provider.License
-	} else {
-		apiData.Password = config.RootPassword
-	}
-	data.Api = apiData.MapObject()
 
 	if data.Orchestrator != nil {
 		if orchestrator.HasChanges(ctx, data.Orchestrator, currentData.Orchestrator) {
@@ -660,19 +540,16 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 	// deactivating parallels license
 	if err := parallelsService.DeactivateLicense(); err != nil {
 		resp.Diagnostics.AddWarning("Error deactivating parallels license", err.Error())
-		return
 	}
 
 	// uninstalling parallels desktop
 	if err := parallelsService.UninstallParallelsDesktop(); err != nil {
 		resp.Diagnostics.AddWarning("Error uninstalling parallels desktop", err.Error())
-		return
 	}
 
 	// uninstalling dependencies
 	if err := parallelsService.UninstallDependencies(); err != nil {
 		resp.Diagnostics.AddWarning("Error uninstalling dependencies", err.Error())
-		return
 	}
 
 	// Save data into Terraform state
@@ -685,7 +562,6 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 
 	if err := parallelsService.UninstallApiService(); err != nil {
 		resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
-		return
 	}
 
 	data.Api = types.ObjectUnknown(map[string]attr.Type{
@@ -698,7 +574,6 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 	if data.Orchestrator != nil {
 		if diag := orchestrator.UnregisterWithHost(ctx, *data.Orchestrator); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
-			return
 		}
 	}
 
@@ -738,4 +613,132 @@ func (r *VirtualMachineStateResource) getSshClient(data DeployResourceModel) (*s
 	}
 
 	return sshClient, nil
+}
+
+func (r *VirtualMachineStateResource) installParallelsDesktop(parallelsClient *ParallelsServerClient) diag.Diagnostics {
+	diag := diag.Diagnostics{}
+
+	// installing dependencies
+	if err := parallelsClient.InstallDependencies(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		diag.AddError("Error installing dependencies", err.Error())
+		return diag
+	}
+
+	// installing parallels desktop
+	if err := parallelsClient.InstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		diag.AddError("Error installing parallels desktop", err.Error())
+		return diag
+	}
+
+	// restarting parallels service
+	if err := parallelsClient.RestartServer(); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		diag.AddError("Error restarting parallels service", err.Error())
+		return diag
+	}
+
+	key := r.provider.License.ValueString()
+	username := r.provider.MyAccountUser.ValueString()
+	password := r.provider.MyAccountPassword.ValueString()
+
+	// installing parallels license
+	if err := parallelsClient.InstallLicense(key, username, password); err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		diag.AddError("Error installing parallels license", err.Error())
+		return diag
+	}
+
+	return diag
+}
+
+func (r *VirtualMachineStateResource) installApi(data *DeployResourceModel, parallelsClient *ParallelsServerClient) (*ParallelsDesktopApi, diag.Diagnostics) {
+	diag := diag.Diagnostics{}
+	targetPort := "8080"
+	targetTlsPort := "8443"
+	apiVersion := "latest"
+
+	// Installing parallels api service
+	var config ParallelsDesktopApiConfig
+	if data.ApiConfig == nil {
+		config = ParallelsDesktopApiConfig{
+			InstallVersion: types.StringValue(apiVersion),
+			Port:           types.StringValue(targetPort),
+			TLSPort:        types.StringValue(targetTlsPort),
+		}
+	} else {
+		config = *data.ApiConfig
+	}
+
+	if config.RootPassword.ValueString() == "" {
+		config.RootPassword = r.provider.License
+	}
+
+	_, err := parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
+	if err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallApiService(); err != nil {
+			diag.AddError("Error uninstalling parallels api service", err.Error())
+		}
+
+		diag.AddError("Error installing parallels api service", err.Error())
+		return nil, diag
+	}
+
+	currentVersion, err := parallelsClient.GetApiVersion()
+	if err != nil {
+		if err := parallelsClient.UninstallDependencies(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			diag.AddError("Error uninstalling dependencies", err.Error())
+		}
+		if err := parallelsClient.UninstallApiService(); err != nil {
+			diag.AddError("Error uninstalling parallels api service", err.Error())
+		}
+		diag.AddError("Error getting parallels api version", err.Error())
+		return nil, diag
+	}
+
+	apiData := ParallelsDesktopApi{
+		Version: types.StringValue(currentVersion),
+		Host:    types.StringValue(data.SshConnection.Host.ValueString()),
+		Port:    types.StringValue(targetPort),
+		User:    types.StringValue("root@localhost"),
+	}
+
+	if config.EnableTLS.ValueBool() {
+		apiData.Protocol = types.StringValue("https")
+	} else {
+		apiData.Protocol = types.StringValue("http")
+	}
+
+	apiData.Password = config.RootPassword
+
+	data.Api = apiData.MapObject()
+
+	return &apiData, diag
 }

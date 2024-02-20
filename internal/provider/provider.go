@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+
 	"terraform-provider-parallels-desktop/internal/authorization"
 	clonevm "terraform-provider-parallels-desktop/internal/clone_vm"
 	deploy "terraform-provider-parallels-desktop/internal/deploy"
@@ -48,7 +49,10 @@ func (p *ParallelsProvider) Metadata(_ context.Context, _ provider.MetadataReque
 // Schema defines the provider-level schema for configuration data.
 func (p *ParallelsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Parallels Desktop provider",
+		MarkdownDescription: `Parallels Desktop provider allows you to manage Parallels Desktop virtual machines in a remote environment.
+You will need a business edition license to use this provider. To get your license, please visit [Parallels Desktop](https://www.parallels.com/products/desktop/).
+
+You can also join our community on [Discord](https://discord.gg/aFsrjbkN) channel.`,
 		Attributes: map[string]schema.Attribute{
 			"license": schema.StringAttribute{
 				Required:            true,

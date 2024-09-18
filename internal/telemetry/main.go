@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	AMPLITUDE_API_KEY = "abc"
+	AMPLITUDE_API_KEY = ""
 )
 
 var (

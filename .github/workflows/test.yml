@@ -30,10 +30,16 @@ jobs:
       - run: go mod download
       - run: go build -v .
       - name: Run linters
-        uses: golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc # v3.7.0
-        with:
-          version: latest
-
+        id: super-linter
+        uses: super-linter/super-linter/slim@v6.0.0
+        env:
+          DEFAULT_BRANCH: origin/${{ github.head_ref}}
+          FILTER_REGEX_EXCLUDE: bin/**/*
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: true
+          VALIDATE_JSCPD: false
+          VALIDATE_GO: false
+          VALIDATE_CHECKOV: false
   generate:
     runs-on: ubuntu-latest
     steps:
@@ -76,6 +82,6 @@ jobs:
           terraform_wrapper: false
       - run: go mod download
       - env:
-          TF_ACC: "1"
+          TF_ACC: '1'
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10

@@ -552,7 +552,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 				return
 			}
 			if devOpsData != nil {
-				tflog.Info(ctx, fmt.Sprintf("DevOps is installed"))
+				tflog.Info(ctx, "DevOps is installed")
 			}
 		}
 	} else {

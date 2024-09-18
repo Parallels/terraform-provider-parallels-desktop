@@ -546,10 +546,13 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if !desiredApiData.IsUnknown() && !desiredApiData.IsNull() {
 		desiredVersion := desiredApiData.Attributes()["version"].String()
 		if installedVersion != desiredVersion {
-			_, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
+			devOpsData, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
 			if apiDiag.HasError() {
 				resp.Diagnostics.Append(apiDiag...)
 				return
+			}
+			if devOpsData != nil {
+				tflog.Info(ctx, fmt.Sprintf("DevOps is installed"))
 			}
 		}
 	} else {

@@ -61,7 +61,7 @@ var deployResourceSchema = schema.Schema{
 			},
 		},
 		"api": schema.ObjectAttribute{
-			MarkdownDescription: "Parallels Desktop API",
+			MarkdownDescription: "Parallels Desktop DevOps Service",
 			Computed:            true,
 			AttributeTypes: map[string]attr.Type{
 				"version":  types.StringType,
@@ -71,6 +71,11 @@ var deployResourceSchema = schema.Schema{
 				"user":     types.StringType,
 				"password": types.StringType,
 			},
+		},
+		"installed_dependencies": schema.ListAttribute{
+			MarkdownDescription: "List of installed dependencies",
+			Computed:            true,
+			ElementType:         types.StringType,
 		},
 		"install_local": schema.BoolAttribute{
 			MarkdownDescription: "Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine",

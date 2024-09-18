@@ -3,12 +3,14 @@ package clonevm
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
-	"time"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,8 +20,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &CloneVmResource{}
-var _ resource.ResourceWithImportState = &CloneVmResource{}
+var (
+	_ resource.Resource                = &CloneVmResource{}
+	_ resource.ResourceWithImportState = &CloneVmResource{}
+)
 
 func NewCloneVmResource() resource.Resource {
 	return &CloneVmResource{}
@@ -57,6 +61,16 @@ func (r *CloneVmResource) Configure(ctx context.Context, req resource.ConfigureR
 
 func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data CloneVmResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventCloneVm, telemetry.ModeCreate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -278,6 +292,16 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data CloneVmResourceModel
 
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventCloneVm, telemetry.ModeRead,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
+
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
@@ -328,6 +352,16 @@ func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, re
 func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data CloneVmResourceModel
 	var currentData CloneVmResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventCloneVm, telemetry.ModeUpdate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -488,8 +522,18 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 
 func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data CloneVmResourceModel
-	//Read Terraform prior state data into the model
+	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventCloneVm, telemetry.ModeDestroy,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return

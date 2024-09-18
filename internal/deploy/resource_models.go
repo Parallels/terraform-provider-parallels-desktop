@@ -18,8 +18,9 @@ type DeployResourceModel struct {
 	CurrentGitVersion     types.String                           `tfsdk:"current_git_version"`
 	License               types.Object                           `tfsdk:"license"`
 	Orchestrator          *orchestrator.OrchestratorRegistration `tfsdk:"orchestrator_registration"`
-	ApiConfig             *ParallelsDesktopApiConfig             `tfsdk:"api_config"`
+	ApiConfig             *ParallelsDesktopDevopsConfig          `tfsdk:"api_config"`
 	Api                   types.Object                           `tfsdk:"api"`
+	InstalledDependencies types.List                             `tfsdk:"installed_dependencies"`
 	InstallLocal          types.Bool                             `tfsdk:"install_local"`
 }
 
@@ -57,7 +58,7 @@ func (p *ParallelsDesktopLicense) MapObject() basetypes.ObjectValue {
 	return types.ObjectValueMust(attributeTypes, attrs)
 }
 
-type ParallelsDesktopApi struct {
+type ParallelsDesktopDevOps struct {
 	Version  types.String `tfsdk:"version"`
 	Protocol types.String `tfsdk:"protocol"`
 	Host     types.String `tfsdk:"host"`
@@ -66,7 +67,7 @@ type ParallelsDesktopApi struct {
 	Password types.String `tfsdk:"password"`
 }
 
-func (p *ParallelsDesktopApi) MapObject() basetypes.ObjectValue {
+func (p *ParallelsDesktopDevOps) MapObject() basetypes.ObjectValue {
 	attributeTypes := make(map[string]attr.Type)
 	attributeTypes["version"] = types.StringType
 	attributeTypes["protocol"] = types.StringType
@@ -86,7 +87,7 @@ func (p *ParallelsDesktopApi) MapObject() basetypes.ObjectValue {
 	return types.ObjectValueMust(attributeTypes, attrs)
 }
 
-type ParallelsDesktopApiConfig struct {
+type ParallelsDesktopDevopsConfig struct {
 	Port                     types.String `tfsdk:"port" json:"port,omitempty"`
 	Prefix                   types.String `tfsdk:"prefix" json:"prefix,omitempty"`
 	InstallVersion           types.String `tfsdk:"install_version" json:"install_version,omitempty"`
@@ -102,9 +103,13 @@ type ParallelsDesktopApiConfig struct {
 	TokenDurationMinutes     types.String `tfsdk:"token_duration_minutes" json:"token_duration_minutes,omitempty"`
 	Mode                     types.String `tfsdk:"mode" json:"mode,omitempty"`
 	UseOrchestratorResources types.Bool   `tfsdk:"use_orchestrator_resources"`
+	SystemReservedMemory     types.String `tfsdk:"system_reserved_memory"`
+	SystemReservedCpu        types.String `tfsdk:"system_reserved_cpu"`
+	SystemReservedDisk       types.String `tfsdk:"system_reserved_disk"`
+	EnableLogging            types.Bool   `tfsdk:"enable_logging"`
 }
 
-func (p *ParallelsDesktopApiConfig) MapObject() basetypes.ObjectValue {
+func (p *ParallelsDesktopDevopsConfig) MapObject() basetypes.ObjectValue {
 	attributeTypes := make(map[string]attr.Type)
 	attributeTypes["port"] = types.StringType
 	attributeTypes["install_version"] = types.StringType
@@ -116,6 +121,14 @@ func (p *ParallelsDesktopApiConfig) MapObject() basetypes.ObjectValue {
 	attributeTypes["tls_port"] = types.StringType
 	attributeTypes["tls_certificate"] = types.StringType
 	attributeTypes["tls_private_key"] = types.StringType
+	attributeTypes["disable_catalog_caching"] = types.BoolType
+	attributeTypes["token_duration_minutes"] = types.StringType
+	attributeTypes["mode"] = types.StringType
+	attributeTypes["use_orchestrator_resources"] = types.BoolType
+	attributeTypes["system_reserved_memory"] = types.StringType
+	attributeTypes["system_reserved_cpu"] = types.StringType
+	attributeTypes["system_reserved_disk"] = types.StringType
+	attributeTypes["enable_logging"] = types.BoolType
 
 	attrs := map[string]attr.Value{}
 	attrs["api_port"] = p.Port
@@ -128,6 +141,14 @@ func (p *ParallelsDesktopApiConfig) MapObject() basetypes.ObjectValue {
 	attrs["host_tls_port"] = p.TLSPort
 	attrs["tls_certificate"] = p.TLSCertificate
 	attrs["tls_private_key"] = p.TLSPrivateKey
+	attrs["disable_catalog_caching"] = p.DisableCatalogCaching
+	attrs["token_duration_minutes"] = p.TokenDurationMinutes
+	attrs["mode"] = p.Mode
+	attrs["use_orchestrator_resources"] = p.UseOrchestratorResources
+	attrs["system_reserved_memory"] = p.SystemReservedMemory
+	attrs["system_reserved_cpu"] = p.SystemReservedCpu
+	attrs["system_reserved_disk"] = p.SystemReservedDisk
+	attrs["enable_logging"] = p.EnableLogging
 
 	return types.ObjectValueMust(attributeTypes, attrs)
 }

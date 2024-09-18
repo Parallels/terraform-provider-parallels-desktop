@@ -9,69 +9,69 @@ import (
 var (
 	ApiConfigSchemaName  = "api_config"
 	apiConfigSchemaBlock = schema.SingleNestedBlock{
-		MarkdownDescription: "Parallels Desktop API configuration",
-		Description:         "Parallels Desktop API configuration",
+		MarkdownDescription: "Parallels Desktop DevOps configuration",
+		Description:         "Parallels Desktop DevOps configuration",
 		Attributes: map[string]schema.Attribute{
 			"port": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API port",
-				Description:         "Parallels Desktop API port",
+				MarkdownDescription: "Parallels Desktop DevOps port",
+				Description:         "Parallels Desktop DevOps port",
 				Optional:            true,
 			},
 			"prefix": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API port",
-				Description:         "Parallels Desktop API port",
+				MarkdownDescription: "Parallels Desktop DevOps port",
+				Description:         "Parallels Desktop DevOps port",
 				Optional:            true,
 			},
 			"install_version": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API version to install, if empty the latest will be installed",
-				Description:         "Parallels Desktop API version to install, if empty the latest will be installed",
+				MarkdownDescription: "Parallels Desktop DevOps version to install, if empty the latest will be installed",
+				Description:         "Parallels Desktop DevOps version to install, if empty the latest will be installed",
 				Optional:            true,
 			},
 			"root_password": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API root password",
-				Description:         "Parallels Desktop API root password",
+				MarkdownDescription: "Parallels Desktop DevOps root password",
+				Description:         "Parallels Desktop DevOps root password",
 				Optional:            true,
 				Sensitive:           true,
 			},
 			"hmac_secret": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API HMAC secret, this is used to sign the JWT tokens",
-				Description:         "Parallels Desktop API HMAC secret, this is used to sign the JWT tokens",
+				MarkdownDescription: "Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens",
+				Description:         "Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens",
 				Optional:            true,
 				Sensitive:           true,
 			},
 			"encryption_rsa_key": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API RSA key, this is used to encrypt database file on rest",
-				Description:         "Parallels Desktop API RSA key, this is used to encrypt database file on rest",
+				MarkdownDescription: "Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest",
+				Description:         "Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest",
 				Optional:            true,
 				Sensitive:           true,
 			},
 			"log_level": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API log level, you can choose between debug, info, warn, error",
-				Description:         "Parallels Desktop API log level, you can choose between debug, info, warn, error",
+				MarkdownDescription: "Parallels Desktop DevOps log level, you can choose between debug, info, warn, error",
+				Description:         "Parallels Desktop DevOps log level, you can choose between debug, info, warn, error",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("debug", "info", "warn", "error"),
 				},
 			},
 			"enable_tls": schema.BoolAttribute{
-				MarkdownDescription: "Parallels Desktop API enable TLS",
-				Description:         "Parallels Desktop API enable TLS",
+				MarkdownDescription: "Parallels Desktop DevOps enable TLS",
+				Description:         "Parallels Desktop DevOps enable TLS",
 				Optional:            true,
 			},
 			"tls_port": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API TLS port",
-				Description:         "Parallels Desktop API TLS port",
+				MarkdownDescription: "Parallels Desktop DevOps TLS port",
+				Description:         "Parallels Desktop DevOps TLS port",
 				Optional:            true,
 			},
 			"tls_certificate": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API TLS certificate, this should be a PEM base64 encoded certificate string",
-				Description:         "Parallels Desktop API TLS certificate, this should be a PEM base64 encoded certificate string",
+				MarkdownDescription: "Parallels Desktop DevOps TLS certificate, this should be a PEM base64 encoded certificate string",
+				Description:         "Parallels Desktop DevOps TLS certificate, this should be a PEM base64 encoded certificate string",
 				Optional:            true,
 				Sensitive:           true,
 			},
 			"tls_private_key": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API TLS private key, this should be a PEM base64 encoded private key string",
-				Description:         "Parallels Desktop API TLS private key, this should be a PEM base64 encoded private key string",
+				MarkdownDescription: "Parallels Desktop DevOps TLS private key, this should be a PEM base64 encoded private key string",
+				Description:         "Parallels Desktop DevOps TLS private key, this should be a PEM base64 encoded private key string",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -90,11 +90,27 @@ var (
 				Optional:            true,
 				Sensitive:           true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("orchestrator", "api"),
+					stringvalidator.OneOf("orchestrator", "catalog", "api"),
 				},
 			},
 			"use_orchestrator_resources": schema.BoolAttribute{
 				MarkdownDescription: "Use orchestrator resources",
+				Optional:            true,
+			},
+			"system_reserved_memory": schema.StringAttribute{
+				MarkdownDescription: "System reserved memory in MB",
+				Optional:            true,
+			},
+			"system_reserved_cpu": schema.StringAttribute{
+				MarkdownDescription: "System reserved CPU in %",
+				Optional:            true,
+			},
+			"system_reserved_disk": schema.StringAttribute{
+				MarkdownDescription: "System reserved disk in MB",
+				Optional:            true,
+			},
+			"enable_logging": schema.BoolAttribute{
+				MarkdownDescription: "Enable logging",
 				Optional:            true,
 			},
 		},

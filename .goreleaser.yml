@@ -16,7 +16,7 @@ builds:
       - -trimpath
       - --snapshot
     ldflags:
-      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}"
+      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X telemetry.AMPLITUDE_API_KEY={{.Env.AMPLITUDE_API_KEY}}"
     goos:
       - freebsd
       - windows

@@ -10,13 +10,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-const (
-	AMPLITUDE_API_KEY = ""
-)
-
 var (
 	globalTelemetryService *TelemetryService
-	lock                   = &sync.Mutex{}
+	lock                          = &sync.Mutex{}
+	AMPLITUDE_API_KEY      string = ""
 )
 
 func New(context context.Context) *TelemetryService {

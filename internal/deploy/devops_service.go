@@ -66,15 +66,9 @@ func (c *DevOpsServiceClient) GetVersion() (string, error) {
 func (c *DevOpsServiceClient) RestartServer() error {
 	cmd := "/Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service"
 	arguments := []string{"start"}
-	_, err := c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return nil
-	}
+	_, _ = c.client.RunCommand(cmd, arguments)
 
-	_, err = c.client.RunCommand(cmd, arguments)
-	if err != nil {
-		return nil
-	}
+	_, _ = c.client.RunCommand(cmd, arguments)
 
 	return nil
 }

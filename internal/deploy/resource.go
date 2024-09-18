@@ -663,7 +663,9 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	var installedDependencies []string
 	if !data.InstalledDependencies.IsNull() {
 		for _, dep := range data.InstalledDependencies.Elements() {
-			installedDependencies = append(installedDependencies, dep.(types.String).ValueString())
+			if strVal, ok := dep.(types.String); ok {
+				installedDependencies = append(installedDependencies, strVal.ValueString())
+			}
 		}
 	}
 

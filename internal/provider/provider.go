@@ -117,7 +117,7 @@ func (p *ParallelsProvider) DataSources(_ context.Context) []func() datasource.D
 func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		// virtualmachinestate.NewVirtualMachineStateResource,
-		deploy.NewVirtualMachineStateResource,
+		deploy.NewDeployResource,
 		// packertemplate.NewPackerTemplateVirtualMachineResource,
 		authorization.NewAuthorizationResource,
 		vagrantbox.NewVagrantBoxResource,

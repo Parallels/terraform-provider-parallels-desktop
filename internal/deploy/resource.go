@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
@@ -11,6 +12,8 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 	"terraform-provider-parallels-desktop/internal/ssh"
+
+	"terraform-provider-parallels-desktop/internal/telemetry"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -23,28 +26,28 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                = &VirtualMachineStateResource{}
-	_ resource.ResourceWithImportState = &VirtualMachineStateResource{}
+	_ resource.Resource                = &DeployResource{}
+	_ resource.ResourceWithImportState = &DeployResource{}
 )
 
-func NewVirtualMachineStateResource() resource.Resource {
-	return &VirtualMachineStateResource{}
+func NewDeployResource() resource.Resource {
+	return &DeployResource{}
 }
 
-// VirtualMachineStateResource defines the resource implementation.
-type VirtualMachineStateResource struct {
+// DeployResource defines the resource implementation.
+type DeployResource struct {
 	provider *models.ParallelsProviderModel
 }
 
-func (r *VirtualMachineStateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *DeployResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_deploy"
 }
 
-func (r *VirtualMachineStateResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *DeployResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = deployResourceSchema
 }
 
-func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		tflog.Info(ctx, "No provider data")
 		return
@@ -63,10 +66,19 @@ func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resourc
 	tflog.Info(ctx, r.provider.License.ValueString())
 }
 
-func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data DeployResourceModel
-
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventDeploy, telemetry.ModeCreate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -85,14 +97,15 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		}
 	}
 
-	parallelsClient := NewParallelsServerClient(ctx, runClient)
+	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
 
-	if diag := r.installParallelsDesktop(parallelsClient); diag.HasError() {
+	dependencies, diag := r.installParallelsDesktop(parallelsClient)
+	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 
-	apiData, diag := r.installApi(&data, parallelsClient)
+	_, diag = r.installDevOpsService(&data, dependencies, parallelsClient)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
@@ -129,14 +142,16 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	// getting parallels license
 	if license, err := parallelsClient.GetLicense(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallApiService(); err != nil {
-			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 		resp.Diagnostics.AddError("Error getting parallels license", err.Error())
 		return
@@ -146,51 +161,90 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 	// Register with orchestrator if needed
 	if data.Orchestrator != nil {
-		orch := *data.Orchestrator
+		apiData := data.Api
+		host := strings.ReplaceAll(apiData.Attributes()["host"].String(), "\"", "")
+		protocol := strings.ReplaceAll(apiData.Attributes()["protocol"].String(), "\"", "")
+		port := strings.ReplaceAll(apiData.Attributes()["port"].String(), "\"", "")
+		user := strings.ReplaceAll(apiData.Attributes()["user"].String(), "\"", "")
+		password := strings.ReplaceAll(apiData.Attributes()["password"].String(), "\"", "")
 
-		if data.Orchestrator.Host.ValueString() == "" {
-			orch.Host = apiData.Host
-		}
-		if data.Orchestrator.Port.ValueString() == "" {
-			orch.Port = apiData.Port
-		}
-
-		if data.Orchestrator.HostCredentials == nil {
-			orch.HostCredentials = &authenticator.Authentication{
-				Username: apiData.User,
-				Password: apiData.Password,
-			}
-		}
-		if data.Orchestrator.Schema.ValueString() == "" {
-			orch.Schema = apiData.Protocol
+		orchestratorConfig := orchestrator.OrchestratorRegistration{
+			HostId:      data.Orchestrator.HostId,
+			Schema:      types.StringValue(protocol),
+			Host:        types.StringValue(host),
+			Port:        types.StringValue(port),
+			Description: data.Orchestrator.Description,
+			Tags:        data.Orchestrator.Tags,
+			HostCredentials: &authenticator.Authentication{
+				Username: types.StringValue(user),
+				Password: types.StringValue(password),
+			},
+			Orchestrator: data.Orchestrator.Orchestrator,
 		}
 
-		id, diag := orchestrator.RegisterWithHost(ctx, orch)
+		id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig)
 		if diag.HasError() {
-			if err := parallelsClient.UninstallDependencies(); err != nil {
-				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+				for _, uninstallError := range uninstallErrors {
+					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+				}
 			}
 			if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 			}
-			if err := parallelsClient.UninstallApiService(); err != nil {
-				resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+			if err := parallelsClient.UninstallDevOpsService(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			}
-			if diag := orchestrator.UnregisterWithHost(ctx, orch); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
+			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
 			}
+
+			if isRegistered {
+				if diag := orchestrator.UnregisterWithHost(ctx, orchestratorConfig); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+				}
+			}
+
+			resp.Diagnostics.Append(diag...)
 			return
 		}
 
 		data.Orchestrator.HostId = types.StringValue(id)
 	}
 
+	var installedDependencies []attr.Value
+	if len(dependencies) > 0 {
+		for _, dep := range dependencies {
+			installedDependencies = append(installedDependencies, types.StringValue(dep))
+		}
+	} else {
+		installedDependencies = []attr.Value{}
+	}
+
+	installDependenciesListValue, diags := types.ListValue(types.StringType, installedDependencies)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	data.InstalledDependencies = installDependenciesListValue
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data DeployResourceModel
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventDeploy, telemetry.ModeRead,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	tflog.Info(ctx, "Read request to see logs")
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -211,7 +265,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 			return
 		}
 	}
-	parallelsClient := NewParallelsServerClient(ctx, runClient)
+	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
 
 	// getting parallels version
 	if version, err := parallelsClient.GetVersion(); err != nil {
@@ -230,8 +284,8 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 	}
 
 	// Getting parallels latest api version
-	if version, err := parallelsClient.GetApiVersion(); err != nil {
-		planVersion := ParallelsDesktopApi{}
+	if version, err := parallelsClient.GetDevOpsVersion(); err != nil {
+		planVersion := ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
@@ -244,7 +298,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 			data.Api = planVersion.MapObject()
 		}
 	} else {
-		planVersion := ParallelsDesktopApi{}
+		planVersion := ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
@@ -267,9 +321,19 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 	}
 }
 
-func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data DeployResourceModel
 	var currentData DeployResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventDeploy, telemetry.ModeUpdate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -290,11 +354,15 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		}
 	}
 
-	parallelsClient := NewParallelsServerClient(ctx, runClient)
+	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
+
+	var dependencies []string
+	var restartDiag diag.Diagnostics
 
 	// restart parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
-		if diag := r.installParallelsDesktop(parallelsClient); diag.HasError() {
+		dependencies, restartDiag = r.installParallelsDesktop(parallelsClient)
+		if restartDiag.HasError() {
 			resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
 			return
 		}
@@ -385,89 +453,121 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		data.License = license.MapObject()
 	}
 
-	hasChangesInApi := false
+	// setting the same installed dependencies we had
+	if data.InstalledDependencies.IsNull() || data.InstalledDependencies.IsUnknown() {
+		data.InstalledDependencies = currentData.InstalledDependencies
+	}
+
+	hasChangesInDevOpsService := false
 	if data.ApiConfig != nil {
 		if currentData.ApiConfig == nil {
-			hasChangesInApi = true
+			hasChangesInDevOpsService = true
 		} else {
 			if data.ApiConfig.Port.ValueString() != currentData.ApiConfig.Port.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.TLSPort.ValueString() != currentData.ApiConfig.TLSPort.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.RootPassword.ValueString() != currentData.ApiConfig.RootPassword.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.EncryptionRsaKey.ValueString() != currentData.ApiConfig.EncryptionRsaKey.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.HmacSecret.ValueString() != currentData.ApiConfig.HmacSecret.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.LogLevel.ValueString() != currentData.ApiConfig.LogLevel.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.EnableTLS.ValueBool() != currentData.ApiConfig.EnableTLS.ValueBool() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.TLSPort.ValueString() != currentData.ApiConfig.TLSPort.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.TLSCertificate.ValueString() != currentData.ApiConfig.TLSCertificate.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.TLSPrivateKey.ValueString() != currentData.ApiConfig.TLSPrivateKey.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.DisableCatalogCaching.ValueBool() != currentData.ApiConfig.DisableCatalogCaching.ValueBool() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.TokenDurationMinutes.ValueString() != currentData.ApiConfig.TokenDurationMinutes.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.Mode.ValueString() != currentData.ApiConfig.Mode.ValueString() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 			if data.ApiConfig.UseOrchestratorResources.ValueBool() != currentData.ApiConfig.UseOrchestratorResources.ValueBool() {
-				hasChangesInApi = true
+				hasChangesInDevOpsService = true
 			}
 		}
 	}
 
-	if hasChangesInApi {
-		err := parallelsClient.UninstallApiService()
+	if hasChangesInDevOpsService {
+		err := parallelsClient.UninstallDevOpsService()
 		if err != nil {
-			resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			return
 		}
-		if _, diag := r.installApi(&data, parallelsClient); diag.HasError() {
+		if _, diag := r.installDevOpsService(&data, dependencies, parallelsClient); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return
 		}
-		tflog.Info(ctx, "Changes in api service, restarting parallels service")
+		tflog.Info(ctx, "Changes in DevOps service, restarting parallels service")
 	} else {
-		tflog.Info(ctx, "No changes in api service")
+		tflog.Info(ctx, "No changes in DevOps service")
 	}
 
-	var apiData *ParallelsDesktopApi
-	var apiDiag diag.Diagnostics
-	_, diag := parallelsClient.GetApiVersion()
-	if diag != nil {
-		if diag.Error() == "Parallels Desktop DevOps Service not found" {
-			apiData, apiDiag = r.installApi(&data, parallelsClient)
+	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion()
+	if getVersionError != nil {
+		if getVersionError.Error() == "Parallels Desktop DevOps Service not found" {
+			_, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
 			if apiDiag.HasError() {
 				resp.Diagnostics.Append(apiDiag...)
 				return
 			}
 		} else {
-			resp.Diagnostics.AddError("Error getting parallels api version", diag.Error())
+			resp.Diagnostics.AddError("Error getting parallels DevOps version", getVersionError.Error())
 			return
 		}
 	}
 
+	desiredApiData, err := data.Api.ToObjectValue(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error converting data.Api to object value", "")
+		return
+	}
+
+	if !desiredApiData.IsUnknown() && !desiredApiData.IsNull() {
+		desiredVersion := desiredApiData.Attributes()["version"].String()
+		if installedVersion != desiredVersion {
+			devOpsData, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
+			if apiDiag.HasError() {
+				resp.Diagnostics.Append(apiDiag...)
+				return
+			}
+			if devOpsData != nil {
+				tflog.Info(ctx, "DevOps is installed")
+			}
+		}
+	} else {
+		data.Api = currentData.Api
+	}
+
 	if data.Orchestrator != nil {
 		if orchestrator.HasChanges(ctx, data.Orchestrator, currentData.Orchestrator) {
+			apiData := data.Api
+			host := strings.ReplaceAll(apiData.Attributes()["host"].String(), "\"", "")
+			protocol := strings.ReplaceAll(apiData.Attributes()["protocol"].String(), "\"", "")
+			port := strings.ReplaceAll(apiData.Attributes()["port"].String(), "\"", "")
+			user := strings.ReplaceAll(apiData.Attributes()["user"].String(), "\"", "")
+			password := strings.ReplaceAll(apiData.Attributes()["password"].String(), "\"", "")
+
 			// checking if we already registered with orchestrator
 			if currentData.Orchestrator != nil && currentData.Orchestrator.HostId.ValueString() != "" {
 				if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator); diag.HasError() {
@@ -475,31 +575,37 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 					return
 				}
 			}
-			orch := *data.Orchestrator
 
-			if data.Orchestrator.Host.ValueString() == "" {
-				orch.Host = apiData.Host
-			}
-			if data.Orchestrator.Port.ValueString() == "" {
-				orch.Port = apiData.Port
+			orchestratorConfig := orchestrator.OrchestratorRegistration{
+				HostId:      data.Orchestrator.HostId,
+				Schema:      types.StringValue(protocol),
+				Host:        types.StringValue(host),
+				Port:        types.StringValue(port),
+				Description: data.Orchestrator.Description,
+				Tags:        data.Orchestrator.Tags,
+				HostCredentials: &authenticator.Authentication{
+					Username: types.StringValue(user),
+					Password: types.StringValue(password),
+				},
+				Orchestrator: data.Orchestrator.Orchestrator,
 			}
 
-			if data.Orchestrator.HostCredentials == nil {
-				orch.HostCredentials = &authenticator.Authentication{
-					Username: apiData.User,
-					Password: apiData.Password,
-				}
-			}
-			if data.Orchestrator.Schema.ValueString() == "" {
-				orch.Schema = apiData.Protocol
-			}
-			id, diag := orchestrator.RegisterWithHost(ctx, orch)
-			if diag.HasError() {
-				resp.Diagnostics.Append(diag...)
+			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
 				return
 			}
+			if !isRegistered {
+				id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig)
+				if diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
 
-			data.Orchestrator.HostId = types.StringValue(id)
+				data.Orchestrator.HostId = types.StringValue(id)
+			} else {
+				tflog.Info(ctx, "Already registered with orchestrator, skipping registration")
+			}
 		}
 	} else if currentData.Orchestrator != nil {
 		if currentData.Orchestrator.HostId.ValueString() != "" {
@@ -516,8 +622,18 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 	}
 }
 
-func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data DeployResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventDeploy, telemetry.ModeDestroy,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -535,7 +651,7 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 		}
 	}
 
-	parallelsService := NewParallelsServerClient(ctx, runClient)
+	parallelsService := NewDevOpsServiceClient(ctx, runClient)
 
 	// deactivating parallels license
 	if err := parallelsService.DeactivateLicense(); err != nil {
@@ -547,9 +663,20 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 		resp.Diagnostics.AddWarning("Error uninstalling parallels desktop", err.Error())
 	}
 
+	var installedDependencies []string
+	if !data.InstalledDependencies.IsNull() {
+		for _, dep := range data.InstalledDependencies.Elements() {
+			if strVal, ok := dep.(types.String); ok {
+				installedDependencies = append(installedDependencies, strVal.ValueString())
+			}
+		}
+	}
+
 	// uninstalling dependencies
-	if err := parallelsService.UninstallDependencies(); err != nil {
-		resp.Diagnostics.AddWarning("Error uninstalling dependencies", err.Error())
+	if uninstallErrors := parallelsService.UninstallDependencies(installedDependencies); len(uninstallErrors) > 0 {
+		for _, err := range uninstallErrors {
+			resp.Diagnostics.AddWarning("Error uninstalling dependencies", err.Error())
+		}
 	}
 
 	// Save data into Terraform state
@@ -560,8 +687,8 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 		"restricted": types.BoolType,
 	})
 
-	if err := parallelsService.UninstallApiService(); err != nil {
-		resp.Diagnostics.AddError("Error uninstalling parallels api service", err.Error())
+	if err := parallelsService.UninstallDevOpsService(); err != nil {
+		resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 	}
 
 	data.Api = types.ObjectUnknown(map[string]attr.Type{
@@ -582,11 +709,11 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 	}
 }
 
-func (r *VirtualMachineStateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *DeployResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *VirtualMachineStateResource) getSshClient(data DeployResourceModel) (*ssh.SshClient, error) {
+func (r *DeployResource) getSshClient(data DeployResourceModel) (*ssh.SshClient, error) {
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -615,40 +742,49 @@ func (r *VirtualMachineStateResource) getSshClient(data DeployResourceModel) (*s
 	return sshClient, nil
 }
 
-func (r *VirtualMachineStateResource) installParallelsDesktop(parallelsClient *ParallelsServerClient) diag.Diagnostics {
+func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceClient) ([]string, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
+	var installDependenciesError error
+	var installed_dependencies []string
 
 	// installing dependencies
-	if err := parallelsClient.InstallDependencies(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+	installed_dependencies, installDependenciesError = parallelsClient.InstallDependencies()
+	if installDependenciesError != nil {
+		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
-		diag.AddError("Error installing dependencies", err.Error())
-		return diag
+		diag.AddError("Error installing dependencies", installDependenciesError.Error())
+		return installed_dependencies, diag
 	}
 
 	// installing parallels desktop
 	if err := parallelsClient.InstallParallelsDesktop(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
 		diag.AddError("Error installing parallels desktop", err.Error())
-		return diag
+		return installed_dependencies, diag
 	}
 
 	// restarting parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
 		diag.AddError("Error restarting parallels service", err.Error())
-		return diag
+		return installed_dependencies, diag
 	}
 
 	key := r.provider.License.ValueString()
@@ -657,29 +793,35 @@ func (r *VirtualMachineStateResource) installParallelsDesktop(parallelsClient *P
 
 	// installing parallels license
 	if err := parallelsClient.InstallLicense(key, username, password); err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
 		diag.AddError("Error installing parallels license", err.Error())
-		return diag
+		return installed_dependencies, diag
 	}
 
-	return diag
+	if installed_dependencies == nil {
+		installed_dependencies = []string{}
+	}
+
+	return installed_dependencies, diag
 }
 
-func (r *VirtualMachineStateResource) installApi(data *DeployResourceModel, parallelsClient *ParallelsServerClient) (*ParallelsDesktopApi, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(data *DeployResourceModel, dependencies []string, parallelsClient *DevOpsServiceClient) (*ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"
 	apiVersion := "latest"
 
-	// Installing parallels api service
-	var config ParallelsDesktopApiConfig
+	// Installing parallels DevOps service
+	var config ParallelsDesktopDevopsConfig
 	if data.ApiConfig == nil {
-		config = ParallelsDesktopApiConfig{
+		config = ParallelsDesktopDevopsConfig{
 			InstallVersion: types.StringValue(apiVersion),
 			Port:           types.StringValue(targetPort),
 			TLSPort:        types.StringValue(targetTlsPort),
@@ -692,38 +834,42 @@ func (r *VirtualMachineStateResource) installApi(data *DeployResourceModel, para
 		config.RootPassword = r.provider.License
 	}
 
-	_, err := parallelsClient.InstallApiService(r.provider.License.ValueString(), config)
+	_, err := parallelsClient.InstallDevOpsService(r.provider.License.ValueString(), config)
 	if err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallApiService(); err != nil {
-			diag.AddError("Error uninstalling parallels api service", err.Error())
+		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			diag.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 
-		diag.AddError("Error installing parallels api service", err.Error())
+		diag.AddError("Error installing parallels DevOps service", err.Error())
 		return nil, diag
 	}
 
-	currentVersion, err := parallelsClient.GetApiVersion()
+	currentVersion, err := parallelsClient.GetDevOpsVersion()
 	if err != nil {
-		if err := parallelsClient.UninstallDependencies(); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
+		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+			for _, uninstallError := range uninstallErrors {
+				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+			}
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallApiService(); err != nil {
-			diag.AddError("Error uninstalling parallels api service", err.Error())
+		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			diag.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 		diag.AddError("Error getting parallels api version", err.Error())
 		return nil, diag
 	}
 
-	apiData := ParallelsDesktopApi{
+	apiData := ParallelsDesktopDevOps{
 		Version: types.StringValue(currentVersion),
 		Host:    types.StringValue(data.SshConnection.Host.ValueString()),
 		Port:    types.StringValue(targetPort),

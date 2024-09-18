@@ -3,12 +3,14 @@ package remoteimage
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
-	"time"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,8 +20,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &RemoteVmResource{}
-var _ resource.ResourceWithImportState = &RemoteVmResource{}
+var (
+	_ resource.Resource                = &RemoteVmResource{}
+	_ resource.ResourceWithImportState = &RemoteVmResource{}
+)
 
 func NewRemoteVmResource() resource.Resource {
 	return &RemoteVmResource{}
@@ -57,6 +61,16 @@ func (r *RemoteVmResource) Configure(ctx context.Context, req resource.Configure
 
 func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data RemoteVmResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventRemoteImage, telemetry.ModeCreate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -267,6 +281,16 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data RemoteVmResourceModel
 
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventRemoteImage, telemetry.ModeRead,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
+
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
@@ -317,6 +341,16 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data RemoteVmResourceModel
 	var currentData RemoteVmResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventRemoteImage, telemetry.ModeUpdate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -477,8 +511,18 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 
 func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data RemoteVmResourceModel
-	//Read Terraform prior state data into the model
+	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventRemoteImage, telemetry.ModeDestroy,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return

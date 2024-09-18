@@ -3,12 +3,14 @@ package vagrantbox
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
-	"time"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,8 +20,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &VagrantBoxResource{}
-var _ resource.ResourceWithImportState = &VagrantBoxResource{}
+var (
+	_ resource.Resource                = &VagrantBoxResource{}
+	_ resource.ResourceWithImportState = &VagrantBoxResource{}
+)
 
 func NewVagrantBoxResource() resource.Resource {
 	return &VagrantBoxResource{}
@@ -57,6 +61,16 @@ func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.Configu
 
 func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data VagrantBoxResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventVagrant, telemetry.ModeCreate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
@@ -265,6 +279,16 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data VagrantBoxResourceModel
 
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventVagrant, telemetry.ModeRead,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
+
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -313,6 +337,16 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data VagrantBoxResourceModel
 	var currentData VagrantBoxResourceModel
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventVagrant, telemetry.ModeUpdate,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -471,8 +505,18 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 
 func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data VagrantBoxResourceModel
-	//Read Terraform prior state data into the model
+	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	telemetrySvc := telemetry.Get(ctx)
+	telemetryEvent := telemetry.NewTelemetryItem(
+		ctx,
+		r.provider.License.String(),
+		telemetry.EventVagrant, telemetry.ModeDestroy,
+		nil,
+		nil,
+	)
+	telemetrySvc.TrackEvent(telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return

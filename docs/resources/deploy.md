@@ -72,18 +72,19 @@ resource "parallels-desktop_deploy" "example" {
 
 ### Optional
 
-- `api_config` (Block, Optional) Parallels Desktop API configuration (see [below for nested schema](#nestedblock--api_config))
+- `api_config` (Block, Optional) Parallels Desktop DevOps configuration (see [below for nested schema](#nestedblock--api_config))
 - `install_local` (Boolean) Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine
 - `orchestrator_registration` (Block, Optional) Orchestrator connection details (see [below for nested schema](#nestedblock--orchestrator_registration))
 - `ssh_connection` (Block, Optional) Host connection details (see [below for nested schema](#nestedblock--ssh_connection))
 
 ### Read-Only
 
-- `api` (Object) Parallels Desktop API (see [below for nested schema](#nestedatt--api))
+- `api` (Object) Parallels Desktop DevOps Service (see [below for nested schema](#nestedatt--api))
 - `current_git_version` (String) Current version of Git
 - `current_packer_version` (String) Current version of Hashicorp Packer
 - `current_vagrant_version` (String) Current version of Hashicorp Vagrant
 - `current_version` (String) Current version of Parallels Desktop
+- `installed_dependencies` (List of String) List of installed dependencies
 - `license` (Object) Parallels Desktop license (see [below for nested schema](#nestedatt--license))
 
 <a id="nestedblock--api_config"></a>
@@ -92,18 +93,22 @@ resource "parallels-desktop_deploy" "example" {
 Optional:
 
 - `disable_catalog_caching` (Boolean) Disable catalog caching, this will disable the ability to cache catalog items that are pulled from a remote catalog
-- `enable_tls` (Boolean) Parallels Desktop API enable TLS
-- `encryption_rsa_key` (String, Sensitive) Parallels Desktop API RSA key, this is used to encrypt database file on rest
-- `hmac_secret` (String, Sensitive) Parallels Desktop API HMAC secret, this is used to sign the JWT tokens
-- `install_version` (String) Parallels Desktop API version to install, if empty the latest will be installed
-- `log_level` (String) Parallels Desktop API log level, you can choose between debug, info, warn, error
+- `enable_logging` (Boolean) Enable logging
+- `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
+- `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
+- `hmac_secret` (String, Sensitive) Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens
+- `install_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
+- `log_level` (String) Parallels Desktop DevOps log level, you can choose between debug, info, warn, error
 - `mode` (String, Sensitive) API Operation mode, either orchestrator or catalog
-- `port` (String) Parallels Desktop API port
-- `prefix` (String) Parallels Desktop API port
-- `root_password` (String, Sensitive) Parallels Desktop API root password
-- `tls_certificate` (String, Sensitive) Parallels Desktop API TLS certificate, this should be a PEM base64 encoded certificate string
-- `tls_port` (String) Parallels Desktop API TLS port
-- `tls_private_key` (String, Sensitive) Parallels Desktop API TLS private key, this should be a PEM base64 encoded private key string
+- `port` (String) Parallels Desktop DevOps port
+- `prefix` (String) Parallels Desktop DevOps port
+- `root_password` (String, Sensitive) Parallels Desktop DevOps root password
+- `system_reserved_cpu` (String) System reserved CPU in %
+- `system_reserved_disk` (String) System reserved disk in MB
+- `system_reserved_memory` (String) System reserved memory in MB
+- `tls_certificate` (String, Sensitive) Parallels Desktop DevOps TLS certificate, this should be a PEM base64 encoded certificate string
+- `tls_port` (String) Parallels Desktop DevOps TLS port
+- `tls_private_key` (String, Sensitive) Parallels Desktop DevOps TLS private key, this should be a PEM base64 encoded private key string
 - `token_duration_minutes` (String) JWT Token duration in minutes
 - `use_orchestrator_resources` (Boolean) Use orchestrator resources
 

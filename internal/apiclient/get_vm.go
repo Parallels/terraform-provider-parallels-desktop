@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -22,13 +23,13 @@ func GetVm(ctx context.Context, config HostConfig, machineId string) (*apimodels
 
 	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostics.AddError("There was an error getting the authenticator", err.Error())
 		return nil, diagnostics
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {

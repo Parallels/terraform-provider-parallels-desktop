@@ -31,4 +31,5 @@ type CloneVmResourceModel struct {
 	RunAfterCreate       types.Bool                                 `tfsdk:"run_after_create"`
 	Timeouts             timeouts.Value                             `tfsdk:"timeouts"`
 	ForceChanges         types.Bool                                 `tfsdk:"force_changes"`
+	DisableTlsValidation types.Bool                                 `tfsdk:"disable_tls_validation"`
 }

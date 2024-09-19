@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 
@@ -20,13 +21,13 @@ func DeleteApiKey(ctx context.Context, config HostConfig, apiKeyId string) diag.
 
 	url := fmt.Sprintf("%s/auth/api_keys/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), apiKeyId)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostic.AddError("There was an error getting the authenticator", err.Error())
 		return diagnostic
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if clientResponse, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {

@@ -3,6 +3,7 @@ package sharedfolder
 import (
 	"context"
 	"encoding/json"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 

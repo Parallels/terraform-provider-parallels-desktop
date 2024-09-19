@@ -95,9 +95,10 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	// before creating, if we have enough data we will be checking if we have enough resources
@@ -325,9 +326,10 @@ func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
@@ -386,9 +388,10 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
@@ -557,9 +560,10 @@ func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())

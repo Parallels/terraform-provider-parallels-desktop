@@ -3,6 +3,7 @@ package packertemplate
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
 
@@ -62,9 +63,10 @@ func (d *PackerTemplateDataSource) Read(ctx context.Context, req datasource.Read
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       d.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              d.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: d.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	templates, diag := apiclient.GetPackerTemplates(ctx, hostConfig, data.Filter.FieldName.ValueString(), data.Filter.Value.ValueString())

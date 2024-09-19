@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
@@ -16,8 +17,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &AuthorizationResource{}
-var _ resource.ResourceWithImportState = &AuthorizationResource{}
+var (
+	_ resource.Resource                = &AuthorizationResource{}
+	_ resource.ResourceWithImportState = &AuthorizationResource{}
+)
 
 func NewAuthorizationResource() resource.Resource {
 	return &AuthorizationResource{}
@@ -68,9 +71,10 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	usersNotCreated := make([]string, 0)
@@ -365,9 +369,10 @@ func (r *AuthorizationResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	diag := updateClaims(ctx, hostConfig, &data, &currentData)
@@ -395,7 +400,6 @@ func (r *AuthorizationResource) Update(ctx context.Context, req resource.UpdateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
 }
 
 func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -414,9 +418,10 @@ func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	for _, apiKey := range data.ApiKeys {

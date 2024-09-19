@@ -870,16 +870,19 @@ func (r *DeployResource) installDevOpsService(data *DeployResourceModel, depende
 	}
 
 	apiData := ParallelsDesktopDevOps{
-		Version: types.StringValue(currentVersion),
-		Host:    types.StringValue(data.SshConnection.Host.ValueString()),
-		Port:    types.StringValue(targetPort),
-		User:    types.StringValue("root@localhost"),
+		Version:  types.StringValue(currentVersion),
+		Host:     types.StringValue(data.SshConnection.Host.ValueString()),
+		Port:     types.StringValue(targetPort),
+		Protocol: types.StringValue("http"),
+		User:     types.StringValue("root@localhost"),
 	}
 
 	if config.EnableTLS.ValueBool() {
 		apiData.Protocol = types.StringValue("https")
+		apiData.Port = types.StringValue(targetTlsPort)
 	} else {
 		apiData.Protocol = types.StringValue("http")
+		apiData.Port = types.StringValue(targetPort)
 	}
 
 	apiData.Password = config.RootPassword

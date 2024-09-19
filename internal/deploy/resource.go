@@ -182,7 +182,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 			Orchestrator: data.Orchestrator.Orchestrator,
 		}
 
-		id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig)
+		id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
 		if diag.HasError() {
 			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
 				for _, uninstallError := range uninstallErrors {
@@ -195,14 +195,14 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 			if err := parallelsClient.UninstallDevOpsService(); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			}
-			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig)
+			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
 
 			if isRegistered {
-				if diag := orchestrator.UnregisterWithHost(ctx, orchestratorConfig); diag.HasError() {
+				if diag := orchestrator.UnregisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
 					resp.Diagnostics.Append(diag...)
 				}
 			}
@@ -570,7 +570,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 			// checking if we already registered with orchestrator
 			if currentData.Orchestrator != nil && currentData.Orchestrator.HostId.ValueString() != "" {
-				if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator); diag.HasError() {
+				if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
 					resp.Diagnostics.Append(diag...)
 					return
 				}
@@ -590,13 +590,13 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 				Orchestrator: data.Orchestrator.Orchestrator,
 			}
 
-			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig)
+			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
 			if !isRegistered {
-				id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig)
+				id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
 				if diag.HasError() {
 					resp.Diagnostics.Append(diag...)
 					return
@@ -609,7 +609,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	} else if currentData.Orchestrator != nil {
 		if currentData.Orchestrator.HostId.ValueString() != "" {
-			if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator); diag.HasError() {
+			if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
 				resp.Diagnostics.Append(diag...)
 				return
 			}
@@ -699,7 +699,7 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	})
 
 	if data.Orchestrator != nil {
-		if diag := orchestrator.UnregisterWithHost(ctx, *data.Orchestrator); diag.HasError() {
+		if diag := orchestrator.UnregisterWithHost(ctx, *data.Orchestrator, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 		}
 	}

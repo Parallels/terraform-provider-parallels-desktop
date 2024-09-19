@@ -32,5 +32,6 @@ provider "parallels-desktop" {
 
 ### Optional
 
+- `disable_tls_validation` (Boolean) Disable TLS validation
 - `my_account_password` (String, Sensitive) Parallels Desktop My Account password
 - `my_account_user` (String) Parallels Desktop My Account user

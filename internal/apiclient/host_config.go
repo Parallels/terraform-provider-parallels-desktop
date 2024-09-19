@@ -5,8 +5,9 @@ import (
 )
 
 type HostConfig struct {
-	Host          string                        `json:"host"`
-	MachineId     string                        `json:"machine_id"`
-	License       string                        `json:"license"`
-	Authorization *authenticator.Authentication `json:"authorization"`
+	Host                 string                        `json:"host"`
+	MachineId            string                        `json:"machine_id"`
+	License              string                        `json:"license"`
+	DisableTlsValidation bool                          `json:"disable_tls_validation"`
+	Authorization        *authenticator.Authentication `json:"authorization"`
 }

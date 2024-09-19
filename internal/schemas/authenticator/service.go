@@ -2,14 +2,15 @@ package authenticator
 
 import (
 	"context"
+
 	"terraform-provider-parallels-desktop/internal/constants"
 	"terraform-provider-parallels-desktop/internal/helpers"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func GetAuthenticator(ctx context.Context, host string, license string, authenticator *Authentication) (*helpers.HttpCallerAuth, error) {
-	client := helpers.NewHttpCaller(ctx)
+func GetAuthenticator(ctx context.Context, host string, license string, authenticator *Authentication, disableTlsVerification bool) (*helpers.HttpCallerAuth, error) {
+	client := helpers.NewHttpCaller(ctx, disableTlsVerification)
 	var auth helpers.HttpCallerAuth
 	if authenticator == nil {
 		tflog.Info(ctx, "Authenticator is nil, using root access")

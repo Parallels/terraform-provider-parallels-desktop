@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -17,8 +18,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &PackerTemplateVirtualMachineResource{}
-var _ resource.ResourceWithImportState = &PackerTemplateVirtualMachineResource{}
+var (
+	_ resource.Resource                = &PackerTemplateVirtualMachineResource{}
+	_ resource.ResourceWithImportState = &PackerTemplateVirtualMachineResource{}
+)
 
 func NewPackerTemplateVirtualMachineResource() resource.Resource {
 	return &PackerTemplateVirtualMachineResource{}
@@ -78,9 +81,10 @@ func (r *PackerTemplateVirtualMachineResource) Create(ctx context.Context, req r
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
@@ -205,9 +209,10 @@ func (r *PackerTemplateVirtualMachineResource) Read(ctx context.Context, req res
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
@@ -255,9 +260,10 @@ func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req r
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
@@ -381,7 +387,7 @@ func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req r
 
 func (r *PackerTemplateVirtualMachineResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data PackerVirtualMachineResourceModel
-	//Read Terraform prior state data into the model
+	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
@@ -404,9 +410,10 @@ func (r *PackerTemplateVirtualMachineResource) Delete(ctx context.Context, req r
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())

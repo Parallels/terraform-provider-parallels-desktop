@@ -16,13 +16,13 @@ func UnregisterWithOrchestrator(ctx context.Context, config HostConfig, hostId s
 	urlHost := helpers.GetHostUrl(config.Host)
 	url := fmt.Sprintf("%s/orchestrator/hosts/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), hostId)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostics.AddError("There was an error getting the authenticator", err.Error())
 		return diagnostics
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if clientResponse, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
 		if clientResponse != nil {
 			if clientResponse.StatusCode == 404 {

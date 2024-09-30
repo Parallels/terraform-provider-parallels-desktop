@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -15,7 +16,7 @@ func ConfigureMachine(ctx context.Context, config HostConfig, machineId string, 
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostics.AddError("There was an error getting the authenticator", err.Error())
 		return nil, diagnostics
@@ -23,7 +24,7 @@ func ConfigureMachine(ctx context.Context, config HostConfig, machineId string, 
 
 	tflog.Debug(ctx, fmt.Sprintf("Configuring machine %v with configSet", *configSet))
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	var response apimodels.VmConfigResponse
 	if clientResponse, err := client.PutDataToClient(fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId), nil, configSet, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {

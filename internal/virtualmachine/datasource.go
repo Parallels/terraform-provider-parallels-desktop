@@ -3,6 +3,7 @@ package virtualmachine
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
 
@@ -62,9 +63,10 @@ func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       d.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              d.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: d.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vms, diag := apiclient.GetVms(ctx, hostConfig, data.Filter.FieldName.ValueString(), data.Filter.Value.ValueString())

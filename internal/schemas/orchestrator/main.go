@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-func RegisterWithHost(context context.Context, plan OrchestratorRegistration) (string, diag.Diagnostics) {
+func RegisterWithHost(context context.Context, plan OrchestratorRegistration, disableTlsValidation bool) (string, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	if updateDiags := UpdateFromDetails(context, &plan); updateDiags.HasError() {
 		diagnostics.Append(updateDiags...)
@@ -57,8 +57,9 @@ func RegisterWithHost(context context.Context, plan OrchestratorRegistration) (s
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          plan.Orchestrator.GetHost(),
-		Authorization: plan.Orchestrator.UseAuthentication,
+		Host:                 plan.Orchestrator.GetHost(),
+		Authorization:        plan.Orchestrator.UseAuthentication,
+		DisableTlsValidation: disableTlsValidation,
 	}
 
 	response, diag := apiclient.RegisterWithOrchestrator(context, hostConfig, orchestratorRequest)
@@ -74,7 +75,7 @@ func RegisterWithHost(context context.Context, plan OrchestratorRegistration) (s
 	return "", diagnostics
 }
 
-func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration) (bool, diag.Diagnostics) {
+func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) (bool, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 
 	hostConfig := apiclient.HostConfig{
@@ -84,6 +85,7 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration)
 			Password: data.Orchestrator.UseAuthentication.Password,
 			ApiKey:   data.Orchestrator.UseAuthentication.ApiKey,
 		},
+		DisableTlsValidation: disableTlsValidation,
 	}
 
 	currentHostId := data.HostId.ValueString()
@@ -100,7 +102,7 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration)
 	return false, diagnostics
 }
 
-func UnregisterWithHost(context context.Context, data OrchestratorRegistration) diag.Diagnostics {
+func UnregisterWithHost(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
 	hostConfig := apiclient.HostConfig{
@@ -110,6 +112,7 @@ func UnregisterWithHost(context context.Context, data OrchestratorRegistration) 
 			Password: data.Orchestrator.UseAuthentication.Password,
 			ApiKey:   data.Orchestrator.UseAuthentication.ApiKey,
 		},
+		DisableTlsValidation: disableTlsValidation,
 	}
 
 	_ = UpdateFromDetails(context, &data)

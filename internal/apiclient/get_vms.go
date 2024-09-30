@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/constants"
 	"terraform-provider-parallels-desktop/internal/helpers"
@@ -19,7 +20,7 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	urlHost := helpers.GetHostUrl(config.Host)
 	url := fmt.Sprintf("%s/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostic.AddError("There was an error getting the authenticator", err.Error())
 		return nil, diagnostic
@@ -32,7 +33,7 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 		}
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if clientResponse, err := client.GetDataFromClient(url, &filter, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))

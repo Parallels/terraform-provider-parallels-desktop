@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -17,13 +18,13 @@ func GetPackerTemplate(ctx context.Context, config HostConfig, packerTemplateId 
 	urlHost := helpers.GetHostUrl(config.Host)
 	url := fmt.Sprintf("%s/templates/packer/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), packerTemplateId)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostic.AddError("There was an error getting the authenticator", err.Error())
 		return nil, diagnostic
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {

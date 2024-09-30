@@ -3,6 +3,7 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -30,7 +32,8 @@ func (v HttpCallerVerb) String() string {
 }
 
 type HttpCaller struct {
-	ctx context.Context
+	ctx                    context.Context
+	disableTlsVerification bool
 }
 
 type HttpCallerAuth struct {
@@ -44,9 +47,10 @@ type HttpCallerResponse struct {
 	ApiError   *clientmodels.APIErrorResponse
 }
 
-func NewHttpCaller(ctx context.Context) *HttpCaller {
+func NewHttpCaller(ctx context.Context, disableTlsVerification bool) *HttpCaller {
 	return &HttpCaller{
-		ctx: ctx,
+		ctx:                    ctx,
+		disableTlsVerification: disableTlsVerification,
 	}
 }
 
@@ -75,7 +79,7 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	}
 
 	if destination != nil {
-		var destType = reflect.TypeOf(destination)
+		destType := reflect.TypeOf(destination)
 		if destType.Kind() != reflect.Ptr {
 			return &clientResponse, errors.New("dest must be a pointer type")
 		}
@@ -86,6 +90,13 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	}
 
 	client := http.DefaultClient
+	if c.disableTlsVerification {
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
 	var req *http.Request
 
 	if data != nil {

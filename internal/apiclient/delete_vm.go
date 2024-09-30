@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 
@@ -20,13 +21,13 @@ func DeleteVm(ctx context.Context, config HostConfig, machineId string) diag.Dia
 
 	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 
-	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization)
+	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
 		diagnostic.AddError("There was an error getting the authenticator", err.Error())
 		return diagnostic
 	}
 
-	client := helpers.NewHttpCaller(ctx)
+	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	if _, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
 		diagnostic.AddError("There was an error deleting the vm", err.Error())
 		return diagnostic

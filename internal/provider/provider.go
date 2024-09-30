@@ -71,6 +71,11 @@ You can also join our community on [Discord](https://discord.gg/aFsrjbkN) channe
 				MarkdownDescription: "Parallels Desktop My Account password",
 				Description:         "Parallels Desktop My Account password",
 			},
+			"disable_tls_validation": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Disable TLS validation",
+				Description:         "Disable TLS validation",
+			},
 		},
 	}
 }
@@ -96,9 +101,10 @@ func (p *ParallelsProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	data := models.ParallelsProviderModel{
-		License:           config.License,
-		MyAccountUser:     config.MyAccountUser,
-		MyAccountPassword: config.MyAccountPassword,
+		License:              config.License,
+		MyAccountUser:        config.MyAccountUser,
+		MyAccountPassword:    config.MyAccountPassword,
+		DisableTlsValidation: config.DisableTlsValidation,
 	}
 
 	resp.DataSourceData = &data

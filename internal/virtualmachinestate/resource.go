@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
 
@@ -14,8 +15,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &VirtualMachineStateResource{}
-var _ resource.ResourceWithImportState = &VirtualMachineStateResource{}
+var (
+	_ resource.Resource                = &VirtualMachineStateResource{}
+	_ resource.ResourceWithImportState = &VirtualMachineStateResource{}
+)
 
 func NewVirtualMachineStateResource() resource.Resource {
 	return &VirtualMachineStateResource{}
@@ -64,9 +67,10 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		return
 	}
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
@@ -113,9 +117,10 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
@@ -157,9 +162,10 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:          data.Host.ValueString(),
-		License:       r.provider.License.ValueString(),
-		Authorization: data.Authenticator,
+		Host:                 data.Host.ValueString(),
+		License:              r.provider.License.ValueString(),
+		Authorization:        data.Authenticator,
+		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
 	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())

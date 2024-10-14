@@ -48,18 +48,18 @@ func getSchema(ctx context.Context) schema.Schema {
 				},
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.Expressions{
-						path.MatchRelative().AtName("host").AtParent(),
-						path.MatchRelative().AtName("orchestrator").AtParent(),
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
 					}...),
 				},
 			},
 			"orchestrator": schema.StringAttribute{
-				MarkdownDescription: "Orchestrator",
+				MarkdownDescription: "Parallels Desktop DevOps Orchestrator",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.Expressions{
-						path.MatchRelative().AtName("host").AtParent(),
-						path.MatchRelative().AtName("orchestrator").AtParent(),
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
 					}...),
 				},
 				PlanModifiers: []planmodifier.String{

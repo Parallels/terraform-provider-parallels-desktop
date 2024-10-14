@@ -42,25 +42,25 @@ func getSchema(ctx context.Context) schema.Schema {
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API host",
+				MarkdownDescription: "Parallels Desktop DevOps Host",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.Expressions{
-						path.MatchRelative().AtName("host").AtParent(),
-						path.MatchRelative().AtName("orchestrator").AtParent(),
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
 					}...),
 				},
 			},
 			"orchestrator": schema.StringAttribute{
-				MarkdownDescription: "Orchestrator",
+				MarkdownDescription: "Parallels Desktop DevOps Orchestrator",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.Expressions{
-						path.MatchRelative().AtName("host").AtParent(),
-						path.MatchRelative().AtName("orchestrator").AtParent(),
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
 					}...),
 				},
 				PlanModifiers: []planmodifier.String{

@@ -93,6 +93,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -126,7 +127,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	// Checking if the name is already in use
 	existingVms, diag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
 	if diag.HasError() {
-		diag.Append(diag...)
+		resp.Diagnostics.Append(diag...)
 		return
 	}
 
@@ -338,6 +339,7 @@ func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, re
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -410,6 +412,7 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -595,6 +598,7 @@ func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()

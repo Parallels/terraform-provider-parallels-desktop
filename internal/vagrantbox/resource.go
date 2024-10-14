@@ -92,6 +92,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -322,6 +323,7 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -393,6 +395,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()
@@ -575,6 +578,7 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 	isOrchestrator := false
 	var host string
 	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
 		host = data.Orchestrator.ValueString()
 	} else {
 		host = data.Host.ValueString()

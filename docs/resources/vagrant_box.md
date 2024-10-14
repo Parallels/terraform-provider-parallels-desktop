@@ -125,9 +125,9 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
 - `custom_parallels_config` (String) Custom Parallels config
 - `custom_vagrant_config` (String) Custom Vagrant config
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
-- `host` (String) Parallels Desktop API host
+- `host` (String) Parallels Desktop DevOps Host
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
-- `orchestrator` (String) Orchestrator
+- `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner
 - `post_processor_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--post_processor_script))
 - `prlctl` (Block List) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--prlctl))

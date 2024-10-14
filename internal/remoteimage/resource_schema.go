@@ -54,7 +54,7 @@ func getSchema(ctx context.Context) schema.Schema {
 				},
 			},
 			"orchestrator": schema.StringAttribute{
-				MarkdownDescription: "Orchestrator",
+				MarkdownDescription: "Parallels Desktop DevOps Orchestrator",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.Expressions{

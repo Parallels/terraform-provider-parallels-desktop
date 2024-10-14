@@ -2,6 +2,7 @@ package remoteimage
 
 import (
 	"context"
+
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
 	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
@@ -10,9 +11,12 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func getSchema(ctx context.Context) schema.Schema {
@@ -37,8 +41,27 @@ func getSchema(ctx context.Context) schema.Schema {
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
-				MarkdownDescription: "Parallels Desktop API host",
-				Required:            true,
+				MarkdownDescription: "Parallels Desktop DevOps Host",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(path.Expressions{
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
+					}...),
+				},
+			},
+			"orchestrator": schema.StringAttribute{
+				MarkdownDescription: "Parallels Desktop DevOps Orchestrator",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(path.Expressions{
+						path.MatchRoot("orchestrator"),
+						path.MatchRoot("host"),
+					}...),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -62,6 +85,13 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
 				Optional:            true,
 			},
+			"architecture": schema.StringAttribute{
+				MarkdownDescription: "Virtual Machine architecture",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine name to create, this needs to be unique in the host",
 				Required:            true,
@@ -73,8 +103,8 @@ func getSchema(ctx context.Context) schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"host_connection": schema.StringAttribute{
-				MarkdownDescription: "Connection",
+			"catalog_connection": schema.StringAttribute{
+				MarkdownDescription: "Parallels DevOps Catalog Connection",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

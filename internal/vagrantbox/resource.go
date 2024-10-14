@@ -88,24 +88,38 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
+		IsOrchestrator:       isOrchestrator,
 		Host:                 data.Host.ValueString(),
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	// before creating, if we have enough data we will be checking if we have enough resources
-	// in the current host
-	if data.Specs != nil {
-		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
+	if !isOrchestrator {
+		// before creating, if we have enough data we will be checking if we have enough resources
+		// in the current host if it is not an orchestrator, in that case it will be the orchestrator
+		// job to check if we have enough resources
+		if data.Specs != nil {
+			if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs, ""); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
 		}
 	}
 
@@ -305,12 +319,23 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
+		IsOrchestrator:       isOrchestrator,
 		Host:                 data.Host.ValueString(),
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
@@ -366,12 +391,23 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
+		IsOrchestrator:       isOrchestrator,
 		Host:                 data.Host.ValueString(),
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
@@ -405,6 +441,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	configChanges := common.VmConfigBlockHasChanges(ctx, hostConfig, vm, data.Config, currentData.Config)
 	specsChanges := common.SpecsBlockHasChanges(ctx, hostConfig, vm, data.Specs, currentData.Specs)
 	prlctlChanges := common.PrlCtlBlockHasChanges(ctx, hostConfig, vm, data.PrlCtl, currentData.PrlCtl)
+	postProcessorScriptChanges := common.PostProcessorHasChanges(ctx, data.PostProcessorScripts, currentData.PostProcessorScripts)
 	if specsChanges || configChanges || prlctlChanges || nameChanges.HasChanges() {
 		requireShutdown = true
 	}
@@ -466,9 +503,11 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Running post processor changes
-	if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
-		resp.Diagnostics.Append(diag...)
-		return
+	if postProcessorScriptChanges {
+		if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
 	}
 
 	data.ID = types.StringValue(vm.ID)
@@ -535,12 +574,23 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
+		IsOrchestrator:       isOrchestrator,
 		Host:                 data.Host.ValueString(),
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,

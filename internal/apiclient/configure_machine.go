@@ -26,7 +26,14 @@ func ConfigureMachine(ctx context.Context, config HostConfig, machineId string, 
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	var response apimodels.VmConfigResponse
-	if clientResponse, err := client.PutDataToClient(fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId), nil, configSet, auth, &response); err != nil {
+	var url string
+	if config.IsOrchestrator {
+		url = fmt.Sprintf("%s/orchestrator/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	} else {
+		url = fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	}
+
+	if clientResponse, err := client.PutDataToClient(url, nil, configSet, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error configuring vm: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

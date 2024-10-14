@@ -12,21 +12,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func GetVm(ctx context.Context, config HostConfig, machineId string) (*apimodels.VirtualMachine, diag.Diagnostics) {
+func GetCatalogManifest(ctx context.Context, config HostConfig, catalogId string, version string, architecture string) (*apimodels.CatalogManifest, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
-	var response apimodels.VirtualMachine
+	var response *apimodels.CatalogManifest
 	urlHost := helpers.GetHostUrl(config.Host)
-	if machineId == "" {
-		diagnostics.AddError("There was an error getting the vm", "machineId is empty")
+	if catalogId == "" {
+		diagnostics.AddError("There was an error getting the catalog manifest", "catalogId is empty")
 		return nil, diagnostics
 	}
-
-	var url string
-	if config.IsOrchestrator {
-		url = fmt.Sprintf("%s/orchestrator/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
-	} else {
-		url = fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	if version == "" {
+		diagnostics.AddError("There was an error getting the catalog manifest", "version is empty")
+		return nil, diagnostics
 	}
+	if architecture == "" {
+		architecture = "arm64"
+	}
+
+	url := fmt.Sprintf("%s/catalog/%s/%s/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), catalogId, version, architecture)
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -40,13 +42,13 @@ func GetVm(ctx context.Context, config HostConfig, machineId string) (*apimodels
 			if clientResponse.ApiError.Code == 404 {
 				return nil, diagnostics
 			}
-			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))
+			tflog.Error(ctx, fmt.Sprintf("Error getting catalog manifest: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}
-		diagnostics.AddError("There was an error getting the vms", err.Error())
+		diagnostics.AddError("There was an error getting the catalog manifest", err.Error())
 		return nil, diagnostics
 	}
 
-	tflog.Info(ctx, "Got machine "+response.Name)
+	tflog.Info(ctx, "Got catalog manifest ")
 
-	return &response, diagnostics
+	return response, diagnostics
 }

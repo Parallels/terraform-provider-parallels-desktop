@@ -108,18 +108,20 @@ resource "parallels-desktop_remote_vm" "example_box" {
 
 ### Required
 
+- `catalog_connection` (String) Parallels DevOps Catalog Connection
 - `catalog_id` (String) Catalog Id to pull
-- `host` (String) Parallels Desktop API host
-- `host_connection` (String) Connection
 - `name` (String) Virtual Machine name to create, this needs to be unique in the host
 - `path` (String) Path
 
 ### Optional
 
+- `architecture` (String) Virtual Machine architecture
 - `authenticator` (Block, Optional) Authenticator block, this is used to authenticate with the Parallels Desktop API, if empty it will try to use the root password (see [below for nested schema](#nestedblock--authenticator))
 - `config` (Block, Optional) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--config))
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
+- `host` (String) Parallels Desktop DevOps Host
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
+- `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner
 - `post_processor_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--post_processor_script))
 - `prlctl` (Block List) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--prlctl))

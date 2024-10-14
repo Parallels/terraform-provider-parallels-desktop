@@ -5,6 +5,7 @@ import (
 )
 
 type HostConfig struct {
+	IsOrchestrator       bool                          `json:"is_orchestrator"`
 	Host                 string                        `json:"host"`
 	MachineId            string                        `json:"machine_id"`
 	License              string                        `json:"license"`

@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -31,11 +32,18 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 			diagnostics.Append(orchestratorDiag...)
 			return diagnostics
 		}
+
+		foundArchitectureResources := false
 		for _, orchestratorResource := range orchestratorResources {
 			if strings.EqualFold(orchestratorResource.CpuType, arch) {
 				hardwareInfo = orchestratorResource
+				foundArchitectureResources = true
 				break
 			}
+		}
+		if !foundArchitectureResources {
+			diagnostics.AddError("error getting hardware info", fmt.Sprintf("error getting hardware info for %s architecture", arch))
+			return diagnostics
 		}
 	} else {
 		hardwareInfo, diag = apiclient.GetSystemUsage(ctx, hostConfig)
@@ -44,8 +52,13 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 			return diagnostics
 		}
 	}
+
 	if hardwareInfo == nil {
-		diagnostics.AddError("error getting hardware info", "error getting hardware info")
+		if diagnostics.HasError() {
+			return diagnostics
+		} else {
+			diagnostics.AddError("error getting hardware info", "error getting hardware info, hardware info is nil")
+		}
 		return diagnostics
 	}
 

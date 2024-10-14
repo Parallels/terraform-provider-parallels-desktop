@@ -133,8 +133,14 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 
 	// before creating, if we have enough data we will be checking if we have enough resources
 	// in the current host
+	// in the current host we will skip this if the host is an orchestrator
 	if data.Specs != nil {
-		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs, data.Architecture.ValueString()); diags.HasError() {
+		architecture := data.Architecture.ValueString()
+		if architecture == "" {
+			architecture = catalogManifest.Architecture
+		}
+
+		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs, architecture); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}

@@ -150,6 +150,13 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 				clientResponse.ApiError = &errMsg
 			}
 		}
+		// set a clientResponse.ApiError if it is nil
+		if clientResponse.ApiError == nil {
+			clientResponse.ApiError = &clientmodels.APIErrorResponse{
+				Code: int64(response.StatusCode),
+			}
+		}
+
 		if clientResponse.ApiError.Message != "" {
 			return &clientResponse, fmt.Errorf("error on %s data from %s, err: %v message: %v", verb, url, clientResponse.ApiError.Code, clientResponse.ApiError.Message)
 		} else {

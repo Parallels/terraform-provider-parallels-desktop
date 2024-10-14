@@ -12,9 +12,7 @@ import (
 
 func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 	// Remove "host=" prefix if present
-	if strings.HasPrefix(connStr, "host=") {
-		connStr = connStr[len("host="):]
-	}
+	connStr = strings.TrimPrefix(connStr, "host=")
 
 	// Split at '@' to separate credentials and host
 	atIndex := strings.LastIndex(connStr, "@")

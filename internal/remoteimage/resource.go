@@ -104,11 +104,6 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	if isOrchestrator {
-		resp.Diagnostics.AddError("orchestrator not supported", "Orchestrator is not supported for clone operation")
-		return
-	}
-
 	hostConfig := apiclient.HostConfig{
 		Host:                 host,
 		IsOrchestrator:       isOrchestrator,

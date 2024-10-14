@@ -68,3 +68,20 @@ func RunPostProcessorScript(ctx context.Context, hostConfig apiclient.HostConfig
 
 	return diagnostics
 }
+
+func PostProcessorHasChanges(ctx context.Context, planPostProcessorScript, statePostProcessorScript []*postprocessorscript.PostProcessorScript) bool {
+	for i, script := range planPostProcessorScript {
+		innerElements := script.Inline.Elements()
+		if len(innerElements) != len(statePostProcessorScript[i].Inline.Elements()) {
+			return true
+		}
+		for j, element := range innerElements {
+			g := element.String()
+			if g != statePostProcessorScript[i].Inline.Elements()[j].String() {
+				return true
+			}
+		}
+	}
+
+	return false
+}

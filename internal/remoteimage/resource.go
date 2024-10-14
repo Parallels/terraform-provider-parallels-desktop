@@ -89,31 +89,55 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
+	catalogHostConfig, err := common.ParseHostConnectionString(data.CatalogConnection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("error parsing host connection string", err.Error())
+		return
+	}
+
+	catalogManifest, diag := apiclient.GetCatalogManifest(ctx, *catalogHostConfig, data.CatalogId.ValueString(), data.Version.ValueString(), data.Architecture.ValueString())
+	if diag.HasError() {
+		resp.Diagnostics.AddError("Catalog Not Found", fmt.Sprintf("Catalog %s was not found on %s", data.CatalogId.ValueString(), catalogHostConfig.Host))
+		return
+	}
+
+	// Checking if the VM already exists in the host
+	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+
 	// before creating, if we have enough data we will be checking if we have enough resources
 	// in the current host
 	if data.Specs != nil {
-		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs); diags.HasError() {
+		if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs, data.Architecture.ValueString()); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-	}
-
-	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
-	if diag.HasError() {
-		diag.Append(diag...)
-		return
 	}
 
 	if len(vm) > 0 {
@@ -121,28 +145,34 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	version := "latest"
+	version := catalogManifest.Version
+	architecture := catalogManifest.Architecture
 	if data.Version.ValueString() != "" {
 		version = data.Version.ValueString()
 	}
-
-	machineRequest := apimodels.PullCatalogRequest{
-		MachineName: data.Name.ValueString(),
-		CatalogId:   data.CatalogId.ValueString(),
-		Version:     version,
-		Connection:  data.Connection.ValueString(),
-		Path:        data.Path.ValueString(),
+	if data.Architecture.ValueString() != "" {
+		architecture = data.Architecture.ValueString()
 	}
 
-	if data.RunAfterCreate.ValueBool() {
-		machineRequest.StartAfterPull = true
+	createMachineRequest := apimodels.CreateVmRequest{
+		Name:         data.Name.ValueString(),
+		Architecture: architecture,
+		CatalogManifest: &apimodels.CreateCatalogManifestRequest{
+			MachineName:    data.Name.ValueString(),
+			CatalogId:      data.CatalogId.ValueString(),
+			Version:        version,
+			Architecture:   architecture,
+			Connection:     data.CatalogConnection.ValueString(),
+			StartAfterPull: data.RunAfterCreate.ValueBool(),
+			Path:           data.Path.ValueString(),
+		},
 	}
 
 	if data.Owner.ValueString() != "" {
-		machineRequest.Owner = data.Owner.ValueString()
+		createMachineRequest.Owner = data.Owner.ValueString()
 	}
 
-	response, diag := apiclient.PullCatalog(ctx, hostConfig, machineRequest)
+	response, diag := apiclient.CreateVm(ctx, hostConfig, createMachineRequest)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
@@ -309,13 +339,24 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
@@ -371,13 +412,24 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
@@ -410,6 +462,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	configChanges := common.VmConfigBlockHasChanges(ctx, hostConfig, vm, data.Config, currentData.Config)
 	specsChanges := common.SpecsBlockHasChanges(ctx, hostConfig, vm, data.Specs, currentData.Specs)
 	prlctlChanges := common.PrlCtlBlockHasChanges(ctx, hostConfig, vm, data.PrlCtl, currentData.PrlCtl)
+	postProcessorScriptChanges := common.PostProcessorHasChanges(ctx, data.PostProcessorScripts, currentData.PostProcessorScripts)
 	if specsChanges || configChanges || prlctlChanges || nameChanges.HasChanges() {
 		requireShutdown = true
 	}
@@ -426,6 +479,15 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 			needsRestart = true
 		} else {
 			resp.Diagnostics.AddError("vm must be stopped before updating", "Virtual Machine "+vm.Name+" must be stopped before updating, currently "+vm.State)
+			return
+		}
+	}
+
+	// Changing the name of the machine
+	if nameChanges.HasChanges() {
+		_, diag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, nameChanges)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
 			return
 		}
 	}
@@ -471,9 +533,13 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	// Running the post processor scripts
-	if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
-		resp.Diagnostics.Append(diag...)
-		return
+	if postProcessorScriptChanges {
+		if diag := common.RunPostProcessorScript(ctx, hostConfig, vm, data.PostProcessorScripts); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	} else {
+		data.PostProcessorScripts = currentData.PostProcessorScripts
 	}
 
 	data.ID = types.StringValue(vm.ID)
@@ -543,13 +609,24 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),

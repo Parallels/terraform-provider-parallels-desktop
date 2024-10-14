@@ -19,7 +19,12 @@ func DeleteVm(ctx context.Context, config HostConfig, machineId string) diag.Dia
 		return diagnostic
 	}
 
-	url := fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	var url string
+	if config.IsOrchestrator {
+		url = fmt.Sprintf("%s/orchestrator/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	} else {
+		url = fmt.Sprintf("%s/machines/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {

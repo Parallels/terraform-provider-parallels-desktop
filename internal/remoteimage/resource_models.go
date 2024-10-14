@@ -16,13 +16,15 @@ import (
 type RemoteVmResourceModel struct {
 	Authenticator        *authenticator.Authentication              `tfsdk:"authenticator"`
 	Host                 types.String                               `tfsdk:"host"`
+	Orchestrator         types.String                               `tfsdk:"orchestrator"`
 	ID                   types.String                               `tfsdk:"id"`
 	OsType               types.String                               `tfsdk:"os_type"`
 	CatalogId            types.String                               `tfsdk:"catalog_id"`
 	Version              types.String                               `tfsdk:"version"`
+	Architecture         types.String                               `tfsdk:"architecture"`
 	Name                 types.String                               `tfsdk:"name"`
 	Owner                types.String                               `tfsdk:"owner"`
-	Connection           types.String                               `tfsdk:"host_connection"`
+	CatalogConnection    types.String                               `tfsdk:"catalog_connection"`
 	Path                 types.String                               `tfsdk:"path"`
 	Specs                *vmspecs.VmSpecs                           `tfsdk:"specs"`
 	PostProcessorScripts []*postprocessorscript.PostProcessorScript `tfsdk:"post_processor_script"`

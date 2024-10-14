@@ -18,7 +18,13 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.VirtualMachine, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	var url string
+
+	if config.IsOrchestrator {
+		url = fmt.Sprintf("%s/orchestrator/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	} else {
+		url = fmt.Sprintf("%s/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {

@@ -12,15 +12,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func CreateVm(ctx context.Context, config HostConfig, request apimodels.CreateVmRequest) (*apimodels.CreateVmResponse, diag.Diagnostics) {
+func GetOrchestratorResources(ctx context.Context, config HostConfig) ([]*apimodels.SystemUsageResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
+	var response []*apimodels.SystemUsageResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	var url string
-	if config.IsOrchestrator {
-		url = fmt.Sprintf("%s/orchestrator/machines", helpers.GetHostApiVersionedBaseUrl(urlHost))
-	} else {
-		url = fmt.Sprintf("%s/machines", helpers.GetHostApiVersionedBaseUrl(urlHost))
-	}
+
+	url := fmt.Sprintf("%s/orchestrator/overview/resources", helpers.GetHostApiVersionedBaseUrl(urlHost))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -29,14 +26,15 @@ func CreateVm(ctx context.Context, config HostConfig, request apimodels.CreateVm
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	var response apimodels.CreateVmResponse
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
-			tflog.Error(ctx, fmt.Sprintf("Error creating vm: %v, api message: %s", err, clientResponse.ApiError.Message))
+			tflog.Error(ctx, fmt.Sprintf("Error orchestrator resources: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}
-		diagnostics.AddError("There was an error creating vm", err.Error())
+		diagnostics.AddError("There was an error getting orchestrator resources", err.Error())
 		return nil, diagnostics
 	}
 
-	return &response, diagnostics
+	tflog.Info(ctx, "Got Orchestrator resources ")
+
+	return response, diagnostics
 }

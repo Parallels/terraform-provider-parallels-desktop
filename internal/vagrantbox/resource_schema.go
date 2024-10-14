@@ -2,6 +2,7 @@ package vagrantbox
 
 import (
 	"context"
+
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
 	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
@@ -42,7 +43,26 @@ func getSchema(ctx context.Context) schema.Schema {
 			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "Parallels Desktop API host",
-				Required:            true,
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(path.Expressions{
+						path.MatchRelative().AtName("host").AtParent(),
+						path.MatchRelative().AtName("orchestrator").AtParent(),
+					}...),
+				},
+			},
+			"orchestrator": schema.StringAttribute{
+				MarkdownDescription: "Orchestrator",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(path.Expressions{
+						path.MatchRelative().AtName("host").AtParent(),
+						path.MatchRelative().AtName("orchestrator").AtParent(),
+					}...),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

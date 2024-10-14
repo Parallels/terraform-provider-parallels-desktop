@@ -16,6 +16,7 @@ import (
 type CloneVmResourceModel struct {
 	Authenticator        *authenticator.Authentication              `tfsdk:"authenticator"`
 	Host                 types.String                               `tfsdk:"host"`
+	Orchestrator         types.String                               `tfsdk:"orchestrator"`
 	ID                   types.String                               `tfsdk:"id"`
 	OsType               types.String                               `tfsdk:"os_type"`
 	BaseVmId             types.String                               `tfsdk:"base_vm_id"`

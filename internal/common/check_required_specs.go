@@ -3,20 +3,49 @@ package common
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
-func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, specs *vmspecs.VmSpecs) diag.Diagnostics {
+func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, specs *vmspecs.VmSpecs, arch string) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
 	// checking if we have enough resources for this change
-	hardwareInfo, diag := apiclient.GetSystemUsage(ctx, hostConfig)
-	if diag.HasError() {
-		diagnostics.Append(diag...)
+	var hardwareInfo *apimodels.SystemUsageResponse
+	var diag diag.Diagnostics
+
+	if hostConfig.IsOrchestrator {
+
+		if arch == "" {
+			arch = "arm64"
+		}
+
+		// GetOrchestratorResources is a function that returns the orchestrator resources
+		orchestratorResources, orchestratorDiag := apiclient.GetOrchestratorResources(ctx, hostConfig)
+		if orchestratorDiag.HasError() {
+			diagnostics.Append(orchestratorDiag...)
+			return diagnostics
+		}
+		for _, orchestratorResource := range orchestratorResources {
+			if strings.EqualFold(orchestratorResource.CpuType, arch) {
+				hardwareInfo = orchestratorResource
+				break
+			}
+		}
+	} else {
+		hardwareInfo, diag = apiclient.GetSystemUsage(ctx, hostConfig)
+		if diag.HasError() {
+			diagnostics.Append(diag...)
+			return diagnostics
+		}
+	}
+	if hardwareInfo == nil {
+		diagnostics.AddError("error getting hardware info", "error getting hardware info")
 		return diagnostics
 	}
 

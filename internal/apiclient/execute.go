@@ -15,7 +15,12 @@ import (
 func ExecuteScript(ctx context.Context, config HostConfig, machineId string, script string) (*apimodels.VmExecuteCommandResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	var url string
+	if config.IsOrchestrator {
+		url = fmt.Sprintf("%s/orchestrator/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	} else {
+		url = fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {

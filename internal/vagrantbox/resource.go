@@ -115,7 +115,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		// before creating, if we have enough data we will be checking if we have enough resources
 		// in the current host if it is not an orchestrator, in that case it will be the orchestrator
 		// job to check if we have enough resources
-		if data.Specs != nil {
+		if data.Specs != nil && !isOrchestrator {
 			if diags := common.CheckIfEnoughSpecs(ctx, hostConfig, data.Specs, ""); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return

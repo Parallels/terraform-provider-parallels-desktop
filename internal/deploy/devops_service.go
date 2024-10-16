@@ -410,7 +410,11 @@ func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
 		return false, err
 	}
 
-	tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
+	if currentLicense.Key.IsUnknown() || currentLicense.Key.IsNull() {
+		tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
+	} else {
+		tflog.Info(c.ctx, "Current license key is nil")
+	}
 
 	if currentLicense == nil && license == "" {
 		tflog.Info(c.ctx, "No license found")

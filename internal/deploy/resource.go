@@ -354,10 +354,37 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
-
 	var dependencies []string
 	var restartDiag diag.Diagnostics
+
+	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
+
+	// checking if we still have parallels desktop installed
+	if _, err := parallelsClient.GetVersion(); err != nil {
+		dependencies, restartDiag = r.installParallelsDesktop(parallelsClient)
+		if restartDiag.HasError() {
+			resp.Diagnostics.AddError("Error reinstalling Parallels desktop", err.Error())
+			return
+		}
+	}
+
+	// checking if we still have the devops service running
+	_, devOpsErr := parallelsClient.GetDevOpsVersion()
+	if devOpsErr != nil {
+		r.installDevOpsService(&data, dependencies, parallelsClient)
+	}
+
+	// Check if the API config has changed
+	if ApiConfigHasChanges(ctx, data.ApiConfig, currentData.ApiConfig) {
+		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+			return
+		}
+		if _, diag := r.installDevOpsService(&data, dependencies, parallelsClient); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	}
 
 	// restart parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
@@ -606,6 +633,8 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 			} else {
 				tflog.Info(ctx, "Already registered with orchestrator, skipping registration")
 			}
+		} else {
+			data.Orchestrator.HostId = currentData.Orchestrator.HostId
 		}
 	} else if currentData.Orchestrator != nil {
 		if currentData.Orchestrator.HostId.ValueString() != "" {
@@ -616,7 +645,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -822,9 +851,9 @@ func (r *DeployResource) installDevOpsService(data *DeployResourceModel, depende
 	var config ParallelsDesktopDevopsConfig
 	if data.ApiConfig == nil {
 		config = ParallelsDesktopDevopsConfig{
-			InstallVersion: types.StringValue(apiVersion),
-			Port:           types.StringValue(targetPort),
-			TLSPort:        types.StringValue(targetTlsPort),
+			DevOpsVersion: types.StringValue(apiVersion),
+			Port:          types.StringValue(targetPort),
+			TLSPort:       types.StringValue(targetTlsPort),
 		}
 	} else {
 		config = *data.ApiConfig

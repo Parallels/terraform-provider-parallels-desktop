@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"context"
+
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 
@@ -90,7 +92,7 @@ func (p *ParallelsDesktopDevOps) MapObject() basetypes.ObjectValue {
 type ParallelsDesktopDevopsConfig struct {
 	Port                     types.String `tfsdk:"port" json:"port,omitempty"`
 	Prefix                   types.String `tfsdk:"prefix" json:"prefix,omitempty"`
-	InstallVersion           types.String `tfsdk:"install_version" json:"install_version,omitempty"`
+	DevOpsVersion            types.String `tfsdk:"devops_version" json:"devops_version,omitempty"`
 	RootPassword             types.String `tfsdk:"root_password" json:"root_password,omitempty"`
 	HmacSecret               types.String `tfsdk:"hmac_secret" json:"hmac_secret,omitempty"`
 	EncryptionRsaKey         types.String `tfsdk:"encryption_rsa_key" json:"encryption_rsa_key,omitempty"`
@@ -112,7 +114,7 @@ type ParallelsDesktopDevopsConfig struct {
 func (p *ParallelsDesktopDevopsConfig) MapObject() basetypes.ObjectValue {
 	attributeTypes := make(map[string]attr.Type)
 	attributeTypes["port"] = types.StringType
-	attributeTypes["install_version"] = types.StringType
+	attributeTypes["devops_version"] = types.StringType
 	attributeTypes["root_password"] = types.StringType
 	attributeTypes["hmac_secret"] = types.StringType
 	attributeTypes["encryption_rsa_key"] = types.StringType
@@ -132,7 +134,7 @@ func (p *ParallelsDesktopDevopsConfig) MapObject() basetypes.ObjectValue {
 
 	attrs := map[string]attr.Value{}
 	attrs["api_port"] = p.Port
-	attrs["install_version"] = p.InstallVersion
+	attrs["devops_version"] = p.DevOpsVersion
 	attrs["root_password"] = p.RootPassword
 	attrs["hmac_secret"] = p.HmacSecret
 	attrs["encryption_rsa_key"] = p.EncryptionRsaKey
@@ -151,4 +153,96 @@ func (p *ParallelsDesktopDevopsConfig) MapObject() basetypes.ObjectValue {
 	attrs["enable_logging"] = p.EnableLogging
 
 	return types.ObjectValueMust(attributeTypes, attrs)
+}
+
+func ApiConfigHasChanges(context context.Context, planState, currentState *ParallelsDesktopDevopsConfig) bool {
+	if planState == nil && currentState == nil {
+		return false
+	}
+
+	if planState != nil && currentState == nil {
+		return true
+	}
+
+	if planState == nil && currentState != nil {
+		return true
+	}
+
+	if planState.Port != currentState.Port {
+		return true
+	}
+
+	if planState.Prefix != currentState.Prefix {
+		return true
+	}
+
+	if planState.DevOpsVersion != currentState.DevOpsVersion {
+		return true
+	}
+
+	if planState.RootPassword != currentState.RootPassword {
+		return true
+	}
+
+	if planState.HmacSecret != currentState.HmacSecret {
+		return true
+	}
+
+	if planState.EncryptionRsaKey != currentState.EncryptionRsaKey {
+		return true
+	}
+
+	if planState.LogLevel != currentState.LogLevel {
+		return true
+	}
+
+	if planState.EnableTLS != currentState.EnableTLS {
+		return true
+	}
+
+	if planState.TLSPort != currentState.TLSPort {
+		return true
+	}
+
+	if planState.TLSCertificate != currentState.TLSCertificate {
+		return true
+	}
+
+	if planState.TLSPrivateKey != currentState.TLSPrivateKey {
+		return true
+	}
+
+	if planState.DisableCatalogCaching != currentState.DisableCatalogCaching {
+		return true
+	}
+
+	if planState.TokenDurationMinutes != currentState.TokenDurationMinutes {
+		return true
+	}
+
+	if planState.Mode != currentState.Mode {
+		return true
+	}
+
+	if planState.UseOrchestratorResources != currentState.UseOrchestratorResources {
+		return true
+	}
+
+	if planState.SystemReservedMemory != currentState.SystemReservedMemory {
+		return true
+	}
+
+	if planState.SystemReservedCpu != currentState.SystemReservedCpu {
+		return true
+	}
+
+	if planState.SystemReservedDisk != currentState.SystemReservedDisk {
+		return true
+	}
+
+	if planState.EnableLogging != currentState.EnableLogging {
+		return true
+	}
+
+	return false
 }

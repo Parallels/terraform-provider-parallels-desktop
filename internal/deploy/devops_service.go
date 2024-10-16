@@ -406,9 +406,10 @@ func (c *DevOpsServiceClient) DeactivateLicense() error {
 
 func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
 	currentLicense, err := c.GetLicense()
-	if err != nil {
+	if err != nil || currentLicense == nil {
 		return false, err
 	}
+
 	tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
 
 	if currentLicense == nil && license == "" {

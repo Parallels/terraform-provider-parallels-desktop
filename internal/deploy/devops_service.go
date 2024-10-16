@@ -406,9 +406,14 @@ func (c *DevOpsServiceClient) DeactivateLicense() error {
 
 func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
 	currentLicense, err := c.GetLicense()
-	tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
-	if err != nil {
+	if err != nil || currentLicense == nil {
 		return false, err
+	}
+
+	if currentLicense.Key.IsUnknown() || currentLicense.Key.IsNull() {
+		tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
+	} else {
+		tflog.Info(c.ctx, "Current license key is nil")
 	}
 
 	if currentLicense == nil && license == "" {
@@ -444,8 +449,8 @@ func (c *DevOpsServiceClient) InstallDevOpsService(license string, config Parall
 	if devopsPath == "" {
 		cmd := "/bin/bash"
 		arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "-", "--no-service"}
-		if config.InstallVersion.ValueString() != "" && config.InstallVersion.ValueString() != "latest" {
-			arguments = append(arguments, "--version="+config.InstallVersion.ValueString())
+		if config.DevOpsVersion.ValueString() != "" && config.DevOpsVersion.ValueString() != "latest" {
+			arguments = append(arguments, "--version", config.DevOpsVersion.ValueString())
 		}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {

@@ -92,12 +92,12 @@ resource "parallels-desktop_deploy" "example" {
 
 Optional:
 
+- `devops_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
 - `disable_catalog_caching` (Boolean) Disable catalog caching, this will disable the ability to cache catalog items that are pulled from a remote catalog
 - `enable_logging` (Boolean) Enable logging
 - `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
 - `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
 - `hmac_secret` (String, Sensitive) Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens
-- `install_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
 - `log_level` (String) Parallels Desktop DevOps log level, you can choose between debug, info, warn, error
 - `mode` (String, Sensitive) API Operation mode, either orchestrator or catalog
 - `port` (String) Parallels Desktop DevOps port

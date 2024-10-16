@@ -22,7 +22,7 @@ var (
 				Description:         "Parallels Desktop DevOps port",
 				Optional:            true,
 			},
-			"install_version": schema.StringAttribute{
+			"devops_version": schema.StringAttribute{
 				MarkdownDescription: "Parallels Desktop DevOps version to install, if empty the latest will be installed",
 				Description:         "Parallels Desktop DevOps version to install, if empty the latest will be installed",
 				Optional:            true,

@@ -44,7 +44,7 @@ func (r *DeployResource) Metadata(ctx context.Context, req resource.MetadataRequ
 }
 
 func (r *DeployResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = deployResourceSchema
+	resp.Schema = deployResourceSchemaV1
 }
 
 func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -67,7 +67,7 @@ func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRe
 }
 
 func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data DeployResourceModel
+	var data DeployResourceModelV1
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	telemetrySvc := telemetry.Get(ctx)
@@ -235,7 +235,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data DeployResourceModel
+	var data DeployResourceModelV1
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
 		ctx,
@@ -322,8 +322,8 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data DeployResourceModel
-	var currentData DeployResourceModel
+	var data DeployResourceModelV1
+	var currentData DeployResourceModelV1
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -571,7 +571,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	if !desiredApiData.IsUnknown() && !desiredApiData.IsNull() {
-		desiredVersion := desiredApiData.Attributes()["version"].String()
+		desiredVersion := strings.ReplaceAll(desiredApiData.Attributes()["version"].String(), "\"", "")
 		if installedVersion != desiredVersion {
 			devOpsData, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
 			if apiDiag.HasError() {
@@ -652,7 +652,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data DeployResourceModel
+	var data DeployResourceModelV1
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -742,7 +742,64 @@ func (r *DeployResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *DeployResource) getSshClient(data DeployResourceModel) (*ssh.SshClient, error) {
+func (r *DeployResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema:   &deployResourceSchemaV0,
+			StateUpgrader: UpgradeState,
+		},
+	}
+}
+
+func UpgradeState(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+	var priorStateData DeployResourceModelV0
+	resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	upgradedStateData := DeployResourceModelV1{
+		SshConnection:         priorStateData.SshConnection,
+		CurrentVersion:        priorStateData.CurrentVersion,
+		CurrentPackerVersion:  priorStateData.CurrentPackerVersion,
+		CurrentVagrantVersion: priorStateData.CurrentVagrantVersion,
+		CurrentGitVersion:     priorStateData.CurrentGitVersion,
+		License:               priorStateData.License,
+		Orchestrator:          priorStateData.Orchestrator,
+		ApiConfig: &ParallelsDesktopDevopsConfigV1{
+			Port:                     priorStateData.ApiConfig.Port,
+			Prefix:                   priorStateData.ApiConfig.Prefix,
+			DevOpsVersion:            priorStateData.ApiConfig.DevOpsVersion,
+			RootPassword:             priorStateData.ApiConfig.RootPassword,
+			HmacSecret:               priorStateData.ApiConfig.HmacSecret,
+			EncryptionRsaKey:         priorStateData.ApiConfig.EncryptionRsaKey,
+			LogLevel:                 priorStateData.ApiConfig.LogLevel,
+			EnableTLS:                priorStateData.ApiConfig.EnableTLS,
+			TLSPort:                  priorStateData.ApiConfig.TLSPort,
+			TLSCertificate:           priorStateData.ApiConfig.TLSCertificate,
+			TLSPrivateKey:            priorStateData.ApiConfig.TLSPrivateKey,
+			DisableCatalogCaching:    priorStateData.ApiConfig.DisableCatalogCaching,
+			TokenDurationMinutes:     priorStateData.ApiConfig.TokenDurationMinutes,
+			Mode:                     priorStateData.ApiConfig.Mode,
+			UseOrchestratorResources: priorStateData.ApiConfig.UseOrchestratorResources,
+			SystemReservedMemory:     priorStateData.ApiConfig.SystemReservedMemory,
+			SystemReservedCpu:        priorStateData.ApiConfig.SystemReservedCpu,
+			SystemReservedDisk:       priorStateData.ApiConfig.SystemReservedDisk,
+			EnableLogging:            priorStateData.ApiConfig.EnableLogging,
+			EnvironmentVariables:     make(map[string]basetypes.StringValue),
+		},
+		Api:                   priorStateData.Api,
+		InstalledDependencies: priorStateData.InstalledDependencies,
+		InstallLocal:          priorStateData.InstallLocal,
+	}
+
+	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
+}
+
+func (r *DeployResource) getSshClient(data DeployResourceModelV1) (*ssh.SshClient, error) {
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -841,16 +898,16 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	return installed_dependencies, diag
 }
 
-func (r *DeployResource) installDevOpsService(data *DeployResourceModel, dependencies []string, parallelsClient *DevOpsServiceClient) (*ParallelsDesktopDevOps, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(data *DeployResourceModelV1, dependencies []string, parallelsClient *DevOpsServiceClient) (*ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"
 	apiVersion := "latest"
 
 	// Installing parallels DevOps service
-	var config ParallelsDesktopDevopsConfig
+	var config ParallelsDesktopDevopsConfigV1
 	if data.ApiConfig == nil {
-		config = ParallelsDesktopDevopsConfig{
+		config = ParallelsDesktopDevopsConfigV1{
 			DevOpsVersion: types.StringValue(apiVersion),
 			Port:          types.StringValue(targetPort),
 			TLSPort:       types.StringValue(targetTlsPort),

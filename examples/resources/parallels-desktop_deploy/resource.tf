@@ -6,7 +6,7 @@ resource "parallels-desktop_deploy" "example" {
     prefix                     = "/api"
     log_level                  = "info"
     mode                       = "api"
-    install_version            = "latest"
+    devops_version             = "latest"
     root_password              = "VerySecretPassword"
     hmac_secret                = "VerySecretLongStringForHMAC"
     encryption_rsa_key         = "base64 encoded rsa key"
@@ -16,6 +16,9 @@ resource "parallels-desktop_deploy" "example" {
     tls_private_key            = "base64 encoded tls key"
     disable_catalog_caching    = false
     use_orchestrator_resources = false
+    environment_variables = {
+      "key" = "value"
+    }
   }
 
   # This will contain the configuration for the Parallels Desktop Orchestrator

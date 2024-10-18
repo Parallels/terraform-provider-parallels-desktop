@@ -223,7 +223,7 @@ var (
 				Optional:            true,
 			},
 			"environment_variables": schema.MapAttribute{
-				MarkdownDescription: "Environment variables",
+				MarkdownDescription: "Environment variables that can be used in the DevOps service, please see documentation to see which variables are available",
 				Optional:            true,
 				ElementType:         types.StringType,
 			},

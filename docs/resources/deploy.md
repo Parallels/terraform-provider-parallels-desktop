@@ -21,7 +21,7 @@ resource "parallels-desktop_deploy" "example" {
     prefix                     = "/api"
     log_level                  = "info"
     mode                       = "api"
-    install_version            = "latest"
+    devops_version             = "latest"
     root_password              = "VerySecretPassword"
     hmac_secret                = "VerySecretLongStringForHMAC"
     encryption_rsa_key         = "base64 encoded rsa key"
@@ -31,6 +31,9 @@ resource "parallels-desktop_deploy" "example" {
     tls_private_key            = "base64 encoded tls key"
     disable_catalog_caching    = false
     use_orchestrator_resources = false
+    environment_variables = {
+      "key" = "value"
+    }
   }
 
   # This will contain the configuration for the Parallels Desktop Orchestrator
@@ -97,6 +100,7 @@ Optional:
 - `enable_logging` (Boolean) Enable logging
 - `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
 - `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
+- `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
 - `hmac_secret` (String, Sensitive) Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens
 - `log_level` (String) Parallels Desktop DevOps log level, you can choose between debug, info, warn, error
 - `mode` (String, Sensitive) API Operation mode, either orchestrator or catalog

@@ -14,6 +14,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -24,6 +25,10 @@ var (
 type DevOpsServiceClient struct {
 	client interfaces.CommandClient
 	ctx    context.Context
+}
+
+type DevOpsServiceConfigFile struct {
+	EnvironmentVariables map[string]string `json:"environment" yaml:"environment"`
 }
 
 func NewDevOpsServiceClient(ctx context.Context, client interfaces.CommandClient) *DevOpsServiceClient {
@@ -442,7 +447,7 @@ func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
 	return false, nil
 }
 
-func (c *DevOpsServiceClient) InstallDevOpsService(license string, config ParallelsDesktopDevopsConfig) (string, error) {
+func (c *DevOpsServiceClient) InstallDevOpsService(license string, config ParallelsDesktopDevopsConfigV1) (string, error) {
 	// Installing DevOps Service
 
 	devopsPath := c.findPath("prldevops")
@@ -466,6 +471,53 @@ func (c *DevOpsServiceClient) InstallDevOpsService(license string, config Parall
 	folderPath := c.findPathFolder("prldevops")
 	if folderPath == "" {
 		return "", errors.New("Error running devops install command, error: prldevops folder not found")
+	}
+
+	// Setting the environment variables
+	if config.EnvironmentVariables != nil {
+		configFile := DevOpsServiceConfigFile{
+			EnvironmentVariables: make(map[string]string),
+		}
+
+		for key, envVar := range config.EnvironmentVariables {
+			configFile.EnvironmentVariables[key] = envVar.ValueString()
+		}
+
+		yamlConfig, err := yaml.Marshal(configFile)
+		if err != nil {
+			return "", err
+		}
+
+		configFilePath := filepath.Join("/tmp", "config.yaml")
+		cmd := "echo"
+		arguments := []string{"'" + string(yamlConfig) + "' ", ">", configFilePath}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+			return "", err
+		}
+
+		cmd = "sudo"
+		arguments = []string{"cp", configFilePath, folderPath}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+			return "", err
+		}
+
+		cmd = "sudo"
+		arguments = []string{"chown", "root:wheel", filepath.Join(folderPath, "config.yaml")}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+			return "", err
+		}
+
+		cmd = "sudo"
+		arguments = []string{"chmod", "644", filepath.Join(folderPath, "config.yaml")}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+			return "", err
+		}
+
+		cmd = "rm"
+		arguments = []string{configFilePath}
+		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
+			return "", err
+		}
 	}
 
 	configPath, err := c.generateConfigFile(config)
@@ -582,7 +634,7 @@ func (c *DevOpsServiceClient) GenerateDefaultRootPassword() (string, error) {
 	return encoded, nil
 }
 
-func (c *DevOpsServiceClient) generateConfigFile(config ParallelsDesktopDevopsConfig) (string, error) {
+func (c *DevOpsServiceClient) generateConfigFile(config ParallelsDesktopDevopsConfigV1) (string, error) {
 	configPath := "/tmp/service_config.json"
 	configMap := make(map[string]interface{})
 	if config.Port.ValueString() != "" {

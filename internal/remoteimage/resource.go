@@ -123,6 +123,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.AddError("Catalog Not Found", fmt.Sprintf("Catalog %s was not found on %s", data.CatalogId.ValueString(), catalogHostConfig.Host))
 		return
 	}
+	// the catalog manifest is nil, we will add an error to the diagnostics
+	if catalogManifest == nil {
+		resp.Diagnostics.AddError("Catalog Not Found", fmt.Sprintf("Catalog %s was not found on %s", data.CatalogId.ValueString(), catalogHostConfig.Host))
+		return
+	}
 
 	// Checking if the VM already exists in the host
 	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())

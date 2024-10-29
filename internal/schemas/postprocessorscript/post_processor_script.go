@@ -3,8 +3,10 @@ package postprocessorscript
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
+	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -14,12 +16,13 @@ import (
 )
 
 type PostProcessorScript struct {
-	Inline types.List                `tfsdk:"inline"`
-	Retry  *PostProcessorScriptRetry `tfsdk:"retry"`
-	Result basetypes.ListValue       `tfsdk:"result"`
+	Inline               types.List                `tfsdk:"inline"`
+	Retry                *PostProcessorScriptRetry `tfsdk:"retry"`
+	EnvironmentVariables map[string]types.String   `tfsdk:"environment_variables"`
+	Result               basetypes.ListValue       `tfsdk:"result"`
 }
 
-func (s *PostProcessorScript) Apply(ctx context.Context, config apiclient.HostConfig, vmId string) diag.Diagnostics {
+func (s *PostProcessorScript) Apply(ctx context.Context, config apiclient.HostConfig, vm *apimodels.VirtualMachine) diag.Diagnostics {
 	diagnostic := diag.Diagnostics{}
 	elements := make([]attr.Value, 0)
 	t := PostProcessorScriptRunResult{}
@@ -38,7 +41,22 @@ func (s *PostProcessorScript) Apply(ctx context.Context, config apiclient.HostCo
 			return diagnostic
 		}
 
-		resp, resultDiagnostic := apiclient.ExecuteScript(ctx, config, vmId, stringScript)
+		environmentVariables := map[string]string{}
+
+		if len(s.EnvironmentVariables) > 0 {
+			for key, value := range s.EnvironmentVariables {
+				environmentVariables[key] = strings.TrimPrefix(strings.TrimSuffix(value.String(), "\""), "\"")
+			}
+		}
+
+		request := apimodels.PostScriptItem{
+			Command:              stringScript,
+			EnvironmentVariables: environmentVariables,
+			VirtualMachineId:     vm.ID,
+			OS:                   vm.OS,
+		}
+
+		resp, resultDiagnostic := apiclient.ExecuteScript(ctx, config, request)
 		if resultDiagnostic.HasError() {
 			tflog.Error(ctx, fmt.Sprintf("Error executing script: %v", resultDiagnostic))
 			diagnostic = append(diagnostic, resultDiagnostic...)

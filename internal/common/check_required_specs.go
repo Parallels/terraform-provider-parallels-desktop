@@ -42,7 +42,7 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 			}
 		}
 		if !foundArchitectureResources {
-			diagnostics.AddError("error getting hardware info", fmt.Sprintf("error getting hardware info for %s architecture", arch))
+			diagnostics.AddError("Hardware", fmt.Sprintf("Did not find any hosts for %s architecture in the orchestrator, please check if you have any online", arch))
 			return diagnostics
 		}
 	} else {

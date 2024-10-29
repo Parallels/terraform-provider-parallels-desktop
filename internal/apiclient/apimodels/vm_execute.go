@@ -1,7 +1,15 @@
 package apimodels
 
+type PostScriptItem struct {
+	Command              string            `json:"command"`
+	VirtualMachineId     string            `json:"virtual_machine_id"`
+	OS                   string            `json:"os"`
+	EnvironmentVariables map[string]string `json:"environment_variables,omitempty"`
+}
+
 type VmExecuteCommandRequest struct {
-	Command string `json:"command"`
+	Command              string            `json:"command"`
+	EnvironmentVariables map[string]string `json:"environment_variables,omitempty"`
 }
 
 type VmExecuteCommandResponse struct {

@@ -51,10 +51,14 @@ func RunPostProcessorScript(ctx context.Context, hostConfig apiclient.HostConfig
 
 		if err := retry.For(maxRetries, waitBeforeRetry, func() error {
 			tflog.Info(ctx, fmt.Sprintf("Running post processor script %s on vm %s with state %s [%v]", script.Inline, refreshVm.Name, refreshVm.State, maxRetries))
-			resultDiag := script.Apply(ctx, hostConfig, refreshVm.ID)
+			resultDiag := script.Apply(ctx, hostConfig, vm)
 			tflog.Info(ctx, fmt.Sprintf("Script %s executed, result %v", script.Inline, resultDiag))
 			if resultDiag.HasError() {
-				return errors.New("script failed")
+				errorMessages := "Script failed to run:"
+				for _, diag := range resultDiag.Errors() {
+					errorMessages += "\n" + diag.Summary() + " " + diag.Detail()
+				}
+				return errors.New(errorMessages)
 			}
 
 			return nil

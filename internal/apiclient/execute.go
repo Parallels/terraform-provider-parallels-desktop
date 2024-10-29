@@ -12,14 +12,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func ExecuteScript(ctx context.Context, config HostConfig, machineId string, script string) (*apimodels.VmExecuteCommandResponse, diag.Diagnostics) {
+func ExecuteScript(ctx context.Context, config HostConfig, r apimodels.PostScriptItem) (*apimodels.VmExecuteCommandResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
 	var url string
 	if config.IsOrchestrator {
-		url = fmt.Sprintf("%s/orchestrator/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+		url = fmt.Sprintf("%s/orchestrator/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), r.VirtualMachineId)
 	} else {
-		url = fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
+		url = fmt.Sprintf("%s/machines/%s/execute", helpers.GetHostApiVersionedBaseUrl(urlHost), r.VirtualMachineId)
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
@@ -27,8 +27,10 @@ func ExecuteScript(ctx context.Context, config HostConfig, machineId string, scr
 		diagnostics.AddError("There was an error getting the authenticator", err.Error())
 		return nil, diagnostics
 	}
+
 	request := apimodels.VmExecuteCommandRequest{
-		Command: script,
+		Command:              r.Command,
+		EnvironmentVariables: r.EnvironmentVariables,
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)

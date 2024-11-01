@@ -7,6 +7,8 @@ labels:
   - triage
 assignees:
   - cjlapao
+projects:
+  - "Parallels/7"
 body:
   - type: markdown
     attributes:
@@ -17,8 +19,8 @@ body:
       label: Is there an existing issue for this?
       description: Search to see if an issue already exists for the bug you encountered.
       options:
-      - label: I have searched the existing issues
-        required: true
+        - label: I have searched the existing issues
+          required: true
   - type: textarea
     attributes:
       label: Current Behavior
@@ -31,16 +33,22 @@ body:
       description: A concise description of what you expected to happen.
     validations:
       required: true
-  - type: textarea
+  - type: input
+    attributes:
+      label: Terraform Provider version
+      description: |
+        Terraform Provider version where you observed this issue
+      placeholder: |
+        vX.Y.Z
+    validations:
+      required: true
+  - type: input
     attributes:
       label: DevOps Service version
       description: |
-        DevOps Service version where you observed this issue
+        DevOps Service where you observed this issue
       placeholder: |
-          vX.Y.Z
-      render: Markdown
-    validations:
-      required: true
+        vX.Y.Z
   - type: textarea
     id: logs
     attributes:
@@ -63,8 +71,6 @@ body:
         1. With this config...
         1. Run '...'
         1. See error...
-    validations:
-      required: true
   - type: textarea
     attributes:
       label: Anything else?
@@ -79,5 +85,5 @@ body:
     attributes:
       label: Validation
       options:
-          - label: Yes, I've included all of the above information (Version, settings, logs, etc.)
-            required: true
+        - label: Yes, I've included all of the above information (Version, settings, logs, etc.)
+          required: true

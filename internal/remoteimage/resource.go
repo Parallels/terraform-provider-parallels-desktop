@@ -846,12 +846,12 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	hostConfig.HostId = vm.HostId
-
 	// Nothing to do, machine does not exist
 	if vm == nil {
 		resp.Diagnostics.Append(req.State.Set(ctx, &data)...)
 		return
+	} else {
+		hostConfig.HostId = vm.HostId
 	}
 
 	// Running cleanup script if any

@@ -21,7 +21,7 @@ func EnsureMachineStopped(ctx context.Context, hostConfig apiclient.HostConfig, 
 		return vm, diagnostics
 	}
 
-	maxRetries := 10
+	maxRetries := 30
 	retryCount := 0
 	for {
 		diagnostics = diag.Diagnostics{}

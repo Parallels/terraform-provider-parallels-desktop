@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"terraform-provider-parallels-desktop/internal/clientmodels"
 
@@ -95,6 +96,8 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
+			// Set a timeout for the client for 15 seconds to avoid hanging
+			Timeout: 60 * time.Second,
 		}
 	}
 	var req *http.Request

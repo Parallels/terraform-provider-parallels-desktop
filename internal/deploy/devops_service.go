@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"terraform-provider-parallels-desktop/internal/clientmodels"
+	"terraform-provider-parallels-desktop/internal/deploy/models"
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
 
@@ -350,7 +351,7 @@ func (c *DevOpsServiceClient) UninstallParallelsDesktop() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) GetLicense() (*ParallelsDesktopLicense, error) {
+func (c *DevOpsServiceClient) GetLicense() (*models.ParallelsDesktopLicense, error) {
 	cmd := c.findPath("prlsrvctl")
 	arguments := []string{"info", "--json"}
 	output, err := c.client.RunCommand(cmd, arguments)
@@ -368,7 +369,7 @@ func (c *DevOpsServiceClient) GetLicense() (*ParallelsDesktopLicense, error) {
 		return nil, err
 	}
 
-	parallelsLicense := ParallelsDesktopLicense{}
+	parallelsLicense := models.ParallelsDesktopLicense{}
 	parallelsLicense.FromClientModel(parallelsInfo.License)
 	return &parallelsLicense, nil
 }
@@ -447,15 +448,18 @@ func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
 	return false, nil
 }
 
-func (c *DevOpsServiceClient) InstallDevOpsService(license string, config ParallelsDesktopDevopsConfigV1) (string, error) {
+func (c *DevOpsServiceClient) InstallDevOpsService(license string, config models.ParallelsDesktopDevopsConfigV2) (string, error) {
 	// Installing DevOps Service
 
 	devopsPath := c.findPath("prldevops")
 	if devopsPath == "" {
 		cmd := "/bin/bash"
 		arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "-", "--no-service"}
-		if config.DevOpsVersion.ValueString() != "" && config.DevOpsVersion.ValueString() != "latest" {
+		if config.DevOpsVersion.ValueString() != "" && config.DevOpsVersion.ValueString() != "latest" && !config.UseLatestBeta.ValueBool() {
 			arguments = append(arguments, "--version", config.DevOpsVersion.ValueString())
+		}
+		if config.UseLatestBeta.ValueBool() {
+			arguments = append(arguments, "--pre-release")
 		}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
@@ -481,6 +485,11 @@ func (c *DevOpsServiceClient) InstallDevOpsService(license string, config Parall
 
 		for key, envVar := range config.EnvironmentVariables {
 			configFile.EnvironmentVariables[key] = envVar.ValueString()
+		}
+
+		// Setting the environment variables for the prldevops service port forwarding
+		if config.EnablePortForwarding.ValueBool() {
+			configFile.EnvironmentVariables["ENABLE_REVERSE_PROXY"] = "true"
 		}
 
 		yamlConfig, err := yaml.Marshal(configFile)
@@ -634,7 +643,7 @@ func (c *DevOpsServiceClient) GenerateDefaultRootPassword() (string, error) {
 	return encoded, nil
 }
 
-func (c *DevOpsServiceClient) generateConfigFile(config ParallelsDesktopDevopsConfigV1) (string, error) {
+func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopDevopsConfigV2) (string, error) {
 	configPath := "/tmp/service_config.json"
 	configMap := make(map[string]interface{})
 	if config.Port.ValueString() != "" {

@@ -78,6 +78,7 @@ resource "parallels-desktop_deploy" "example" {
 - `api_config` (Block, Optional) Parallels Desktop DevOps configuration (see [below for nested schema](#nestedblock--api_config))
 - `install_local` (Boolean) Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine
 - `orchestrator_registration` (Block, Optional) Orchestrator connection details (see [below for nested schema](#nestedblock--orchestrator_registration))
+- `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
 - `ssh_connection` (Block, Optional) Host connection details (see [below for nested schema](#nestedblock--ssh_connection))
 
 ### Read-Only
@@ -87,8 +88,12 @@ resource "parallels-desktop_deploy" "example" {
 - `current_packer_version` (String) Current version of Hashicorp Packer
 - `current_vagrant_version` (String) Current version of Hashicorp Vagrant
 - `current_version` (String) Current version of Parallels Desktop
+- `external_ip` (String) External IP address
 - `installed_dependencies` (List of String) List of installed dependencies
+- `is_registered_in_orchestrator` (Boolean) Is this host registered in the orchestrator
 - `license` (Object) Parallels Desktop license (see [below for nested schema](#nestedatt--license))
+- `orchestrator_host` (String) Orchestrator host ID
+- `orchestrator_host_id` (String) Orchestrator host ID
 
 <a id="nestedblock--api_config"></a>
 ### Nested Schema for `api_config`
@@ -98,6 +103,7 @@ Optional:
 - `devops_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
 - `disable_catalog_caching` (Boolean) Disable catalog caching, this will disable the ability to cache catalog items that are pulled from a remote catalog
 - `enable_logging` (Boolean) Enable logging
+- `enable_port_forwarding` (Boolean) Enable inbuilt reverse proxy for port forwarding
 - `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
 - `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
 - `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
@@ -114,6 +120,7 @@ Optional:
 - `tls_port` (String) Parallels Desktop DevOps TLS port
 - `tls_private_key` (String, Sensitive) Parallels Desktop DevOps TLS private key, this should be a PEM base64 encoded private key string
 - `token_duration_minutes` (String) JWT Token duration in minutes
+- `use_latest_beta` (Boolean) Enables the use of the latest beta
 - `use_orchestrator_resources` (Boolean) Use orchestrator resources
 
 
@@ -163,6 +170,72 @@ Optional:
 - `password` (String, Sensitive) Parallels desktop API Password
 - `username` (String) Parallels desktop API Username
 
+
+
+
+<a id="nestedblock--reverse_proxy_host"></a>
+### Nested Schema for `reverse_proxy_host`
+
+Required:
+
+- `port` (String) Reverse proxy port
+
+Optional:
+
+- `cors` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--cors))
+- `host` (String) Reverse proxy host
+- `http_routes` (Block List) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--http_routes))
+- `tcp_route` (Block, Optional) Parallels Desktop DevOps Reverse Proxy TCP Route configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tcp_route))
+- `tls` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route TLS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tls))
+
+Read-Only:
+
+- `id` (String) Reverse proxy Host id
+
+<a id="nestedblock--reverse_proxy_host--cors"></a>
+### Nested Schema for `reverse_proxy_host.cors`
+
+Optional:
+
+- `allowed_headers` (List of String) Allowed headers
+- `allowed_methods` (List of String) Allowed methods
+- `allowed_origins` (List of String) Allowed origins
+- `enabled` (Boolean) Enable CORS
+
+
+<a id="nestedblock--reverse_proxy_host--http_routes"></a>
+### Nested Schema for `reverse_proxy_host.http_routes`
+
+Optional:
+
+- `path` (String) Reverse proxy HTTP Route path
+- `pattern` (String) Reverse proxy HTTP Route pattern
+- `request_headers` (Map of String) Reverse proxy HTTP Route request headers
+- `response_headers` (Map of String) Reverse proxy HTTP Route response headers
+- `schema` (String) Reverse proxy HTTP Route schema
+- `target_host` (String) Reverse proxy HTTP Route target host
+- `target_port` (String) Reverse proxy HTTP Route target port
+- `target_vm_id` (String) Reverse proxy HTTP Route target VM id
+
+
+<a id="nestedblock--reverse_proxy_host--tcp_route"></a>
+### Nested Schema for `reverse_proxy_host.tcp_route`
+
+Optional:
+
+- `target_host` (String) Reverse proxy host
+- `target_port` (String) Reverse proxy port
+- `target_vm_id` (String) Reverse proxy target VM ID
+
+
+<a id="nestedblock--reverse_proxy_host--tls"></a>
+### Nested Schema for `reverse_proxy_host.tls`
+
+Optional:
+
+- `certificate` (String) TLS Certificate
+- `enabled` (Boolean) Enable TLS
+- `private_key` (String) TLS Private Key
 
 
 

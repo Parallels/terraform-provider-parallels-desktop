@@ -126,12 +126,14 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
 - `custom_vagrant_config` (String) Custom Vagrant config
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
 - `host` (String) Parallels Desktop DevOps Host
+- `keep_running` (Boolean) This will keep the VM running after the terraform apply
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner
 - `post_processor_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--post_processor_script))
 - `prlctl` (Block List) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--prlctl))
-- `run_after_create` (Boolean) Run after create
+- `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
+- `run_after_create` (Boolean, Deprecated) Run after create
 - `shared_folder` (Block List) Shared Folders Block, this is used to share folders with the virtual machine (see [below for nested schema](#nestedblock--shared_folder))
 - `specs` (Block, Optional) Virtual Machine Specs block, this is used to set the specs of the virtual machine (see [below for nested schema](#nestedblock--specs))
 - `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
@@ -139,7 +141,9 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
 
 ### Read-Only
 
+- `external_ip` (String) VM external IP address
 - `id` (String) Virtual Machine Id
+- `internal_ip` (String) VM internal IP address
 - `os_type` (String) Virtual Machine OS type
 
 <a id="nestedblock--authenticator"></a>
@@ -247,6 +251,72 @@ Optional:
 
 - `flag` (String) Set the VM option flag, this will stop the VM if it is running
 - `value` (String) Set the VM option value, this will stop the VM if it is running
+
+
+
+<a id="nestedblock--reverse_proxy_host"></a>
+### Nested Schema for `reverse_proxy_host`
+
+Required:
+
+- `port` (String) Reverse proxy port
+
+Optional:
+
+- `cors` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--cors))
+- `host` (String) Reverse proxy host
+- `http_routes` (Block List) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--http_routes))
+- `tcp_route` (Block, Optional) Parallels Desktop DevOps Reverse Proxy TCP Route configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tcp_route))
+- `tls` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route TLS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tls))
+
+Read-Only:
+
+- `id` (String) Reverse proxy Host id
+
+<a id="nestedblock--reverse_proxy_host--cors"></a>
+### Nested Schema for `reverse_proxy_host.cors`
+
+Optional:
+
+- `allowed_headers` (List of String) Allowed headers
+- `allowed_methods` (List of String) Allowed methods
+- `allowed_origins` (List of String) Allowed origins
+- `enabled` (Boolean) Enable CORS
+
+
+<a id="nestedblock--reverse_proxy_host--http_routes"></a>
+### Nested Schema for `reverse_proxy_host.http_routes`
+
+Optional:
+
+- `path` (String) Reverse proxy HTTP Route path
+- `pattern` (String) Reverse proxy HTTP Route pattern
+- `request_headers` (Map of String) Reverse proxy HTTP Route request headers
+- `response_headers` (Map of String) Reverse proxy HTTP Route response headers
+- `schema` (String) Reverse proxy HTTP Route schema
+- `target_host` (String) Reverse proxy HTTP Route target host
+- `target_port` (String) Reverse proxy HTTP Route target port
+- `target_vm_id` (String) Reverse proxy HTTP Route target VM id
+
+
+<a id="nestedblock--reverse_proxy_host--tcp_route"></a>
+### Nested Schema for `reverse_proxy_host.tcp_route`
+
+Optional:
+
+- `target_host` (String) Reverse proxy host
+- `target_port` (String) Reverse proxy port
+- `target_vm_id` (String) Reverse proxy target VM ID
+
+
+<a id="nestedblock--reverse_proxy_host--tls"></a>
+### Nested Schema for `reverse_proxy_host.tls`
+
+Optional:
+
+- `certificate` (String) TLS Certificate
+- `enabled` (Boolean) Enable TLS
+- `private_key` (String) TLS Private Key
 
 
 

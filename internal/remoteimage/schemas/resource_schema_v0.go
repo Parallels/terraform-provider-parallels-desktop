@@ -1,4 +1,4 @@
-package vagrantbox
+package schemas
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-func getSchema(ctx context.Context) schema.Schema {
+func GetRemoteImageSchemaV0(ctx context.Context) schema.Schema {
 	return schema.Schema{
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "Parallels Virtual Machine State Resource",
@@ -32,13 +32,13 @@ func getSchema(ctx context.Context) schema.Schema {
 			vmconfig.SchemaName:            vmconfig.SchemaBlock,
 			prlctl.SchemaName:              prlctl.SchemaBlock,
 		},
+		Version: 0,
 		Attributes: map[string]schema.Attribute{
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
 				Create: true,
 			}),
 			"force_changes": schema.BoolAttribute{
 				MarkdownDescription: "Force changes, this will force the VM to be stopped and started again",
-				Description:         "Force changes, this will force the VM to be stopped and started again",
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
@@ -75,49 +75,26 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Virtual Machine OS type",
 				Computed:            true,
 			},
-			"box_name": schema.StringAttribute{
-				MarkdownDescription: "Vagrant box name",
-				Optional:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-				Validators: []validator.String{
-					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
-				},
-			},
-			"vagrant_file_path": schema.StringAttribute{
-				MarkdownDescription: "Vagrant file path",
-				Optional:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-				Validators: []validator.String{
-					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
-				},
-			},
-			"box_version": schema.StringAttribute{
-				MarkdownDescription: "Vagrant box version",
-				Optional:            true,
+			"catalog_id": schema.StringAttribute{
+				MarkdownDescription: "Catalog Id to pull",
+				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"custom_vagrant_config": schema.StringAttribute{
-				MarkdownDescription: "Custom Vagrant config",
+			"version": schema.StringAttribute{
+				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
 				Optional:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
-			"custom_parallels_config": schema.StringAttribute{
-				MarkdownDescription: "Custom Parallels config",
+			"architecture": schema.StringAttribute{
+				MarkdownDescription: "Virtual Machine architecture",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine name",
+				MarkdownDescription: "Virtual Machine name to create, this needs to be unique in the host",
 				Required:            true,
 			},
 			"owner": schema.StringAttribute{
@@ -127,8 +104,22 @@ func getSchema(ctx context.Context) schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"catalog_connection": schema.StringAttribute{
+				MarkdownDescription: "Parallels DevOps Catalog Connection",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"path": schema.StringAttribute{
+				MarkdownDescription: "Path",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"run_after_create": schema.BoolAttribute{
-				MarkdownDescription: "Run after create",
+				MarkdownDescription: "Run after create, this will make the VM to run after creation",
 				Optional:            true,
 			},
 		},

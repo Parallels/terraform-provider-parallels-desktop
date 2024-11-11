@@ -1,4 +1,4 @@
-package clonevm
+package schemas
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
 	"terraform-provider-parallels-desktop/internal/schemas/prlctl"
+	"terraform-provider-parallels-desktop/internal/schemas/reverseproxy"
 	"terraform-provider-parallels-desktop/internal/schemas/sharedfolder"
 	"terraform-provider-parallels-desktop/internal/schemas/vmconfig"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
@@ -19,10 +20,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-func getSchema(ctx context.Context) schema.Schema {
+func GetRemoteImageSchemaV1(ctx context.Context) schema.Schema {
 	return schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Parallels Desktop Clone VM resource",
+		MarkdownDescription: "Parallels Virtual Machine State Resource",
 		Blocks: map[string]schema.Block{
 			authenticator.SchemaName:       authenticator.SchemaBlock,
 			vmspecs.SchemaName:             vmspecs.SchemaBlock,
@@ -31,7 +32,9 @@ func getSchema(ctx context.Context) schema.Schema {
 			sharedfolder.SchemaName:        sharedfolder.SchemaBlock,
 			vmconfig.SchemaName:            vmconfig.SchemaBlock,
 			prlctl.SchemaName:              prlctl.SchemaBlock,
+			reverseproxy.SchemaName:        reverseproxy.HostBlockV0,
 		},
+		Version: 1,
 		Attributes: map[string]schema.Attribute{
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
 				Create: true,
@@ -70,13 +73,28 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Virtual Machine Id",
 				Computed:            true,
 			},
+			"orchestrator_host_id": schema.StringAttribute{
+				MarkdownDescription: "Orchestrator Host Id if the VM is running in an orchestrator",
+				Computed:            true,
+			},
 			"os_type": schema.StringAttribute{
 				MarkdownDescription: "Virtual Machine OS type",
 				Computed:            true,
 			},
-			"base_vm_id": schema.StringAttribute{
-				MarkdownDescription: "Base Virtual Machine Id to clone",
+			"catalog_id": schema.StringAttribute{
+				MarkdownDescription: "Catalog Id to pull",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"version": schema.StringAttribute{
+				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
+				Optional:            true,
+			},
+			"architecture": schema.StringAttribute{
+				MarkdownDescription: "Virtual Machine architecture",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -92,6 +110,13 @@ func getSchema(ctx context.Context) schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"catalog_connection": schema.StringAttribute{
+				MarkdownDescription: "Parallels DevOps Catalog Connection",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"path": schema.StringAttribute{
 				MarkdownDescription: "Path",
 				Required:            true,
@@ -101,6 +126,19 @@ func getSchema(ctx context.Context) schema.Schema {
 			},
 			"run_after_create": schema.BoolAttribute{
 				MarkdownDescription: "Run after create, this will make the VM to run after creation",
+				Optional:            true,
+				DeprecationMessage:  "Use the `keep_running` attribute instead",
+			},
+			"external_ip": schema.StringAttribute{
+				MarkdownDescription: "VM external IP address",
+				Computed:            true,
+			},
+			"internal_ip": schema.StringAttribute{
+				MarkdownDescription: "VM internal IP address",
+				Computed:            true,
+			},
+			"keep_running": schema.BoolAttribute{
+				MarkdownDescription: "This will keep the VM running after the terraform apply",
 				Optional:            true,
 			},
 		},

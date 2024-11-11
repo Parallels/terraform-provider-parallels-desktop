@@ -1,4 +1,4 @@
-package virtualmachinestate
+package models
 
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -7,7 +7,7 @@ import (
 )
 
 // VirtualMachineStateResourceModel describes the resource data model.
-type VirtualMachineStateResourceModel struct {
+type VirtualMachineStateResourceModelV0 struct {
 	Authenticator *authenticator.Authentication `tfsdk:"authenticator"`
 	Host          types.String                  `tfsdk:"host"`
 	ID            types.String                  `tfsdk:"id"`

@@ -1,24 +1,47 @@
-package virtualmachinestate
+package schemas
 
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-var virtualMachineStateResourceSchema = schema.Schema{
+var VirtualMachineStateResourceSchemaV1 = schema.Schema{
 	MarkdownDescription: "Parallels Virtual Machine State Resource\n Use this to set a virtual machine to a desired state.",
 	Blocks: map[string]schema.Block{
 		authenticator.SchemaName: authenticator.SchemaBlock,
 	},
 	Attributes: map[string]schema.Attribute{
 		"host": schema.StringAttribute{
-			MarkdownDescription: "Parallels server host",
-			Required:            true,
+			MarkdownDescription: "Parallels Desktop DevOps Host",
+			Optional:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplace(),
+			},
+			Validators: []validator.String{
+				stringvalidator.AtLeastOneOf(path.Expressions{
+					path.MatchRoot("orchestrator"),
+					path.MatchRoot("host"),
+				}...),
+			},
+		},
+		"orchestrator": schema.StringAttribute{
+			MarkdownDescription: "Parallels Desktop DevOps Orchestrator",
+			Optional:            true,
+			Validators: []validator.String{
+				stringvalidator.AtLeastOneOf(path.Expressions{
+					path.MatchRoot("orchestrator"),
+					path.MatchRoot("host"),
+				}...),
+			},
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplace(),
+			},
 		},
 		"id": schema.StringAttribute{
 			MarkdownDescription: "Virtual Machine Id",

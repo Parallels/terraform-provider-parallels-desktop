@@ -34,6 +34,24 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
     memory_size = "2048"
   }
 
+  # this flag will set the desired state for the VM
+  # if it is set to true it will keep the VM running otherwise it will stop it
+  # by default it is set to true, so all VMs will be running
+  keep_running = true
+
+  # This will contain the configuration for the port forwarding reverse proxy
+  # in this case we are opening a port to any part in the host, it will not be linked to any
+  # specific vm or container. by default it will listen on 0.0.0.0 (all interfaces)
+  # and the target host will also be 0.0.0.0 (all interfaces) so it will be open to the world
+  # use 
+  reverse_proxy_host {
+    port = "2022"
+
+    tcp_route {
+      target_port = "22"
+    }
+  }
+
   # this will allow you to fine grain the configuration of the VM
   # you can pass any command that is compatible with the prlctl command
   # directly to the VM

@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"strings"
 
+	"terraform-provider-parallels-desktop/internal/common"
+	deploy_models "terraform-provider-parallels-desktop/internal/deploy/models"
+	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
+	"terraform-provider-parallels-desktop/internal/schemas/reverseproxy"
 	"terraform-provider-parallels-desktop/internal/ssh"
 
 	"terraform-provider-parallels-desktop/internal/telemetry"
@@ -44,7 +48,7 @@ func (r *DeployResource) Metadata(ctx context.Context, req resource.MetadataRequ
 }
 
 func (r *DeployResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = deployResourceSchemaV1
+	resp.Schema = schemas.DeployResourceSchemaV2
 }
 
 func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -67,7 +71,7 @@ func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRe
 }
 
 func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data DeployResourceModelV1
+	var data deploy_models.DeployResourceModelV2
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	telemetrySvc := telemetry.Get(ctx)
@@ -161,28 +165,8 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Register with orchestrator if needed
 	if data.Orchestrator != nil {
-		apiData := data.Api
-		host := strings.ReplaceAll(apiData.Attributes()["host"].String(), "\"", "")
-		protocol := strings.ReplaceAll(apiData.Attributes()["protocol"].String(), "\"", "")
-		port := strings.ReplaceAll(apiData.Attributes()["port"].String(), "\"", "")
-		user := strings.ReplaceAll(apiData.Attributes()["user"].String(), "\"", "")
-		password := strings.ReplaceAll(apiData.Attributes()["password"].String(), "\"", "")
 
-		orchestratorConfig := orchestrator.OrchestratorRegistration{
-			HostId:      data.Orchestrator.HostId,
-			Schema:      types.StringValue(protocol),
-			Host:        types.StringValue(host),
-			Port:        types.StringValue(port),
-			Description: data.Orchestrator.Description,
-			Tags:        data.Orchestrator.Tags,
-			HostCredentials: &authenticator.Authentication{
-				Username: types.StringValue(user),
-				Password: types.StringValue(password),
-			},
-			Orchestrator: data.Orchestrator.Orchestrator,
-		}
-
-		id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
+		diag := r.registerWithOrchestrator(ctx, &data, nil)
 		if diag.HasError() {
 			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
 				for _, uninstallError := range uninstallErrors {
@@ -195,23 +179,14 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 			if err := parallelsClient.UninstallDevOpsService(); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			}
-			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
+			diags := r.unregisterWithOrchestrator(ctx, &data)
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-
-			if isRegistered {
-				if diag := orchestrator.UnregisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-				}
-			}
-
 			resp.Diagnostics.Append(diag...)
 			return
 		}
-
-		data.Orchestrator.HostId = types.StringValue(id)
 	}
 
 	var installedDependencies []attr.Value
@@ -230,12 +205,32 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	data.InstalledDependencies = installDependenciesListValue
 
+	hostConfig := data.GenerateApiHostConfig(r.provider)
+
+	if len(data.ReverseProxyHosts) > 0 {
+		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
+		result, createDiag := reverseproxy.Create(ctx, hostConfig, rpHostsCopy)
+		if createDiag.HasError() {
+			resp.Diagnostics.Append(createDiag...)
+			if diag := reverseproxy.Delete(ctx, hostConfig, rpHostsCopy); diag.HasError() {
+				tflog.Error(ctx, "Error deleting reverse proxy hosts")
+			}
+			return
+		}
+
+		for i := range result {
+			data.ReverseProxyHosts[i].ID = result[i].ID
+		}
+	}
+
+	data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data DeployResourceModelV1
+	var data deploy_models.DeployResourceModelV2
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
 		ctx,
@@ -285,7 +280,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Getting parallels latest api version
 	if version, err := parallelsClient.GetDevOpsVersion(); err != nil {
-		planVersion := ParallelsDesktopDevOps{}
+		planVersion := deploy_models.ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
@@ -298,7 +293,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 			data.Api = planVersion.MapObject()
 		}
 	} else {
-		planVersion := ParallelsDesktopDevOps{}
+		planVersion := deploy_models.ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
@@ -322,8 +317,8 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data DeployResourceModelV1
-	var currentData DeployResourceModelV1
+	var data deploy_models.DeployResourceModelV2
+	var currentData deploy_models.DeployResourceModelV2
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -375,7 +370,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// Check if the API config has changed
-	if ApiConfigHasChanges(ctx, data.ApiConfig, currentData.ApiConfig) {
+	if deploy_models.ApiConfigHasChanges(ctx, data.ApiConfig, currentData.ApiConfig) {
 		if err := parallelsClient.UninstallDevOpsService(); err != nil {
 			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			return
@@ -384,6 +379,24 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 			resp.Diagnostics.Append(diag...)
 			return
 		}
+
+		if diag := r.registerWithOrchestrator(ctx, &data, &currentData); diag.HasError() {
+			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+				for _, uninstallError := range uninstallErrors {
+					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+				}
+			}
+			if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+			}
+			if err := parallelsClient.UninstallDevOpsService(); err != nil {
+				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+			}
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+
+		tflog.Info(ctx, "Changes in DevOps service, restarting parallels service")
 	}
 
 	// restart parallels service
@@ -485,71 +498,6 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		data.InstalledDependencies = currentData.InstalledDependencies
 	}
 
-	hasChangesInDevOpsService := false
-	if data.ApiConfig != nil {
-		if currentData.ApiConfig == nil {
-			hasChangesInDevOpsService = true
-		} else {
-			if data.ApiConfig.Port.ValueString() != currentData.ApiConfig.Port.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.TLSPort.ValueString() != currentData.ApiConfig.TLSPort.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.RootPassword.ValueString() != currentData.ApiConfig.RootPassword.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.EncryptionRsaKey.ValueString() != currentData.ApiConfig.EncryptionRsaKey.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.HmacSecret.ValueString() != currentData.ApiConfig.HmacSecret.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.LogLevel.ValueString() != currentData.ApiConfig.LogLevel.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.EnableTLS.ValueBool() != currentData.ApiConfig.EnableTLS.ValueBool() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.TLSPort.ValueString() != currentData.ApiConfig.TLSPort.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.TLSCertificate.ValueString() != currentData.ApiConfig.TLSCertificate.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.TLSPrivateKey.ValueString() != currentData.ApiConfig.TLSPrivateKey.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.DisableCatalogCaching.ValueBool() != currentData.ApiConfig.DisableCatalogCaching.ValueBool() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.TokenDurationMinutes.ValueString() != currentData.ApiConfig.TokenDurationMinutes.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.Mode.ValueString() != currentData.ApiConfig.Mode.ValueString() {
-				hasChangesInDevOpsService = true
-			}
-			if data.ApiConfig.UseOrchestratorResources.ValueBool() != currentData.ApiConfig.UseOrchestratorResources.ValueBool() {
-				hasChangesInDevOpsService = true
-			}
-		}
-	}
-
-	if hasChangesInDevOpsService {
-		err := parallelsClient.UninstallDevOpsService()
-		if err != nil {
-			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
-			return
-		}
-		if _, diag := r.installDevOpsService(&data, dependencies, parallelsClient); diag.HasError() {
-			resp.Diagnostics.Append(diag...)
-			return
-		}
-		tflog.Info(ctx, "Changes in DevOps service, restarting parallels service")
-	} else {
-		tflog.Info(ctx, "No changes in DevOps service")
-	}
-
 	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion()
 	if getVersionError != nil {
 		if getVersionError.Error() == "Parallels Desktop DevOps Service not found" {
@@ -588,53 +536,30 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if data.Orchestrator != nil {
 		if orchestrator.HasChanges(ctx, data.Orchestrator, currentData.Orchestrator) {
-			apiData := data.Api
-			host := strings.ReplaceAll(apiData.Attributes()["host"].String(), "\"", "")
-			protocol := strings.ReplaceAll(apiData.Attributes()["protocol"].String(), "\"", "")
-			port := strings.ReplaceAll(apiData.Attributes()["port"].String(), "\"", "")
-			user := strings.ReplaceAll(apiData.Attributes()["user"].String(), "\"", "")
-			password := strings.ReplaceAll(apiData.Attributes()["password"].String(), "\"", "")
-
-			// checking if we already registered with orchestrator
-			if currentData.Orchestrator != nil && currentData.Orchestrator.HostId.ValueString() != "" {
-				if diag := orchestrator.UnregisterWithHost(ctx, *currentData.Orchestrator, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
+			if diag := r.registerWithOrchestrator(ctx, &data, &currentData); diag.HasError() {
+				if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+					for _, uninstallError := range uninstallErrors {
+						diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+					}
 				}
-			}
-
-			orchestratorConfig := orchestrator.OrchestratorRegistration{
-				HostId:      data.Orchestrator.HostId,
-				Schema:      types.StringValue(protocol),
-				Host:        types.StringValue(host),
-				Port:        types.StringValue(port),
-				Description: data.Orchestrator.Description,
-				Tags:        data.Orchestrator.Tags,
-				HostCredentials: &authenticator.Authentication{
-					Username: types.StringValue(user),
-					Password: types.StringValue(password),
-				},
-				Orchestrator: data.Orchestrator.Orchestrator,
-			}
-
-			isRegistered, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
-			if diags.HasError() {
-				resp.Diagnostics.Append(diags...)
+				if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+					resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
+				}
+				if err := parallelsClient.UninstallDevOpsService(); err != nil {
+					resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+				}
+				resp.Diagnostics.Append(diag...)
 				return
-			}
-			if !isRegistered {
-				id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
-				if diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
-				}
-
-				data.Orchestrator.HostId = types.StringValue(id)
-			} else {
-				tflog.Info(ctx, "Already registered with orchestrator, skipping registration")
 			}
 		} else {
 			data.Orchestrator.HostId = currentData.Orchestrator.HostId
+			data.IsRegisteredInOrchestrator = types.BoolValue(true)
+			data.OrchestratorHost = currentData.OrchestratorHost
+			if common.GetString(data.OrchestratorHostId) != "" {
+				data.OrchestratorHostId = currentData.OrchestratorHostId
+			} else {
+				data.OrchestratorHostId = currentData.Orchestrator.HostId
+			}
 		}
 	} else if currentData.Orchestrator != nil {
 		if currentData.Orchestrator.HostId.ValueString() != "" {
@@ -645,6 +570,36 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
+	hostConfig := data.GenerateApiHostConfig(r.provider)
+
+	if reverseproxy.ReverseProxyHostsDiff(data.ReverseProxyHosts, currentData.ReverseProxyHosts) {
+		copyCurrentRpHosts := reverseproxy.CopyReverseProxyHosts(currentData.ReverseProxyHosts)
+		copyRpHosts := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
+
+		results, updateDiag := reverseproxy.Update(ctx, hostConfig, copyCurrentRpHosts, copyRpHosts)
+		if updateDiag.HasError() {
+			resp.Diagnostics.Append(updateDiag...)
+			revertResults, _ := reverseproxy.Revert(ctx, hostConfig, copyCurrentRpHosts, copyRpHosts)
+			for i := range revertResults {
+				data.ReverseProxyHosts[i].ID = revertResults[i].ID
+			}
+			return
+		}
+
+		for i := range results {
+			data.ReverseProxyHosts[i].ID = results[i].ID
+		}
+	} else {
+		for i := range currentData.ReverseProxyHosts {
+			data.ReverseProxyHosts[i].ID = currentData.ReverseProxyHosts[i].ID
+		}
+	}
+
+	if currentData.ExternalIp.ValueString() == "" ||
+		strings.ReplaceAll(currentData.ExternalIp.ValueString(), "\"", "") != strings.ReplaceAll(data.ExternalIp.ValueString(), "\"", "") {
+		data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -652,7 +607,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data DeployResourceModelV1
+	var data deploy_models.DeployResourceModelV2
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -728,8 +683,18 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	})
 
 	if data.Orchestrator != nil {
-		if diag := orchestrator.UnregisterWithHost(ctx, *data.Orchestrator, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
+		if diag := r.unregisterWithOrchestrator(ctx, &data); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
+		}
+	}
+
+	hostConfig := data.GenerateApiHostConfig(r.provider)
+
+	if len(data.ReverseProxyHosts) > 0 {
+		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
+		if diag := reverseproxy.Delete(ctx, hostConfig, rpHostsCopy); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
 		}
 	}
 
@@ -745,21 +710,25 @@ func (r *DeployResource) ImportState(ctx context.Context, req resource.ImportSta
 func (r *DeployResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
-			PriorSchema:   &deployResourceSchemaV0,
-			StateUpgrader: UpgradeState,
+			PriorSchema:   &schemas.DeployResourceSchemaV0,
+			StateUpgrader: UpgradeStateToV1,
+		},
+		1: {
+			PriorSchema:   &schemas.DeployResourceSchemaV1,
+			StateUpgrader: UpgradeStateToV2,
 		},
 	}
 }
 
-func UpgradeState(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-	var priorStateData DeployResourceModelV0
+func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+	var priorStateData deploy_models.DeployResourceModelV0
 	resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	upgradedStateData := DeployResourceModelV1{
+	upgradedStateData := deploy_models.DeployResourceModelV1{
 		SshConnection:         priorStateData.SshConnection,
 		CurrentVersion:        priorStateData.CurrentVersion,
 		CurrentPackerVersion:  priorStateData.CurrentPackerVersion,
@@ -767,7 +736,7 @@ func UpgradeState(ctx context.Context, req resource.UpgradeStateRequest, resp *r
 		CurrentGitVersion:     priorStateData.CurrentGitVersion,
 		License:               priorStateData.License,
 		Orchestrator:          priorStateData.Orchestrator,
-		ApiConfig: &ParallelsDesktopDevopsConfigV1{
+		ApiConfig: &deploy_models.ParallelsDesktopDevopsConfigV1{
 			Port:                     priorStateData.ApiConfig.Port,
 			Prefix:                   priorStateData.ApiConfig.Prefix,
 			DevOpsVersion:            priorStateData.ApiConfig.DevOpsVersion,
@@ -799,7 +768,58 @@ func UpgradeState(ctx context.Context, req resource.UpgradeStateRequest, resp *r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
-func (r *DeployResource) getSshClient(data DeployResourceModelV1) (*ssh.SshClient, error) {
+func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+	var priorStateData deploy_models.DeployResourceModelV1
+	resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	upgradedStateData := deploy_models.DeployResourceModelV2{
+		SshConnection:         priorStateData.SshConnection,
+		CurrentVersion:        priorStateData.CurrentVersion,
+		CurrentPackerVersion:  priorStateData.CurrentPackerVersion,
+		CurrentVagrantVersion: priorStateData.CurrentVagrantVersion,
+		CurrentGitVersion:     priorStateData.CurrentGitVersion,
+		License:               priorStateData.License,
+		Orchestrator:          priorStateData.Orchestrator,
+		ApiConfig: &deploy_models.ParallelsDesktopDevopsConfigV2{
+			Port:                     priorStateData.ApiConfig.Port,
+			Prefix:                   priorStateData.ApiConfig.Prefix,
+			DevOpsVersion:            priorStateData.ApiConfig.DevOpsVersion,
+			RootPassword:             priorStateData.ApiConfig.RootPassword,
+			HmacSecret:               priorStateData.ApiConfig.HmacSecret,
+			EncryptionRsaKey:         priorStateData.ApiConfig.EncryptionRsaKey,
+			LogLevel:                 priorStateData.ApiConfig.LogLevel,
+			EnableTLS:                priorStateData.ApiConfig.EnableTLS,
+			TLSPort:                  priorStateData.ApiConfig.TLSPort,
+			TLSCertificate:           priorStateData.ApiConfig.TLSCertificate,
+			TLSPrivateKey:            priorStateData.ApiConfig.TLSPrivateKey,
+			DisableCatalogCaching:    priorStateData.ApiConfig.DisableCatalogCaching,
+			TokenDurationMinutes:     priorStateData.ApiConfig.TokenDurationMinutes,
+			Mode:                     priorStateData.ApiConfig.Mode,
+			UseOrchestratorResources: priorStateData.ApiConfig.UseOrchestratorResources,
+			SystemReservedMemory:     priorStateData.ApiConfig.SystemReservedMemory,
+			SystemReservedCpu:        priorStateData.ApiConfig.SystemReservedCpu,
+			SystemReservedDisk:       priorStateData.ApiConfig.SystemReservedDisk,
+			EnableLogging:            priorStateData.ApiConfig.EnableLogging,
+			EnvironmentVariables:     priorStateData.ApiConfig.EnvironmentVariables,
+			EnablePortForwarding:     basetypes.NewBoolValue(false),
+			UseLatestBeta:            basetypes.NewBoolValue(false),
+		},
+		ReverseProxyHosts:     make([]*reverseproxy.ReverseProxyHost, 0),
+		Api:                   priorStateData.Api,
+		InstalledDependencies: priorStateData.InstalledDependencies,
+		InstallLocal:          priorStateData.InstallLocal,
+	}
+
+	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
+}
+
+func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV2) (*ssh.SshClient, error) {
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -898,16 +918,16 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	return installed_dependencies, diag
 }
 
-func (r *DeployResource) installDevOpsService(data *DeployResourceModelV1, dependencies []string, parallelsClient *DevOpsServiceClient) (*ParallelsDesktopDevOps, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(data *deploy_models.DeployResourceModelV2, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"
 	apiVersion := "latest"
 
 	// Installing parallels DevOps service
-	var config ParallelsDesktopDevopsConfigV1
+	var config deploy_models.ParallelsDesktopDevopsConfigV2
 	if data.ApiConfig == nil {
-		config = ParallelsDesktopDevopsConfigV1{
+		config = deploy_models.ParallelsDesktopDevopsConfigV2{
 			DevOpsVersion: types.StringValue(apiVersion),
 			Port:          types.StringValue(targetPort),
 			TLSPort:       types.StringValue(targetTlsPort),
@@ -955,7 +975,7 @@ func (r *DeployResource) installDevOpsService(data *DeployResourceModelV1, depen
 		return nil, diag
 	}
 
-	apiData := ParallelsDesktopDevOps{
+	apiData := deploy_models.ParallelsDesktopDevOps{
 		Version:  types.StringValue(currentVersion),
 		Host:     types.StringValue(data.SshConnection.Host.ValueString()),
 		Port:     types.StringValue(targetPort),
@@ -976,4 +996,131 @@ func (r *DeployResource) installDevOpsService(data *DeployResourceModelV1, depen
 	data.Api = apiData.MapObject()
 
 	return &apiData, diag
+}
+
+func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, currentData *deploy_models.DeployResourceModelV2) diag.Diagnostics {
+	diagnostic := diag.Diagnostics{}
+	if data.Orchestrator == nil {
+		return diagnostic
+	}
+
+	host := strings.ReplaceAll(data.SshConnection.Host.String(), "\"", "")
+	port := strings.ReplaceAll(data.ApiConfig.Port.String(), "\"", "")
+	user := "root@localhost"
+	schema := "http"
+	password := strings.ReplaceAll(data.ApiConfig.RootPassword.String(), "\"", "")
+	if data.ApiConfig.EnableTLS.ValueBool() {
+		schema = "https"
+	}
+
+	if currentData != nil {
+		currentRegistration := *currentData.Orchestrator
+		if common.GetString(currentData.OrchestratorHostId) != "" {
+			currentRegistration.HostId = currentData.OrchestratorHostId
+		}
+		if currentRegistration.HostId.ValueString() != "" &&
+			currentData.Orchestrator != nil &&
+			currentData.Orchestrator.HostId.ValueString() != "" {
+			currentRegistration.HostId = currentData.Orchestrator.HostId
+		}
+
+		// checking if we already registered with orchestrator
+		isRegistered, item, diags := orchestrator.IsAlreadyRegistered(ctx, currentRegistration, r.provider.DisableTlsValidation.ValueBool())
+		if diags.HasError() {
+			diagnostic.Append(diags...)
+			return diagnostic
+		}
+		if isRegistered {
+			currentRegistration.HostId = types.StringValue(item.ID)
+			if diag := orchestrator.UnregisterWithHost(ctx, currentRegistration, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
+				diag.Append(diag...)
+				return diag
+			}
+		}
+	}
+
+	// New registration details
+	orchestratorConfig := orchestrator.OrchestratorRegistration{
+		HostId:      data.Orchestrator.HostId,
+		Schema:      types.StringValue(schema),
+		Host:        types.StringValue(host),
+		Port:        types.StringValue(port),
+		Description: data.Orchestrator.Description,
+		Tags:        data.Orchestrator.Tags,
+		HostCredentials: &authenticator.Authentication{
+			Username: types.StringValue(user),
+			Password: types.StringValue(password),
+		},
+		Orchestrator: data.Orchestrator.Orchestrator,
+	}
+
+	isRegistered, item, diags := orchestrator.IsAlreadyRegistered(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
+	if diags.HasError() {
+		diagnostic.Append(diags...)
+		data.IsRegisteredInOrchestrator = types.BoolValue(true)
+		data.OrchestratorHostId = types.StringValue(item.ID)
+		data.OrchestratorHost = types.StringValue(item.Host)
+		return diagnostic
+	}
+
+	if !isRegistered {
+		id, diag := orchestrator.RegisterWithHost(ctx, orchestratorConfig, r.provider.DisableTlsValidation.ValueBool())
+		if diag.HasError() {
+			diagnostic.Append(diag...)
+			return diagnostic
+		}
+
+		if data.Orchestrator != nil {
+			data.Orchestrator.HostId = types.StringValue(id)
+		}
+		data.IsRegisteredInOrchestrator = types.BoolValue(true)
+		data.OrchestratorHostId = types.StringValue(id)
+		data.OrchestratorHost = types.StringValue(orchestratorConfig.GetHost())
+	} else {
+		tflog.Info(ctx, "Already registered with orchestrator, skipping registration")
+		if data.Orchestrator != nil {
+			data.Orchestrator.HostId = types.StringValue(item.ID)
+		}
+		data.IsRegisteredInOrchestrator = types.BoolValue(true)
+		data.OrchestratorHostId = types.StringValue(item.ID)
+		data.OrchestratorHost = types.StringValue(item.Host)
+	}
+
+	return diagnostic
+}
+
+func (r *DeployResource) unregisterWithOrchestrator(ctx context.Context, data *deploy_models.DeployResourceModelV2) diag.Diagnostics {
+	diagnostic := diag.Diagnostics{}
+	if data.Orchestrator == nil {
+		return diagnostic
+	}
+
+	currentRegistration := *data.Orchestrator
+	if common.GetString(data.OrchestratorHostId) != "" {
+		currentRegistration.HostId = data.OrchestratorHostId
+	}
+
+	isRegistered, item, diags := orchestrator.IsAlreadyRegistered(ctx, currentRegistration, r.provider.DisableTlsValidation.ValueBool())
+	if diags.HasError() {
+		diagnostic.Append(diags...)
+		return diagnostic
+	}
+
+	if isRegistered {
+		// checking if we already registered with orchestrator
+		currentRegistration.HostId = types.StringValue(item.ID)
+		if diag := orchestrator.UnregisterWithHost(ctx, currentRegistration, r.provider.DisableTlsValidation.ValueBool()); diag.HasError() {
+			diag.Append(diag...)
+			return diag
+		}
+	}
+	if data.Orchestrator != nil {
+		data.Orchestrator.HostId = types.StringValue("")
+	}
+
+	data.IsRegisteredInOrchestrator = types.BoolValue(false)
+	data.OrchestratorHostId = types.StringValue("")
+	data.OrchestratorHost = types.StringValue("")
+
+	return diagnostic
 }

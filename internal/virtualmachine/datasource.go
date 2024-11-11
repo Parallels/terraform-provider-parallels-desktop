@@ -6,6 +6,8 @@ import (
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
+	data_models "terraform-provider-parallels-desktop/internal/virtualmachine/models"
+	"terraform-provider-parallels-desktop/internal/virtualmachine/schemas"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -46,24 +48,35 @@ func (d *VirtualMachinesDataSource) Metadata(_ context.Context, req datasource.M
 }
 
 func (d *VirtualMachinesDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
-	resp.Schema = virtualMachineDataSourceSchema
+	resp.Schema = schemas.VirtualMachineDataSourceSchemaV1
 }
 
 func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data virtualMachinesDataSourceModel
+	var data data_models.VirtualMachinesDataSourceModelV1
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              d.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: d.provider.DisableTlsValidation.ValueBool(),
@@ -76,21 +89,24 @@ func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	for _, machine := range vms {
-		stateMachine := virtualMachineModel{
-			HostIP:      types.StringValue("-"),
-			ID:          types.StringValue(machine.ID),
-			Name:        types.StringValue(machine.Name),
-			Description: types.StringValue(machine.Description),
-			OSType:      types.StringValue(machine.OS),
-			State:       types.StringValue(machine.State),
-			Home:        types.StringValue(machine.Home),
+		stateMachine := data_models.VirtualMachineModelV1{
+			HostIP:             types.StringValue("-"),
+			ID:                 types.StringValue(machine.ID),
+			Name:               types.StringValue(machine.Name),
+			Description:        types.StringValue(machine.Description),
+			OSType:             types.StringValue(machine.OS),
+			State:              types.StringValue(machine.State),
+			Home:               types.StringValue(machine.Home),
+			ExternalIp:         types.StringValue(machine.HostExternalIpAddress),
+			InternalIp:         types.StringValue(machine.InternalIpAddress),
+			OrchestratorHostId: types.StringValue(machine.HostId),
 		}
 
 		data.Machines = append(data.Machines, stateMachine)
 	}
 
 	if data.Machines == nil {
-		data.Machines = make([]virtualMachineModel, 0)
+		data.Machines = make([]data_models.VirtualMachineModelV1, 0)
 	}
 
 	diags := resp.State.Set(ctx, &data)

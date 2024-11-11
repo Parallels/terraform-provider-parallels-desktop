@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
@@ -75,8 +76,11 @@ func RegisterWithHost(context context.Context, plan OrchestratorRegistration, di
 	return "", diagnostics
 }
 
-func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) (bool, diag.Diagnostics) {
+func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) (bool, *apimodels.OrchestratorHost, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
+	if data.Orchestrator == nil {
+		return false, nil, diagnostics
+	}
 
 	hostConfig := apiclient.HostConfig{
 		Host: data.Orchestrator.GetHost(),
@@ -90,16 +94,25 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration,
 
 	currentHostId := data.HostId.ValueString()
 	currentHostUrl := helpers.GetHostApiBaseUrl(data.GetHost())
-	response, _ := apiclient.GetOrchestratorHost(context, hostConfig, data.HostId.ValueString())
+	currentHostDescription := data.Description.ValueString()
+	response, _ := apiclient.GetOrchestratorHosts(context, hostConfig)
 	if response == nil {
-		return false, diagnostics
+		return false, nil, diagnostics
 	}
 
-	if currentHostId == response.ID || currentHostUrl == response.Host {
-		return true, diagnostics
+	if len(response) == 0 {
+		return false, nil, diagnostics
 	}
 
-	return false, diagnostics
+	for _, host := range response {
+		if strings.EqualFold(currentHostId, host.ID) ||
+			strings.EqualFold(currentHostUrl, host.Host) ||
+			strings.EqualFold(currentHostDescription, host.Description) {
+			return true, &host, diagnostics
+		}
+	}
+
+	return false, nil, diagnostics
 }
 
 func UnregisterWithHost(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) diag.Diagnostics {

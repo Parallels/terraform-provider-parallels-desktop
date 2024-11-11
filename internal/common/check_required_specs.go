@@ -74,7 +74,7 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 		diagnostics.AddError("error converting cpu count", err.Error())
 		return diagnostics
 	}
-	if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateCpuValueInt) <= 0 {
+	if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateCpuValueInt) < 0 {
 		diagnostics.AddError("not enough cpus", "not enough cpus")
 		return diagnostics
 	}
@@ -88,7 +88,7 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 		diagnostics.AddError("error converting memory size", err.Error())
 		return diagnostics
 	}
-	if hardwareInfo.TotalAvailable.MemorySize-float64(updateMemoryValueInt) <= 0 {
+	if hardwareInfo.TotalAvailable.MemorySize-float64(updateMemoryValueInt) < 0 {
 		diagnostics.AddError("not enough memory", "not enough memory")
 		return diagnostics
 	}

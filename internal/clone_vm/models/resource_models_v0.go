@@ -1,4 +1,4 @@
-package remoteimage
+package models
 
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -12,19 +12,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// VirtualMachineStateResourceModel describes the resource data model.
-type RemoteVmResourceModel struct {
+// CloneVmResourceModelV0 describes the resource data model.
+type CloneVmResourceModelV0 struct {
 	Authenticator        *authenticator.Authentication              `tfsdk:"authenticator"`
 	Host                 types.String                               `tfsdk:"host"`
 	Orchestrator         types.String                               `tfsdk:"orchestrator"`
 	ID                   types.String                               `tfsdk:"id"`
 	OsType               types.String                               `tfsdk:"os_type"`
-	CatalogId            types.String                               `tfsdk:"catalog_id"`
-	Version              types.String                               `tfsdk:"version"`
-	Architecture         types.String                               `tfsdk:"architecture"`
+	BaseVmId             types.String                               `tfsdk:"base_vm_id"`
 	Name                 types.String                               `tfsdk:"name"`
 	Owner                types.String                               `tfsdk:"owner"`
-	CatalogConnection    types.String                               `tfsdk:"catalog_connection"`
 	Path                 types.String                               `tfsdk:"path"`
 	Specs                *vmspecs.VmSpecs                           `tfsdk:"specs"`
 	PostProcessorScripts []*postprocessorscript.PostProcessorScript `tfsdk:"post_processor_script"`

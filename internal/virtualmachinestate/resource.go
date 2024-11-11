@@ -7,6 +7,8 @@ import (
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
+	resource_models "terraform-provider-parallels-desktop/internal/virtualmachinestate/models"
+	"terraform-provider-parallels-desktop/internal/virtualmachinestate/schemas"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -34,7 +36,7 @@ func (r *VirtualMachineStateResource) Metadata(ctx context.Context, req resource
 }
 
 func (r *VirtualMachineStateResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = virtualMachineStateResourceSchema
+	resp.Schema = schemas.VirtualMachineStateResourceSchemaV1
 }
 
 func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -55,19 +57,32 @@ func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resourc
 }
 
 func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data VirtualMachineStateResourceModel
+	var data resource_models.VirtualMachineStateResourceModelV1
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if data.Host.ValueString() == "" {
+
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
+
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
@@ -103,7 +118,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 }
 
 func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data VirtualMachineStateResourceModel
+	var data resource_models.VirtualMachineStateResourceModelV1
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -111,13 +126,24 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 		return
 	}
 
-	if data.Host.ValueString() == "" {
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
 		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
@@ -143,16 +169,11 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 }
 
 func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data VirtualMachineStateResourceModel
+	var data resource_models.VirtualMachineStateResourceModelV1
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if data.Host.ValueString() == "" {
-		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
 		return
 	}
 
@@ -161,8 +182,24 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
+	// selecting if this is a standalone host or an orchestrator
+	isOrchestrator := false
+	var host string
+	if data.Orchestrator.ValueString() != "" {
+		isOrchestrator = true
+		host = data.Orchestrator.ValueString()
+	} else {
+		host = data.Host.ValueString()
+	}
+
+	if host == "" {
+		resp.Diagnostics.AddError("host cannot be empty", "Host cannot be null")
+		return
+	}
+
 	hostConfig := apiclient.HostConfig{
-		Host:                 data.Host.ValueString(),
+		Host:                 host,
+		IsOrchestrator:       isOrchestrator,
 		License:              r.provider.License.ValueString(),
 		Authorization:        data.Authenticator,
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
@@ -217,7 +254,7 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 }
 
 func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data VirtualMachineStateResourceModel
+	var data resource_models.VirtualMachineStateResourceModelV1
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)

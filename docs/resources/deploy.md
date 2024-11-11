@@ -17,22 +17,56 @@ resource "parallels-desktop_deploy" "example" {
 
   # This will contain the configuration for the Parallels Desktop API
   api_config {
-    port                       = "8080"
-    prefix                     = "/api"
-    log_level                  = "info"
-    mode                       = "api"
-    devops_version             = "latest"
-    root_password              = "VerySecretPassword"
-    hmac_secret                = "VerySecretLongStringForHMAC"
-    encryption_rsa_key         = "base64 encoded rsa key"
-    enable_tls                 = true
-    tls_port                   = "8443"
-    tls_certificate            = "base64 encoded tls cert"
-    tls_private_key            = "base64 encoded tls key"
-    disable_catalog_caching    = false
+    port   = "8080"
+    prefix = "/api"
+    # This will set the log level for the API
+    log_level = "info"
+    # This will enable logging for the API
+    enable_logging = true
+    # This will set the mode for the API, you can use either api or orchestrator. by default it will be api
+    mode = "api"
+    # you can force any version of the devops api, if you leave it empty it will use the latest version
+    # but it will not automatically update to the latest version, that would need a manual step
+    devops_version = "latest"
+    # This will set the password for the default root user
+    root_password = "VerySecretPassword"
+    # This will enable the api to use the hmac secret for the authentication
+    hmac_secret = "VerySecretLongStringForHMAC"
+    # This will enable the api to use the rsa key for encryption of the database file
+    # we strongly advise you to use this feature for security reasons
+    encryption_rsa_key = "base64 encoded rsa key"
+    # This will enable the api to use the tls certificate
+    enable_tls = true
+    # This will enable the tls port
+    tls_port = "8443"
+    # This will enable the tls certificate
+    tls_certificate = "base64 encoded tls cert"
+    # This will enable the tls private key
+    tls_private_key = "base64 encoded tls key"
+    # This will enable the catalog caching, this will cache the catalog in the host
+    disable_catalog_caching = false
+    # This will enable the orchestrator resources, this will enable the host to use the orchestrator
     use_orchestrator_resources = false
+    # This will enable the port forwarding reverse proxy in the host, you will need to set the
+    # port_forwarding block to configure the ports in the deploy or any other provider
+    enable_port_forwarding = false
+    # This will allow more fine tune of the api configuration, you can pass any compatible environment
+    # variable 
     environment_variables = {
       "key" = "value"
+    }
+  }
+
+  # This will contain the configuration for the port forwarding reverse proxy
+  # in this case we are opening a port to any part in the host, it will not be linked to any
+  # specific vm or container. by default it will listen on 0.0.0.0 (all interfaces)
+  # and the target host will also be 0.0.0.0 (all interfaces) so it will be open to the world
+  # use 
+  reverse_proxy_host {
+    port = "2022"
+
+    tcp_route {
+      target_port = "22"
     }
   }
 
@@ -78,6 +112,7 @@ resource "parallels-desktop_deploy" "example" {
 - `api_config` (Block, Optional) Parallels Desktop DevOps configuration (see [below for nested schema](#nestedblock--api_config))
 - `install_local` (Boolean) Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine
 - `orchestrator_registration` (Block, Optional) Orchestrator connection details (see [below for nested schema](#nestedblock--orchestrator_registration))
+- `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
 - `ssh_connection` (Block, Optional) Host connection details (see [below for nested schema](#nestedblock--ssh_connection))
 
 ### Read-Only
@@ -87,8 +122,12 @@ resource "parallels-desktop_deploy" "example" {
 - `current_packer_version` (String) Current version of Hashicorp Packer
 - `current_vagrant_version` (String) Current version of Hashicorp Vagrant
 - `current_version` (String) Current version of Parallels Desktop
+- `external_ip` (String) External IP address
 - `installed_dependencies` (List of String) List of installed dependencies
+- `is_registered_in_orchestrator` (Boolean) Is this host registered in the orchestrator
 - `license` (Object) Parallels Desktop license (see [below for nested schema](#nestedatt--license))
+- `orchestrator_host` (String) Orchestrator host ID
+- `orchestrator_host_id` (String) Orchestrator host ID
 
 <a id="nestedblock--api_config"></a>
 ### Nested Schema for `api_config`
@@ -98,6 +137,7 @@ Optional:
 - `devops_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
 - `disable_catalog_caching` (Boolean) Disable catalog caching, this will disable the ability to cache catalog items that are pulled from a remote catalog
 - `enable_logging` (Boolean) Enable logging
+- `enable_port_forwarding` (Boolean) Enable inbuilt reverse proxy for port forwarding
 - `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
 - `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
 - `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
@@ -114,6 +154,7 @@ Optional:
 - `tls_port` (String) Parallels Desktop DevOps TLS port
 - `tls_private_key` (String, Sensitive) Parallels Desktop DevOps TLS private key, this should be a PEM base64 encoded private key string
 - `token_duration_minutes` (String) JWT Token duration in minutes
+- `use_latest_beta` (Boolean) Enables the use of the latest beta
 - `use_orchestrator_resources` (Boolean) Use orchestrator resources
 
 
@@ -163,6 +204,72 @@ Optional:
 - `password` (String, Sensitive) Parallels desktop API Password
 - `username` (String) Parallels desktop API Username
 
+
+
+
+<a id="nestedblock--reverse_proxy_host"></a>
+### Nested Schema for `reverse_proxy_host`
+
+Required:
+
+- `port` (String) Reverse proxy port
+
+Optional:
+
+- `cors` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--cors))
+- `host` (String) Reverse proxy host
+- `http_routes` (Block List) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--http_routes))
+- `tcp_route` (Block, Optional) Parallels Desktop DevOps Reverse Proxy TCP Route configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tcp_route))
+- `tls` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route TLS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tls))
+
+Read-Only:
+
+- `id` (String) Reverse proxy Host id
+
+<a id="nestedblock--reverse_proxy_host--cors"></a>
+### Nested Schema for `reverse_proxy_host.cors`
+
+Optional:
+
+- `allowed_headers` (List of String) Allowed headers
+- `allowed_methods` (List of String) Allowed methods
+- `allowed_origins` (List of String) Allowed origins
+- `enabled` (Boolean) Enable CORS
+
+
+<a id="nestedblock--reverse_proxy_host--http_routes"></a>
+### Nested Schema for `reverse_proxy_host.http_routes`
+
+Optional:
+
+- `path` (String) Reverse proxy HTTP Route path
+- `pattern` (String) Reverse proxy HTTP Route pattern
+- `request_headers` (Map of String) Reverse proxy HTTP Route request headers
+- `response_headers` (Map of String) Reverse proxy HTTP Route response headers
+- `schema` (String) Reverse proxy HTTP Route schema
+- `target_host` (String) Reverse proxy HTTP Route target host
+- `target_port` (String) Reverse proxy HTTP Route target port
+- `target_vm_id` (String) Reverse proxy HTTP Route target VM id
+
+
+<a id="nestedblock--reverse_proxy_host--tcp_route"></a>
+### Nested Schema for `reverse_proxy_host.tcp_route`
+
+Optional:
+
+- `target_host` (String) Reverse proxy host
+- `target_port` (String) Reverse proxy port
+- `target_vm_id` (String) Reverse proxy target VM ID
+
+
+<a id="nestedblock--reverse_proxy_host--tls"></a>
+### Nested Schema for `reverse_proxy_host.tls`
+
+Optional:
+
+- `certificate` (String) TLS Certificate
+- `enabled` (Boolean) Enable TLS
+- `private_key` (String) TLS Private Key
 
 
 

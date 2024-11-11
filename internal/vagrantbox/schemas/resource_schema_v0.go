@@ -1,4 +1,4 @@
-package remoteimage
+package schemas
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-func getSchema(ctx context.Context) schema.Schema {
+func GetResourceSchemaV0(ctx context.Context) schema.Schema {
 	return schema.Schema{
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "Parallels Virtual Machine State Resource",
@@ -38,6 +38,7 @@ func getSchema(ctx context.Context) schema.Schema {
 			}),
 			"force_changes": schema.BoolAttribute{
 				MarkdownDescription: "Force changes, this will force the VM to be stopped and started again",
+				Description:         "Force changes, this will force the VM to be stopped and started again",
 				Optional:            true,
 			},
 			"host": schema.StringAttribute{
@@ -74,26 +75,49 @@ func getSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Virtual Machine OS type",
 				Computed:            true,
 			},
-			"catalog_id": schema.StringAttribute{
-				MarkdownDescription: "Catalog Id to pull",
-				Required:            true,
+			"box_name": schema.StringAttribute{
+				MarkdownDescription: "Vagrant box name",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
+				},
+			},
+			"vagrant_file_path": schema.StringAttribute{
+				MarkdownDescription: "Vagrant file path",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("vagrant_file_path")),
+				},
+			},
+			"box_version": schema.StringAttribute{
+				MarkdownDescription: "Vagrant box version",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"version": schema.StringAttribute{
-				MarkdownDescription: "Catalog version to pull, if empty will pull the 'latest' version",
+			"custom_vagrant_config": schema.StringAttribute{
+				MarkdownDescription: "Custom Vagrant config",
 				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"architecture": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine architecture",
+			"custom_parallels_config": schema.StringAttribute{
+				MarkdownDescription: "Custom Parallels config",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Virtual Machine name to create, this needs to be unique in the host",
+				MarkdownDescription: "Virtual Machine name",
 				Required:            true,
 			},
 			"owner": schema.StringAttribute{
@@ -103,22 +127,8 @@ func getSchema(ctx context.Context) schema.Schema {
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"catalog_connection": schema.StringAttribute{
-				MarkdownDescription: "Parallels DevOps Catalog Connection",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"path": schema.StringAttribute{
-				MarkdownDescription: "Path",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
 			"run_after_create": schema.BoolAttribute{
-				MarkdownDescription: "Run after create, this will make the VM to run after creation",
+				MarkdownDescription: "Run after create",
 				Optional:            true,
 			},
 		},

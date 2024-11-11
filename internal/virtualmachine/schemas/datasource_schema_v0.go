@@ -1,4 +1,4 @@
-package virtualmachine
+package schemas
 
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 )
 
-var virtualMachineDataSourceSchema = schema.Schema{
+var VirtualMachineDataSourceSchemaV0 = schema.Schema{
 	MarkdownDescription: "Virtual Machine Data Source",
 	Blocks: map[string]schema.Block{
 		authenticator.SchemaName: authenticator.SchemaBlock,
@@ -22,25 +22,32 @@ var virtualMachineDataSourceSchema = schema.Schema{
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"host_ip": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The IP address of the host machine",
+						Computed:            true,
 					},
 					"id": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The unique identifier of the virtual machine",
+						Computed:            true,
 					},
 					"name": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The name of the virtual machine",
+						Computed:            true,
 					},
 					"description": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The description of the virtual machine",
+						Computed:            true,
 					},
 					"os_type": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The type of the operating system installed on the virtual machine",
+						Computed:            true,
 					},
 					"state": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The state of the virtual machine",
+						Computed:            true,
 					},
 					"home": schema.StringAttribute{
-						Computed: true,
+						MarkdownDescription: "The path to the virtual machine home directory",
+						Computed:            true,
 					},
 				},
 			},

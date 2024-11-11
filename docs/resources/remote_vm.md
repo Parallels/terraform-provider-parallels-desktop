@@ -14,13 +14,25 @@ Parallels Virtual Machine State Resource
 
 ```terraform
 resource "parallels-desktop_remote_vm" "example_box" {
-  host            = "https://example.com:8080"
-  name            = "example-vm"
-  owner           = "example"
-  catalog_id      = "example-catalog-id"
-  version         = "v1"
-  host_connection = "host=user:VerySecretPassword@example.com"
-  path            = "/Users/example/Parallels"
+  # You can only use one of the following options
+
+  # Use the host if you need to connect directly to a host
+  host = "http://example.com:8080"
+  # Use the orchestrator if you need to connect to a Parallels Orchestrator
+  orchestrator = "https://orchestrator.example.com:443"
+
+  # The name of the VM
+  name = "example-vm"
+  # The owner of the VM, otherwise it will be set as root
+  owner = "example"
+  # The catalog id of the VM from the catalog provider
+  catalog_id = "example-catalog-id"
+  # The version of the VM from the catalog provider
+  version = "v1"
+  # The connection to the catalog provider
+  catalog_connection = "host=user:VerySecretPassword@example.com"
+  # The path where the VM will be stored
+  path = "/Users/example/Parallels"
 
   # This will tell how should we authenticate with the host API
   # you can either use it or leave it empty, if left empty then
@@ -42,6 +54,24 @@ resource "parallels-desktop_remote_vm" "example_box" {
   specs {
     cpu_count   = "2"
     memory_size = "2048"
+  }
+
+  # this flag will set the desired state for the VM
+  # if it is set to true it will keep the VM running otherwise it will stop it
+  # by default it is set to true, so all VMs will be running
+  keep_running = true
+
+  # This will contain the configuration for the port forwarding reverse proxy
+  # in this case we are opening a port to any part in the host, it will not be linked to any
+  # specific vm or container. by default it will listen on 0.0.0.0 (all interfaces)
+  # and the target host will also be 0.0.0.0 (all interfaces) so it will be open to the world
+  # use 
+  reverse_proxy_host {
+    port = "2022"
+
+    tcp_route {
+      target_port = "22"
+    }
   }
 
   # this will allow you to fine grain the configuration of the VM
@@ -120,12 +150,14 @@ resource "parallels-desktop_remote_vm" "example_box" {
 - `config` (Block, Optional) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--config))
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
 - `host` (String) Parallels Desktop DevOps Host
+- `keep_running` (Boolean) This will keep the VM running after the terraform apply
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner
 - `post_processor_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--post_processor_script))
 - `prlctl` (Block List) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--prlctl))
-- `run_after_create` (Boolean) Run after create, this will make the VM to run after creation
+- `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
+- `run_after_create` (Boolean, Deprecated) Run after create, this will make the VM to run after creation
 - `shared_folder` (Block List) Shared Folders Block, this is used to share folders with the virtual machine (see [below for nested schema](#nestedblock--shared_folder))
 - `specs` (Block, Optional) Virtual Machine Specs block, this is used to set the specs of the virtual machine (see [below for nested schema](#nestedblock--specs))
 - `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
@@ -133,7 +165,10 @@ resource "parallels-desktop_remote_vm" "example_box" {
 
 ### Read-Only
 
+- `external_ip` (String) VM external IP address
 - `id` (String) Virtual Machine Id
+- `internal_ip` (String) VM internal IP address
+- `orchestrator_host_id` (String) Orchestrator Host Id if the VM is running in an orchestrator
 - `os_type` (String) Virtual Machine OS type
 
 <a id="nestedblock--authenticator"></a>
@@ -241,6 +276,72 @@ Optional:
 
 - `flag` (String) Set the VM option flag, this will stop the VM if it is running
 - `value` (String) Set the VM option value, this will stop the VM if it is running
+
+
+
+<a id="nestedblock--reverse_proxy_host"></a>
+### Nested Schema for `reverse_proxy_host`
+
+Required:
+
+- `port` (String) Reverse proxy port
+
+Optional:
+
+- `cors` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--cors))
+- `host` (String) Reverse proxy host
+- `http_routes` (Block List) Parallels Desktop DevOps Reverse Proxy Http Route CORS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--http_routes))
+- `tcp_route` (Block, Optional) Parallels Desktop DevOps Reverse Proxy TCP Route configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tcp_route))
+- `tls` (Block, Optional) Parallels Desktop DevOps Reverse Proxy Http Route TLS configuration (see [below for nested schema](#nestedblock--reverse_proxy_host--tls))
+
+Read-Only:
+
+- `id` (String) Reverse proxy Host id
+
+<a id="nestedblock--reverse_proxy_host--cors"></a>
+### Nested Schema for `reverse_proxy_host.cors`
+
+Optional:
+
+- `allowed_headers` (List of String) Allowed headers
+- `allowed_methods` (List of String) Allowed methods
+- `allowed_origins` (List of String) Allowed origins
+- `enabled` (Boolean) Enable CORS
+
+
+<a id="nestedblock--reverse_proxy_host--http_routes"></a>
+### Nested Schema for `reverse_proxy_host.http_routes`
+
+Optional:
+
+- `path` (String) Reverse proxy HTTP Route path
+- `pattern` (String) Reverse proxy HTTP Route pattern
+- `request_headers` (Map of String) Reverse proxy HTTP Route request headers
+- `response_headers` (Map of String) Reverse proxy HTTP Route response headers
+- `schema` (String) Reverse proxy HTTP Route schema
+- `target_host` (String) Reverse proxy HTTP Route target host
+- `target_port` (String) Reverse proxy HTTP Route target port
+- `target_vm_id` (String) Reverse proxy HTTP Route target VM id
+
+
+<a id="nestedblock--reverse_proxy_host--tcp_route"></a>
+### Nested Schema for `reverse_proxy_host.tcp_route`
+
+Optional:
+
+- `target_host` (String) Reverse proxy host
+- `target_port` (String) Reverse proxy port
+- `target_vm_id` (String) Reverse proxy target VM ID
+
+
+<a id="nestedblock--reverse_proxy_host--tls"></a>
+### Nested Schema for `reverse_proxy_host.tls`
+
+Optional:
+
+- `certificate` (String) TLS Certificate
+- `enabled` (Boolean) Enable TLS
+- `private_key` (String) TLS Private Key
 
 
 

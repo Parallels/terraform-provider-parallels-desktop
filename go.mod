@@ -1,6 +1,7 @@
 module terraform-provider-parallels-desktop
 
-go 1.22.0
+go 1.22.7
+
 toolchain go1.22.9
 
 require (

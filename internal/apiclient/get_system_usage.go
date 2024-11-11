@@ -17,7 +17,12 @@ func GetSystemUsage(ctx context.Context, config HostConfig) (*apimodels.SystemUs
 	var response apimodels.SystemUsageResponse
 	urlHost := helpers.GetHostUrl(config.Host)
 
-	url := fmt.Sprintf("%s/config/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	var url string
+	if config.IsOrchestrator {
+		url = fmt.Sprintf("%s/orchestrator/hosts/%s/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost), config.HostId)
+	} else {
+		url = fmt.Sprintf("%s/config/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {

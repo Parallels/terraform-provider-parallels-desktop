@@ -10,9 +10,13 @@ import (
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/postprocessorscript"
+	"terraform-provider-parallels-desktop/internal/schemas/reverseproxy"
 	"terraform-provider-parallels-desktop/internal/telemetry"
+	resource_models "terraform-provider-parallels-desktop/internal/vagrantbox/models"
+	"terraform-provider-parallels-desktop/internal/vagrantbox/schemas"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -39,7 +43,7 @@ func (r *VagrantBoxResource) Metadata(ctx context.Context, req resource.Metadata
 }
 
 func (r *VagrantBoxResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = getSchema(ctx)
+	resp.Schema = schemas.GetResourceSchemaV1(ctx)
 }
 
 func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -60,7 +64,7 @@ func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.Configu
 }
 
 func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data VagrantBoxResourceModel
+	var data resource_models.VagrantBoxResourceModelV1
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -234,13 +238,52 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	// Starting the vm if requested
-	if data.RunAfterCreate.ValueBool() {
+	if len(data.ReverseProxyHosts) > 0 {
+		rpHostConfig := hostConfig
+		rpHostConfig.HostId = stoppedVm.HostId
+		rpHosts, updateDiag := updateReverseProxyHostsTarget(ctx, &data, rpHostConfig, stoppedVm)
+		if updateDiag.HasError() {
+			resp.Diagnostics.Append(updateDiag...)
+			return
+		}
+
+		result, createDiag := reverseproxy.Create(ctx, rpHostConfig, rpHosts)
+		if createDiag.HasError() {
+			resp.Diagnostics.Append(createDiag...)
+
+			if diag := reverseproxy.Delete(ctx, rpHostConfig, rpHosts); diag.HasError() {
+				tflog.Error(ctx, "Error deleting reverse proxy hosts")
+			}
+
+			if data.ID.ValueString() != "" {
+				// If we have an ID, we need to delete the machine
+				apiclient.SetMachineState(ctx, rpHostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+				if _, diag := common.EnsureMachineStopped(ctx, rpHostConfig, stoppedVm); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
+
+				apiclient.DeleteVm(ctx, rpHostConfig, data.ID.ValueString())
+			}
+			return
+		}
+
+		for i := range result {
+			data.ReverseProxyHosts[i].ID = result[i].ID
+		}
+	}
+
+	// Starting the vm by default, otherwise we will stop the VM from being created
+	if data.RunAfterCreate.ValueBool() || data.KeepRunning.ValueBool() || (data.RunAfterCreate.IsUnknown() && data.KeepRunning.IsUnknown()) {
 		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, stoppedVm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			if data.ID.ValueString() != "" {
 				// If we have an ID, we need to delete the machine
 				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
 				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 			}
 			return
@@ -251,7 +294,36 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 			resp.Diagnostics.Append(diag...)
 			return
 		}
+	} else {
+		// If we are not starting the machine, we will stop it
+		if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			if data.ID.ValueString() != "" {
+				// If we have an ID, we need to delete the machine
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
+			return
+		}
 	}
+
+	externalIp := ""
+	internalIp := ""
+	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, response.ID)
+	if refreshDiag.HasError() {
+		resp.Diagnostics.Append(refreshDiag...)
+		return
+	} else {
+		externalIp = refreshVm.HostExternalIpAddress
+		internalIp = refreshVm.InternalIpAddress
+	}
+
+	data.ExternalIp = types.StringValue(externalIp)
+	data.InternalIp = types.StringValue(internalIp)
 
 	data.OsType = types.StringValue(createdVM.OS)
 	if data.OnDestroyScript != nil {
@@ -292,7 +364,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 }
 
 func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data VagrantBoxResourceModel
+	var data resource_models.VagrantBoxResourceModelV1
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -362,8 +434,8 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 }
 
 func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data VagrantBoxResourceModel
-	var currentData VagrantBoxResourceModel
+	var data resource_models.VagrantBoxResourceModelV1
+	var currentData resource_models.VagrantBoxResourceModelV1
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -510,6 +582,81 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 		}
 	}
 
+	if reverseproxy.ReverseProxyHostsDiff(data.ReverseProxyHosts, currentData.ReverseProxyHosts) {
+		copyCurrentRpHosts := reverseproxy.CopyReverseProxyHosts(currentData.ReverseProxyHosts)
+		copyRpHosts := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
+
+		results, updateDiag := reverseproxy.Update(ctx, hostConfig, copyCurrentRpHosts, copyRpHosts)
+		if updateDiag.HasError() {
+			resp.Diagnostics.Append(updateDiag...)
+			revertResults, _ := reverseproxy.Revert(ctx, hostConfig, copyCurrentRpHosts, copyRpHosts)
+			for i := range revertResults {
+				data.ReverseProxyHosts[i].ID = revertResults[i].ID
+			}
+			return
+		}
+
+		for i := range results {
+			data.ReverseProxyHosts[i].ID = results[i].ID
+		}
+	} else {
+		for i := range currentData.ReverseProxyHosts {
+			data.ReverseProxyHosts[i].ID = currentData.ReverseProxyHosts[i].ID
+		}
+	}
+
+	// Starting the vm by default, otherwise we will stop the VM from being created
+	if data.RunAfterCreate.ValueBool() || data.KeepRunning.ValueBool() || (data.RunAfterCreate.IsUnknown() && data.KeepRunning.IsUnknown()) {
+		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, vm); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			if data.ID.ValueString() != "" {
+				// If we have an ID, we need to delete the machine
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, vm); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
+			return
+		}
+
+		_, diag := apiclient.GetVm(ctx, hostConfig, vm.ID)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	} else {
+		// If we are not starting the machine, we will stop it
+		if _, diag := common.EnsureMachineStopped(ctx, hostConfig, vm); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			if data.ID.ValueString() != "" {
+				// If we have an ID, we need to delete the machine
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, vm); diag.HasError() {
+					resp.Diagnostics.Append(diag...)
+					return
+				}
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
+			return
+		}
+	}
+
+	externalIp := ""
+	internalIp := ""
+	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, vm.ID)
+	if refreshDiag.HasError() {
+		resp.Diagnostics.Append(refreshDiag...)
+		return
+	} else {
+		externalIp = refreshVm.HostExternalIpAddress
+		internalIp = refreshVm.InternalIpAddress
+	}
+
+	data.ExternalIp = types.StringValue(externalIp)
+	data.InternalIp = types.StringValue(internalIp)
+
 	data.ID = types.StringValue(vm.ID)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
@@ -546,7 +693,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data VagrantBoxResourceModel
+	var data resource_models.VagrantBoxResourceModelV1
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -659,4 +806,72 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *VagrantBoxResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func updateReverseProxyHostsTarget(ctx context.Context, data *resource_models.VagrantBoxResourceModelV1, hostConfig apiclient.HostConfig, targetVm *apimodels.VirtualMachine) ([]reverseproxy.ReverseProxyHost, diag.Diagnostics) {
+	resultDiagnostic := diag.Diagnostics{}
+	var refreshedVm *apimodels.VirtualMachine
+	var rpDiag diag.Diagnostics
+	refreshedVm, rpDiag = common.EnsureMachineHasInternalIp(ctx, hostConfig, targetVm)
+	if rpDiag.HasError() {
+		resultDiagnostic.Append(rpDiag...)
+		if data.ID.ValueString() != "" {
+			// If we have an ID, we need to delete the machine
+			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, refreshedVm); diag.HasError() {
+				return nil, diag
+			}
+			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+		}
+		return nil, resultDiagnostic
+	}
+
+	modifiedHosts := make([]reverseproxy.ReverseProxyHost, len(data.ReverseProxyHosts))
+	for i := range data.ReverseProxyHosts {
+		host := reverseproxy.ReverseProxyHost{}
+		host.Host = data.ReverseProxyHosts[i].Host
+		host.Port = data.ReverseProxyHosts[i].Port
+		internalIp := refreshedVm.InternalIpAddress
+		emptyString := ""
+
+		if data.ReverseProxyHosts[i].Cors != nil {
+			host.Cors = &reverseproxy.ReverseProxyCors{}
+			host.Cors.AllowedOrigins = data.ReverseProxyHosts[i].Cors.AllowedOrigins
+			host.Cors.AllowedMethods = data.ReverseProxyHosts[i].Cors.AllowedMethods
+			host.Cors.AllowedHeaders = data.ReverseProxyHosts[i].Cors.AllowedHeaders
+			host.Cors.Enabled = data.ReverseProxyHosts[i].Cors.Enabled
+		}
+		if data.ReverseProxyHosts[i].Tls != nil {
+			host.Tls = &reverseproxy.ReverseProxyTls{}
+			host.Tls.Certificate = data.ReverseProxyHosts[i].Tls.Certificate
+			host.Tls.PrivateKey = data.ReverseProxyHosts[i].Tls.PrivateKey
+			host.Tls.Enabled = data.ReverseProxyHosts[i].Tls.Enabled
+		}
+		if data.ReverseProxyHosts[i].TcpRoute != nil {
+			host.TcpRoute = &reverseproxy.ReverseProxyHostTcpRoute{}
+			host.TcpRoute.TargetPort = data.ReverseProxyHosts[i].TcpRoute.TargetPort
+			host.TcpRoute.TargetHost = types.StringValue(internalIp)
+			host.TcpRoute.TargetVmId = types.StringValue(emptyString)
+		}
+
+		if len(data.ReverseProxyHosts[i].HttpRoute) > 0 {
+			host.HttpRoute = make([]*reverseproxy.ReverseProxyHttpRoute, len(data.ReverseProxyHosts[i].HttpRoute))
+			for j := range modifiedHosts[i].HttpRoute {
+				httpRoute := reverseproxy.ReverseProxyHttpRoute{}
+				httpRoute.Path = data.ReverseProxyHosts[i].HttpRoute[j].Path
+				httpRoute.TargetHost = types.StringValue(internalIp)
+				httpRoute.TargetPort = data.ReverseProxyHosts[i].HttpRoute[j].TargetPort
+				httpRoute.TargetVmId = types.StringValue(emptyString)
+				httpRoute.Pattern = data.ReverseProxyHosts[i].HttpRoute[j].Pattern
+				httpRoute.Schema = data.ReverseProxyHosts[i].HttpRoute[j].Schema
+				httpRoute.RequestHeaders = data.ReverseProxyHosts[i].HttpRoute[j].RequestHeaders
+				httpRoute.ResponseHeaders = data.ReverseProxyHosts[i].HttpRoute[j].ResponseHeaders
+				host.HttpRoute[j] = &httpRoute
+			}
+		}
+
+		modifiedHosts[i] = host
+	}
+
+	return modifiedHosts, resultDiagnostic
 }

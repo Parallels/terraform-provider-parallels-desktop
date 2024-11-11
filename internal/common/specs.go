@@ -8,7 +8,6 @@ import (
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
-	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/vmspecs"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -46,15 +45,8 @@ func SpecsBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm
 
 	changes := apimodels.NewVmConfigRequest(vm.User)
 	if vm.State == "running" {
-		// Because this is an update we need to take into account the already existing cpu and add it to the total available
-		// if the vm is running, otherwise we already added that value to the reserved resources
-		hardwareInfo.TotalAvailable.LogicalCpuCount = hardwareInfo.TotalAvailable.LogicalCpuCount + vm.Hardware.CPU.Cpus
-		currentMemoryUsage, err := helpers.GetSizeByteFromString(vm.Hardware.Memory.Size)
-		if err != nil {
-			diagnostics.AddError("error getting memory size", err.Error())
-			return diagnostics
-		}
-		hardwareInfo.TotalAvailable.MemorySize = hardwareInfo.TotalAvailable.MemorySize + helpers.ConvertByteToMegabyte(currentMemoryUsage)
+		diagnostics.AddError("cannot update vm", "vm is running")
+		return diagnostics
 	}
 
 	if planSpecs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {

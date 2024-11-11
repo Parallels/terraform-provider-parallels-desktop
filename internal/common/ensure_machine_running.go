@@ -44,12 +44,20 @@ func EnsureMachineRunning(ctx context.Context, hostConfig apiclient.HostConfig, 
 				diagnostics.Append(checkVmDiag...)
 			}
 
-			// All if good, break out of the loop
+			// The machine is running, lets check if we have the tools initialized
 			if updatedVm.State == "running" {
-				tflog.Info(ctx, "Machine "+returnVm.Name+" is running")
-				diagnostics = diag.Diagnostics{}
-				returnVm = updatedVm
-				break
+				echoHelloCommand := apimodels.PostScriptItem{
+					Command:          "echo 'I am running'",
+					VirtualMachineId: updatedVm.ID,
+				}
+
+				// Only breaking out of the loop if the script executes successfully
+				if _, execDiag := apiclient.ExecuteScript(ctx, hostConfig, echoHelloCommand); !execDiag.HasError() {
+					tflog.Info(ctx, "Machine "+returnVm.Name+" is running")
+					diagnostics = diag.Diagnostics{}
+					returnVm = updatedVm
+					break
+				}
 			}
 
 			// We have run out of retries, add an error and break out of the loop

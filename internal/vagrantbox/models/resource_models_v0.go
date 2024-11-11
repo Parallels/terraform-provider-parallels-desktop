@@ -1,4 +1,4 @@
-package vagrantbox
+package models
 
 import (
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -13,7 +13,7 @@ import (
 )
 
 // VirtualMachineStateResourceModel describes the resource data model.
-type VagrantBoxResourceModel struct {
+type VagrantBoxResourceModelV0 struct {
 	Authenticator         *authenticator.Authentication              `tfsdk:"authenticator"`
 	Host                  types.String                               `tfsdk:"host"`
 	Orchestrator          types.String                               `tfsdk:"orchestrator"`

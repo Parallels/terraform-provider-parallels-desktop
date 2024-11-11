@@ -14,13 +14,25 @@ Parallels Virtual Machine State Resource
 
 ```terraform
 resource "parallels-desktop_remote_vm" "example_box" {
-  host            = "https://example.com:8080"
-  name            = "example-vm"
-  owner           = "example"
-  catalog_id      = "example-catalog-id"
-  version         = "v1"
-  host_connection = "host=user:VerySecretPassword@example.com"
-  path            = "/Users/example/Parallels"
+  # You can only use one of the following options
+
+  # Use the host if you need to connect directly to a host
+  host = "http://example.com:8080"
+  # Use the orchestrator if you need to connect to a Parallels Orchestrator
+  orchestrator = "https://orchestrator.example.com:443"
+
+  # The name of the VM
+  name = "example-vm"
+  # The owner of the VM, otherwise it will be set as root
+  owner = "example"
+  # The catalog id of the VM from the catalog provider
+  catalog_id = "example-catalog-id"
+  # The version of the VM from the catalog provider
+  version = "v1"
+  # The connection to the catalog provider
+  catalog_connection = "host=user:VerySecretPassword@example.com"
+  # The path where the VM will be stored
+  path = "/Users/example/Parallels"
 
   # This will tell how should we authenticate with the host API
   # you can either use it or leave it empty, if left empty then
@@ -42,6 +54,24 @@ resource "parallels-desktop_remote_vm" "example_box" {
   specs {
     cpu_count   = "2"
     memory_size = "2048"
+  }
+
+  # this flag will set the desired state for the VM
+  # if it is set to true it will keep the VM running otherwise it will stop it
+  # by default it is set to true, so all VMs will be running
+  keep_running = true
+
+  # This will contain the configuration for the port forwarding reverse proxy
+  # in this case we are opening a port to any part in the host, it will not be linked to any
+  # specific vm or container. by default it will listen on 0.0.0.0 (all interfaces)
+  # and the target host will also be 0.0.0.0 (all interfaces) so it will be open to the world
+  # use 
+  reverse_proxy_host {
+    port = "2022"
+
+    tcp_route {
+      target_port = "22"
+    }
   }
 
   # this will allow you to fine grain the configuration of the VM

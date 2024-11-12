@@ -14,4 +14,5 @@ type VirtualMachineStateResourceModelV1 struct {
 	ID            types.String                  `tfsdk:"id"`
 	Operation     types.String                  `tfsdk:"operation"`
 	CurrentState  types.String                  `tfsdk:"current_state"`
+	EnsureState   types.Bool                    `tfsdk:"ensure_state"`
 }

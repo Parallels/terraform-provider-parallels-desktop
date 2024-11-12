@@ -34,7 +34,7 @@ func New(context context.Context) *TelemetryService {
 
 	config := amplitude.NewConfig(key)
 	config.FlushQueueSize = 100
-	config.FlushInterval = time.Second * 5
+	config.FlushInterval = time.Second * 3
 	// adding a callback to read what is the status
 	config.ExecuteCallback = func(result types.ExecuteResult) {
 		svc.Callback(result)

@@ -2,7 +2,6 @@ package models
 
 import (
 	"strings"
-
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -127,15 +126,19 @@ func (o *DeployResourceModelV2) GenerateApiHostConfig(provider *models.Parallels
 
 		DisableTlsValidation: provider.DisableTlsValidation.ValueBool(),
 	}
+
 	api_port := strings.ReplaceAll(o.ApiConfig.Port.ValueString(), "\"", "")
 	api_schema := "http"
+
+	if o.ApiConfig.EnableTLS.ValueBool() {
+		api_schema = "https"
+		api_port = strings.ReplaceAll(o.ApiConfig.TLSPort.ValueString(), "\"", "")
+	}
 
 	if api_port != "" {
 		hostConfig.Host = hostConfig.Host + ":" + api_port
 	}
-	if o.ApiConfig.EnableTLS.ValueBool() {
-		api_schema = "https"
-	}
+
 	hostConfig.Host = api_schema + "://" + hostConfig.Host
 
 	return hostConfig

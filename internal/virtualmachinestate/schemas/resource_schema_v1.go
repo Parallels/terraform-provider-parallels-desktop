@@ -61,5 +61,9 @@ var VirtualMachineStateResourceSchemaV1 = schema.Schema{
 			Computed:            true,
 			MarkdownDescription: "Virtual Machine current state",
 		},
+		"ensure_state": schema.BoolAttribute{
+			MarkdownDescription: "Ensure the virtual machine is in the desired state",
+			Optional:            true,
+		},
 	},
 }

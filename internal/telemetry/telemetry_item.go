@@ -41,5 +41,7 @@ func NewTelemetryItem(ctx context.Context, userId string, eventType TelemetryEve
 		item.Properties["user_id"] = hashedUserId
 	}
 
+	item.UserID = hashedUserId
+
 	return item
 }

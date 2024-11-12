@@ -202,6 +202,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
+	if createdVM == nil {
+		resp.Diagnostics.AddError("VM not found", "There was an issue creating the VM, we could not find it in the host")
+		return
+	}
+
 	hostConfig.HostId = createdVM.HostId
 
 	// stopping the machine as it might need some operations where the machine needs to be stopped

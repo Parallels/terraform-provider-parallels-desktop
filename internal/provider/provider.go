@@ -10,6 +10,7 @@ import (
 	"terraform-provider-parallels-desktop/internal/remoteimage"
 	"terraform-provider-parallels-desktop/internal/vagrantbox"
 	"terraform-provider-parallels-desktop/internal/virtualmachine"
+	"terraform-provider-parallels-desktop/internal/virtualmachinestate"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -122,7 +123,7 @@ func (p *ParallelsProvider) DataSources(_ context.Context) []func() datasource.D
 // Resources defines the resources implemented in the provider.
 func (p *ParallelsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		// virtualmachinestate.NewVirtualMachineStateResource,
+		virtualmachinestate.NewVirtualMachineStateResource,
 		deploy.NewDeployResource,
 		// packertemplate.NewPackerTemplateVirtualMachineResource,
 		authorization.NewAuthorizationResource,

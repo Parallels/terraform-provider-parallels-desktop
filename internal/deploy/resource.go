@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
 	"terraform-provider-parallels-desktop/internal/common"
-	deploy_models "terraform-provider-parallels-desktop/internal/deploy/models"
 	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	"terraform-provider-parallels-desktop/internal/localclient"
@@ -16,8 +14,9 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 	"terraform-provider-parallels-desktop/internal/schemas/reverseproxy"
 	"terraform-provider-parallels-desktop/internal/ssh"
-
 	"terraform-provider-parallels-desktop/internal/telemetry"
+
+	deploy_models "terraform-provider-parallels-desktop/internal/deploy/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -1011,6 +1010,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 	password := strings.ReplaceAll(data.ApiConfig.RootPassword.String(), "\"", "")
 	if data.ApiConfig.EnableTLS.ValueBool() {
 		schema = "https"
+		port = strings.ReplaceAll(data.ApiConfig.TLSPort.String(), "\"", "")
 	}
 
 	if currentData != nil {

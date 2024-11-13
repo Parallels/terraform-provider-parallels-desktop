@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/common"
 	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 	"terraform-provider-parallels-desktop/internal/interfaces"
@@ -851,9 +852,14 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	diag := diag.Diagnostics{}
 	var installDependenciesError error
 	var installed_dependencies []string
+	mandatoryDependencies := []string{
+		"brew",
+		"git",
+		"vagrant",
+	}
 
 	// installing dependencies
-	installed_dependencies, installDependenciesError = parallelsClient.InstallDependencies()
+	installed_dependencies, installDependenciesError = parallelsClient.InstallDependencies(mandatoryDependencies)
 	if installDependenciesError != nil {
 		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {

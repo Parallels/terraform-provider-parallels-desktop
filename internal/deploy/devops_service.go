@@ -79,36 +79,65 @@ func (c *DevOpsServiceClient) RestartServer() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallDependencies() ([]string, error) {
+func containsDependency(arr []string, value string) bool {
+	for _, v := range arr {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]string, error) {
 	installed_dependencies := []string{}
 	_, ok := c.client.(*localclient.LocalClient)
+
+	if err := c.InstallBrew(); err != nil {
+		return installed_dependencies, err
+	}
+	installed_dependencies = append(installed_dependencies, "brew")
+
 	if !ok {
-		if err := c.InstallBrew(); err != nil {
-			return installed_dependencies, err
-		}
-
-		gitPresent := c.findPath("git")
-		if gitPresent == "" {
-			if err := c.InstallGit(); err != nil {
-				return installed_dependencies, err
+		for _, dep := range listToInstall {
+			switch dep {
+			case "brew":
+				brewPresent := c.findPath("brew")
+				if brewPresent == "" {
+					if err := c.InstallBrew(); err != nil {
+						return installed_dependencies, err
+					}
+					installed_dependencies = append(installed_dependencies, "brew")
+				}
+			case "git":
+				gitPresent := c.findPath("git")
+				brewPresent := c.findPath("brew")
+				if gitPresent == "" && brewPresent == "" {
+					if err := c.InstallGit(); err != nil {
+						return installed_dependencies, err
+					}
+					installed_dependencies = append(installed_dependencies, "git")
+				}
+			case "packer":
+				packerPresent := c.findPath("packer")
+				brewPresent := c.findPath("brew")
+				if packerPresent == "" && brewPresent == "" {
+					if err := c.InstallPacker(); err != nil {
+						return installed_dependencies, err
+					}
+					installed_dependencies = append(installed_dependencies, "packer")
+				}
+			case "vagrant":
+				vagrantPresent := c.findPath("vagrant")
+				brewPresent := c.findPath("brew")
+				if vagrantPresent == "" && brewPresent == "" {
+					if err := c.InstallVagrant(); err != nil {
+						return installed_dependencies, err
+					}
+					installed_dependencies = append(installed_dependencies, "vagrant")
+				}
+			default:
+				return installed_dependencies, errors.New("Unsupported dependency")
 			}
-			installed_dependencies = append(installed_dependencies, "git")
-		}
-
-		packerPresent := c.findPath("packer")
-		if packerPresent == "" {
-			if err := c.InstallPacker(); err != nil {
-				return installed_dependencies, err
-			}
-			installed_dependencies = append(installed_dependencies, "packer")
-		}
-
-		vagrantPresent := c.findPath("vagrant")
-		if vagrantPresent == "" {
-			if err := c.InstallVagrant(); err != nil {
-				return installed_dependencies, err
-			}
-			installed_dependencies = append(installed_dependencies, "vagrant")
 		}
 	} else {
 		return installed_dependencies, errors.New("Unsupported client")

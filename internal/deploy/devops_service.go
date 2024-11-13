@@ -79,15 +79,6 @@ func (c *DevOpsServiceClient) RestartServer() error {
 	return nil
 }
 
-func containsDependency(arr []string, value string) bool {
-	for _, v := range arr {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]string, error) {
 	installed_dependencies := []string{}
 	_, ok := c.client.(*localclient.LocalClient)

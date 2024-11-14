@@ -2,6 +2,7 @@ package models
 
 import (
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -115,6 +116,10 @@ func (p *ParallelsDesktopDevopsConfigV2) MapObject() basetypes.ObjectValue {
 }
 
 func (o *DeployResourceModelV2) GenerateApiHostConfig(provider *models.ParallelsProviderModel) apiclient.HostConfig {
+	if o.Api.IsNull() || o.Api.IsUnknown() {
+		return apiclient.HostConfig{}
+	}
+
 	hostConfig := apiclient.HostConfig{
 		IsOrchestrator: false,
 		Host:           strings.ReplaceAll(o.SshConnection.Host.String(), "\"", ""),

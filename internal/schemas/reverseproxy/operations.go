@@ -22,11 +22,11 @@ func Read() diag.Diagnostics {
 
 func Create(ctx context.Context, config apiclient.HostConfig, request []ReverseProxyHost) ([]ReverseProxyHost, diag.Diagnostics) {
 	diagnostic := diag.Diagnostics{}
-	for _, host := range request {
+	for i, host := range request {
 		if h, diag := createHost(ctx, config, host); diag.HasError() {
 			diagnostic = append(diagnostic, diag...)
 		} else {
-			host.ID = h.ID
+			request[i].ID = h.ID
 		}
 	}
 

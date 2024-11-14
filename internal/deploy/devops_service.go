@@ -90,14 +90,22 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 
 	if !ok {
 		for _, dep := range listToInstall {
-			switch dep {
+			switch strings.ToLower(dep) {
 			case "brew":
 				brewPresent := c.findPath("brew")
 				if brewPresent == "" {
 					if err := c.InstallBrew(); err != nil {
 						return installed_dependencies, err
 					}
-					installed_dependencies = append(installed_dependencies, "brew")
+					isAlreadyInInstalledDependencies := false
+					for _, installedDep := range installed_dependencies {
+						if installedDep == "brew" {
+							isAlreadyInInstalledDependencies = true
+						}
+					}
+					if !isAlreadyInInstalledDependencies {
+						installed_dependencies = append(installed_dependencies, "brew")
+					}
 				}
 			case "git":
 				gitPresent := c.findPath("git")
@@ -127,7 +135,7 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 					installed_dependencies = append(installed_dependencies, "vagrant")
 				}
 			default:
-				return installed_dependencies, errors.New("Unsupported dependency")
+				return installed_dependencies, errors.New("Unsupported dependency " + dep + " to install")
 			}
 		}
 	} else {

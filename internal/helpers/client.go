@@ -133,6 +133,7 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-No-Cache", "true")
 	if headers != nil && len(*headers) > 0 {
 		for k, v := range *headers {
 			req.Header.Set(k, v)

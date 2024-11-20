@@ -335,6 +335,11 @@ func updateHost(ctx context.Context, config apiclient.HostConfig, currentHost Re
 	if createDiag.HasError() {
 		diagnostic = append(diagnostic, createDiag...)
 	}
+	if r == nil {
+		errDiag := diag.NewErrorDiagnostic("Failed to create reverse proxy host", "The reverse proxy response was nil")
+		diagnostic = append(diagnostic, errDiag)
+		return requestHost, diagnostic
+	}
 
 	requestHost.ID = types.StringValue(r.ID)
 	return requestHost, diagnostic

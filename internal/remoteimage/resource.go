@@ -706,7 +706,6 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 			}
 			return
 		}
@@ -864,6 +863,16 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 		_ = common.RunPostProcessorScript(ctx, hostConfig, vm, data.OnDestroyScript)
 	}
 
+	if len(data.ReverseProxyHosts) > 0 {
+		rpHostConfig := hostConfig
+		rpHostConfig.HostId = vm.HostId
+		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
+		if diag := reverseproxy.Delete(ctx, rpHostConfig, rpHostsCopy); diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+	}
+
 	// Stopping the machine
 	if _, stopDiag := common.EnsureMachineStopped(ctx, hostConfig, vm); stopDiag.HasError() {
 		resp.Diagnostics.Append(stopDiag...)
@@ -895,16 +904,6 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 		}
 
 		time.Sleep(10 * time.Second)
-	}
-
-	if len(data.ReverseProxyHosts) > 0 {
-		rpHostConfig := hostConfig
-		rpHostConfig.HostId = vm.HostId
-		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
-		if diag := reverseproxy.Delete(ctx, rpHostConfig, rpHostsCopy); diag.HasError() {
-			resp.Diagnostics.Append(diag...)
-			return
-		}
 	}
 
 	resp.Diagnostics.Append(req.State.Set(ctx, &data)...)

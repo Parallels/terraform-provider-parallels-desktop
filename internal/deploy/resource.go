@@ -455,7 +455,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// getting parallels version
 	if version, err := parallelsClient.GetVersion(); err != nil {
-		resp.Diagnostics.AddError("Error getting parallels version", err.Error())
+		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
 		data.CurrentVersion = types.StringValue(version)
@@ -463,7 +463,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// getting git version
 	if version, err := parallelsClient.GetGitVersion(); err != nil {
-		resp.Diagnostics.AddError("Error getting git version", err.Error())
+		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
 		data.CurrentGitVersion = types.StringValue(version)
@@ -471,7 +471,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// getting packer version
 	if version, err := parallelsClient.GetPackerVersion(); err != nil {
-		resp.Diagnostics.AddError("Error getting packer version", err.Error())
+		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
 		data.CurrentPackerVersion = types.StringValue(version)
@@ -479,7 +479,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// getting Vagrant version
 	if version, err := parallelsClient.GetVagrantVersion(); err != nil {
-		resp.Diagnostics.AddError("Error getting vagrant version", err.Error())
+		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
 		data.CurrentVagrantVersion = types.StringValue(version)

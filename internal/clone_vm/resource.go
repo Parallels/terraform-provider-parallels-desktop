@@ -134,9 +134,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Checking if the name is already in use
-	existingVms, diag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	existingVms, existingVmDiag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
+	if existingVmDiag.HasError() {
+		resp.Diagnostics.Append(existingVmDiag...)
 		return
 	}
 
@@ -146,9 +146,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Checking if we can find the base vm to clone
-	vm, diag := apiclient.GetVm(ctx, hostConfig, data.BaseVmId.ValueString())
-	if diag.HasError() {
-		diag.Append(diag...)
+	vm, getVmDiag := apiclient.GetVm(ctx, hostConfig, data.BaseVmId.ValueString())
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 
@@ -177,9 +177,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Checking if we can find the base vm to clone
-	createdVms, diag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
-	if diag.HasError() {
-		diag.Append(diag...)
+	createdVms, createVmDiag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
+	if createVmDiag.HasError() {
+		resp.Diagnostics.Append(createVmDiag...)
 		return
 	}
 	if len(createdVms) != 1 {
@@ -194,9 +194,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	// stopping the machine as it might need some operations where the machine needs to be stopped
 	// add anything here in sequence that needs to be done before the machine is started
 	// so we do not loose time waiting for the machine to stop
-	stoppedVm, diag := common.EnsureMachineStopped(ctx, hostConfig, &clonedVm)
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	stoppedVm, stoppedVmDiag := common.EnsureMachineStopped(ctx, hostConfig, &clonedVm)
+	if stoppedVmDiag.HasError() {
+		resp.Diagnostics.Append(stoppedVmDiag...)
 	}
 
 	// Applying the Specs block
@@ -331,13 +331,24 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, vm.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, vm.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.ExternalIp = types.StringValue(externalIp)
@@ -507,15 +518,16 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	vm, getVmDiag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 	if vm == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	currentVmState := vm.State
 
 	nameChanges := apimodels.NewVmConfigRequest(vm.User)
 	currentState := vm.State
@@ -666,13 +678,24 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, vm.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, vm.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.ID = types.StringValue(refreshVm.ID)
@@ -702,6 +725,37 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 			}
 
 			script.Result = listValue
+		}
+	}
+
+	if currentVmState != refreshVm.State {
+		// If the vm state is desync we nee to set it right
+		switch currentVmState {
+		case "running":
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+			if refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+		case "stopped":
+			if refreshVm.State == "running" || refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			}
+		case "paused":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+		case "suspended":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
 		}
 	}
 

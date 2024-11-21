@@ -21,20 +21,24 @@ func EnsureMachineRunning(ctx context.Context, hostConfig apiclient.HostConfig, 
 		return vm, diagnostics
 	}
 
-	maxRetries := 10
+	maxRetries := 20
 	retryCount := 0
 	for {
 		diagnostics = diag.Diagnostics{}
 		retryCount += 1
 		if returnVm.State != "running" {
 			tflog.Info(ctx, "Machine "+returnVm.Name+" is not running, starting it"+fmt.Sprintf("[%v/%v]", retryCount, maxRetries))
-			result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, returnVm.ID, apiclient.MachineStateOpStart)
+			op := apiclient.MachineStateOpStart
+			if returnVm.State == "suspended" || returnVm.State == "paused" {
+				op = apiclient.MachineStateOpResume
+			}
+			result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, returnVm.ID, op)
 			if stateDiag.HasError() {
 				diagnostics.Append(stateDiag...)
 			}
 
 			if !result {
-				diagnostics.AddError("error starting vm", "error starting vm")
+				diagnostics.AddError("Error starting vm", "Could not set the state of the machine to running")
 			}
 
 			tflog.Info(ctx, "Checking if "+returnVm.Name+" is running")
@@ -62,7 +66,7 @@ func EnsureMachineRunning(ctx context.Context, hostConfig apiclient.HostConfig, 
 
 			// We have run out of retries, add an error and break out of the loop
 			if retryCount >= maxRetries {
-				diagnostics.AddError("error starting vm", "error starting vm")
+				diagnostics.AddError("Error starting vm", "Could not verify the state of the machine after starting, retry count exceeded")
 				break
 			}
 

@@ -62,7 +62,7 @@ func SpecsBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm
 		}
 
 		if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
-			diagnostics.AddError("not enough cpus", "not enough cpus")
+			diagnostics.AddError("Not enough cpus", "You requested more cpus than available, the machine will need "+updateValue+" cpus and we have "+fmt.Sprintf("%v", hardwareInfo.TotalAvailable.LogicalCpuCount))
 			return diagnostics
 		}
 
@@ -88,7 +88,7 @@ func SpecsBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm
 		}
 
 		if hardwareInfo.TotalAvailable.MemorySize-float64(updateValueInt) <= 0 {
-			diagnostics.AddError("not enough memory", "not enough memory")
+			diagnostics.AddError("Not enough memory", "You requested more memory than available, the machine will need "+updateValue+" memory and we have "+fmt.Sprintf("%v", hardwareInfo.TotalAvailable.MemorySize))
 			return diagnostics
 		}
 

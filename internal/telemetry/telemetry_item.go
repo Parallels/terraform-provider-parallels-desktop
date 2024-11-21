@@ -32,6 +32,9 @@ func NewTelemetryItem(ctx context.Context, userId string, eventType TelemetryEve
 	// Adding default properties
 	item.Properties["os"] = runtime.GOOS
 	item.Properties["architecture"] = runtime.GOARCH
+	if VERSION != "" {
+		item.Properties["version"] = VERSION
+	}
 
 	hash := crypto.SHA256.New()
 	hash.Write([]byte(userId))

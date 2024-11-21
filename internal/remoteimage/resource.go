@@ -369,13 +369,24 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, response.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, refreshVm.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.OsType = types.StringValue(createdVM.OS)
@@ -557,15 +568,16 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	vm, getVmDiag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 	if vm == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	currentVmState := vm.State
 
 	hostConfig.HostId = vm.HostId
 
@@ -609,9 +621,9 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 
 	// Changing the name of the machine
 	if nameChanges.HasChanges() {
-		_, diag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, nameChanges)
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
+		_, nameChangeDiag := apiclient.ConfigureMachine(ctx, hostConfig, vm.ID, nameChanges)
+		if nameChangeDiag.HasError() {
+			resp.Diagnostics.Append(nameChangeDiag...)
 			return
 		}
 	}
@@ -624,8 +636,8 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 			return
 		}
 
-		if diags := common.SpecsBlockOnUpdate(ctx, hostConfig, vm, data.Specs, currentData.Specs); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
+		if specBlockDiag := common.SpecsBlockOnUpdate(ctx, hostConfig, vm, data.Specs, currentData.Specs); specBlockDiag.HasError() {
+			resp.Diagnostics.Append(specBlockDiag...)
 			return
 		}
 	}
@@ -734,13 +746,24 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, vm.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, vm.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.ID = types.StringValue(vm.ID)
@@ -775,7 +798,39 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 
-	if (data.RunAfterCreate.ValueBool() || data.RunAfterCreate.IsUnknown() || data.RunAfterCreate.IsNull()) && (vm.State == "stopped") {
+	if currentVmState != refreshVm.State {
+		// If the vm state is desync we nee to set it right
+		switch currentVmState {
+		case "running":
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+			if refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+		case "stopped":
+			if refreshVm.State == "running" || refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			}
+		case "paused":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+		case "suspended":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+		}
+	}
+
+	if (data.RunAfterCreate.ValueBool() || data.KeepRunning.ValueBool() || (data.RunAfterCreate.IsUnknown() && data.KeepRunning.IsUnknown())) &&
+		(vm.State == "stopped") {
 		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, vm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return

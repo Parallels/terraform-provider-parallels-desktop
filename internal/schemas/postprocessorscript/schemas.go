@@ -38,6 +38,10 @@ var (
 					Optional:            true,
 					ElementType:         types.StringType,
 				},
+				"always_run_on_update": schema.BoolAttribute{
+					MarkdownDescription: "Always run on update",
+					Optional:            true,
+				},
 				"result": schema.ListNestedAttribute{
 					MarkdownDescription: "Result of the script",
 					Description:         "Result of the script",

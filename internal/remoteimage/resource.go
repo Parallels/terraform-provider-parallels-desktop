@@ -378,6 +378,13 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break
@@ -755,6 +762,13 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break

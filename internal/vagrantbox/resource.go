@@ -322,6 +322,13 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break
@@ -667,6 +674,13 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break

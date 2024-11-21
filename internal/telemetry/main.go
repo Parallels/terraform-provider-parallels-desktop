@@ -14,6 +14,7 @@ var (
 	globalTelemetryService *TelemetryService
 	lock                          = &sync.Mutex{}
 	AMPLITUDE_API_KEY      string = ""
+	VERSION                       = ""
 )
 
 func New(context context.Context) *TelemetryService {

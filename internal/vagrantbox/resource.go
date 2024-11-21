@@ -127,9 +127,9 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
-	vm, diag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
-	if diag.HasError() {
-		diag.Append(diag...)
+	vm, getVmDiag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 
@@ -153,18 +153,18 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		createVmRequest.Owner = data.Owner.ValueString()
 	}
 
-	response, diag := apiclient.CreateVm(ctx, hostConfig, createVmRequest)
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	response, createVmDiag := apiclient.CreateVm(ctx, hostConfig, createVmRequest)
+	if createVmDiag.HasError() {
+		resp.Diagnostics.Append(createVmDiag...)
 		return
 	}
 
 	data.ID = types.StringValue(response.ID)
 	tflog.Info(ctx, "Created vm with id "+data.ID.ValueString())
 
-	createdVM, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	createdVM, getVmDiag := apiclient.GetVm(ctx, hostConfig, response.ID)
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 
@@ -176,9 +176,9 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	// stopping the machine as it might need some operations where the machine needs to be stopped
 	// add anything here in sequence that needs to be done before the machine is started
 	// so we do not loose time waiting for the machine to stop
-	stoppedVm, diag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	stoppedVm, stoppedVmDiag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
+	if stoppedVmDiag.HasError() {
+		resp.Diagnostics.Append(stoppedVmDiag...)
 	}
 
 	// Applying the Specs block
@@ -313,13 +313,24 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, response.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, response.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.ExternalIp = types.StringValue(externalIp)
@@ -486,15 +497,17 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	vm, diag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	vm, getVmDiag := apiclient.GetVm(ctx, hostConfig, currentData.ID.ValueString())
+	if getVmDiag.HasError() {
+		resp.Diagnostics.Append(getVmDiag...)
 		return
 	}
 	if vm == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
+
+	currentVmState := vm.State
 
 	nameChanges := apimodels.NewVmConfigRequest(vm.User)
 	currentState := vm.State
@@ -645,13 +658,24 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	externalIp := ""
 	internalIp := ""
-	refreshVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, vm.ID)
-	if refreshDiag.HasError() {
-		resp.Diagnostics.Append(refreshDiag...)
-		return
-	} else {
-		externalIp = refreshVm.HostExternalIpAddress
-		internalIp = refreshVm.InternalIpAddress
+	retryAttempts := 10
+	var refreshVm *apimodels.VirtualMachine
+	var refreshDiag diag.Diagnostics
+	for {
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, vm.ID)
+		if !refreshDiag.HasError() {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = refreshVm.InternalIpAddress
+		}
+		if internalIp != "" {
+			time.Sleep(5 * time.Second)
+			break
+		}
+		if retryAttempts == 0 {
+			internalIp = "-"
+			break
+		}
+		retryAttempts--
 	}
 
 	data.ExternalIp = types.StringValue(externalIp)
@@ -681,6 +705,37 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 			}
 
 			script.Result = listValue
+		}
+	}
+
+	if currentVmState != refreshVm.State {
+		// If the vm state is desync we nee to set it right
+		switch currentVmState {
+		case "running":
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+			if refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+		case "stopped":
+			if refreshVm.State == "running" || refreshVm.State == "paused" || refreshVm.State == "suspended" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			}
+		case "paused":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
+		case "suspended":
+			if refreshVm.State == "running" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpResume)
+			}
+			if refreshVm.State == "stopped" {
+				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStart)
+			}
 		}
 	}
 

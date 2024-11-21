@@ -18,6 +18,7 @@ import (
 type PostProcessorScript struct {
 	Inline               types.List                `tfsdk:"inline"`
 	Retry                *PostProcessorScriptRetry `tfsdk:"retry"`
+	AlwaysRunOnUpdate    types.Bool                `tfsdk:"always_run_on_update"`
 	EnvironmentVariables map[string]types.String   `tfsdk:"environment_variables"`
 	Result               basetypes.ListValue       `tfsdk:"result"`
 }

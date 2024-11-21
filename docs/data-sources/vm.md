@@ -44,6 +44,7 @@ data "parallels-desktop_vm" "example" {
 - `filter` (Block, Optional) Filter block, this is used to filter data sources (see [below for nested schema](#nestedblock--filter))
 - `host` (String) Parallels Desktop DevOps Host
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator
+- `wait_for_network_up` (Boolean) Wait for network up
 
 ### Read-Only
 

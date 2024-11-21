@@ -189,6 +189,7 @@ Optional:
 
 Optional:
 
+- `always_run_on_update` (Boolean) Always run on update
 - `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
 - `inline` (List of String) Inline script
 - `retry` (Block, Optional) Retry settings (see [below for nested schema](#nestedblock--on_destroy_script--retry))
@@ -223,6 +224,7 @@ Optional:
 
 Optional:
 
+- `always_run_on_update` (Boolean) Always run on update
 - `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
 - `inline` (List of String) Inline script
 - `retry` (Block, Optional) Retry settings (see [below for nested schema](#nestedblock--post_processor_script--retry))

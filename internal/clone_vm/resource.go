@@ -340,6 +340,13 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break
@@ -687,6 +694,13 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
 		}
+
+		if refreshVm.State != "running" {
+			externalIp = refreshVm.HostExternalIpAddress
+			internalIp = "-"
+			break
+		}
+
 		if internalIp != "" {
 			time.Sleep(5 * time.Second)
 			break

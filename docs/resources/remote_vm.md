@@ -166,6 +166,7 @@ resource "parallels-desktop_remote_vm" "example_box" {
 ### Read-Only
 
 - `external_ip` (String) VM external IP address
+- `host_url` (String) Parallels Desktop DevOps Host URL
 - `id` (String) Virtual Machine Id
 - `internal_ip` (String) VM internal IP address
 - `orchestrator_host_id` (String) Orchestrator Host Id if the VM is running in an orchestrator

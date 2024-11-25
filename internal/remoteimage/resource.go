@@ -43,7 +43,7 @@ func (r *RemoteVmResource) Metadata(ctx context.Context, req resource.MetadataRe
 }
 
 func (r *RemoteVmResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schemas.GetRemoteImageSchemaV1(ctx)
+	resp.Schema = schemas.GetRemoteImageSchemaV2(ctx)
 }
 
 func (r *RemoteVmResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -64,7 +64,7 @@ func (r *RemoteVmResource) Configure(ctx context.Context, req resource.Configure
 }
 
 func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data models.RemoteVmResourceModelV1
+	var data models.RemoteVmResourceModelV2
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -369,11 +369,12 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 
 	externalIp := ""
 	internalIp := ""
+	data.HostUrl = types.StringValue(stoppedVm.HostUrl)
 	retryAttempts := 10
 	var refreshVm *apimodels.VirtualMachine
 	var refreshDiag diag.Diagnostics
 	for {
-		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, refreshVm.ID)
+		refreshVm, refreshDiag = apiclient.GetVm(ctx, hostConfig, stoppedVm.ID)
 		if !refreshDiag.HasError() {
 			externalIp = refreshVm.HostExternalIpAddress
 			internalIp = refreshVm.InternalIpAddress
@@ -450,7 +451,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 }
 
 func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data models.RemoteVmResourceModelV1
+	var data models.RemoteVmResourceModelV2
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -522,8 +523,8 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 }
 
 func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data models.RemoteVmResourceModelV1
-	var currentData models.RemoteVmResourceModelV1
+	var data models.RemoteVmResourceModelV2
+	var currentData models.RemoteVmResourceModelV2
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -753,6 +754,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 
 	externalIp := ""
 	internalIp := ""
+	data.HostUrl = types.StringValue(vm.HostUrl)
 	retryAttempts := 10
 	var refreshVm *apimodels.VirtualMachine
 	var refreshDiag diag.Diagnostics
@@ -860,7 +862,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 }
 
 func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data models.RemoteVmResourceModelV1
+	var data models.RemoteVmResourceModelV2
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -988,10 +990,15 @@ func (r *RemoteVmResource) ImportState(ctx context.Context, req resource.ImportS
 
 func (r *RemoteVmResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	v0Schema := schemas.GetRemoteImageSchemaV0(ctx)
+	V1Schema := schemas.GetRemoteImageSchemaV1(ctx)
 	return map[int64]resource.StateUpgrader{
 		0: {
 			PriorSchema:   &v0Schema,
 			StateUpgrader: UpgradeStateToV1,
+		},
+		1: {
+			PriorSchema:   &V1Schema,
+			StateUpgrader: UpgradeStateToV2,
 		},
 	}
 }
@@ -1038,7 +1045,50 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
-func updateReverseProxyHostsTarget(ctx context.Context, data *models.RemoteVmResourceModelV1, hostConfig apiclient.HostConfig, targetVm *apimodels.VirtualMachine) ([]reverseproxy.ReverseProxyHost, diag.Diagnostics) {
+func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+	var priorStateData models.RemoteVmResourceModelV1
+	resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	upgradedStateData := models.RemoteVmResourceModelV2{
+		Authenticator:        priorStateData.Authenticator,
+		Host:                 priorStateData.Host,
+		HostUrl:              types.StringUnknown(),
+		Orchestrator:         priorStateData.Orchestrator,
+		ID:                   priorStateData.ID,
+		OsType:               priorStateData.OsType,
+		ExternalIp:           priorStateData.ExternalIp,
+		InternalIp:           priorStateData.InternalIp,
+		OrchestratorHostId:   priorStateData.OrchestratorHostId,
+		CatalogId:            priorStateData.CatalogId,
+		Version:              priorStateData.Version,
+		Architecture:         priorStateData.Architecture,
+		Name:                 priorStateData.Name,
+		Owner:                priorStateData.Owner,
+		CatalogConnection:    priorStateData.CatalogConnection,
+		Path:                 priorStateData.Path,
+		Specs:                priorStateData.Specs,
+		PostProcessorScripts: priorStateData.PostProcessorScripts,
+		OnDestroyScript:      priorStateData.OnDestroyScript,
+		SharedFolder:         priorStateData.SharedFolder,
+		Config:               priorStateData.Config,
+		PrlCtl:               priorStateData.PrlCtl,
+		RunAfterCreate:       priorStateData.RunAfterCreate,
+		Timeouts:             priorStateData.Timeouts,
+		ForceChanges:         priorStateData.ForceChanges,
+		KeepRunning:          priorStateData.KeepRunning,
+		ReverseProxyHosts:    priorStateData.ReverseProxyHosts,
+	}
+
+	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
+}
+
+func updateReverseProxyHostsTarget(ctx context.Context, data *models.RemoteVmResourceModelV2, hostConfig apiclient.HostConfig, targetVm *apimodels.VirtualMachine) ([]reverseproxy.ReverseProxyHost, diag.Diagnostics) {
 	resultDiagnostic := diag.Diagnostics{}
 	var refreshedVm *apimodels.VirtualMachine
 	var rpDiag diag.Diagnostics

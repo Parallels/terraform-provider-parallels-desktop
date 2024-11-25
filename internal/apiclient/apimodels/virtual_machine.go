@@ -3,6 +3,8 @@ package apimodels
 type VirtualMachine struct {
 	User                  string                             `json:"user"`
 	ID                    string                             `json:"ID"`
+	Host                  string                             `json:"Host"`
+	HostUrl               string                             `json:"host_url"`
 	HostId                string                             `json:"host_id"`
 	HostExternalIpAddress string                             `json:"host_external_ip_address"`
 	InternalIpAddress     string                             `json:"internal_ip_address"`

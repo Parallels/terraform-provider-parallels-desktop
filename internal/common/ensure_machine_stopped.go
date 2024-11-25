@@ -43,6 +43,10 @@ func EnsureMachineStopped(ctx context.Context, hostConfig apiclient.HostConfig, 
 			if checkVmDiag.HasError() {
 				diagnostics.Append(checkVmDiag...)
 			}
+			if updatedVm == nil {
+				diagnostics.AddError("error stopping vm", "VM not found")
+				return returnVm, diagnostics
+			}
 
 			// All if good, break out of the loop
 			if updatedVm.State == "stopped" {

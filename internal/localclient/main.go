@@ -57,3 +57,11 @@ func executeWithOutput(command Command) (stdout string, stderr string, exitCode 
 	stdout = strings.TrimSuffix(stdOut.String(), "\n")
 	return stdout, stderr, cmd.ProcessState.ExitCode(), nil
 }
+
+func (l *LocalClient) Username() string {
+	return ""
+}
+
+func (l *LocalClient) Password() string {
+	return ""
+}

@@ -107,6 +107,39 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 						installed_dependencies = append(installed_dependencies, "brew")
 					}
 				}
+				// setting up sudo access for brew without password
+
+				cmd := "echo"
+				// " %v | sudo -S echo hello | sudo grep -q '^%v ALL=(ALL) NOPASSWD:ALL$' /etc/sudoers || echo '%v ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers", c.client.Password(), c.client.Username(), c.client.Username()
+				sudoArgs := []string{
+					c.client.Password(),
+					"|",
+					"sudo",
+					"-S",
+					"echo",
+					"hello",
+					"|",
+					"sudo",
+					"grep",
+					"-q",
+					fmt.Sprintf("'^%v ALL=(ALL) NOPASSWD:ALL$'", c.client.Username()),
+					"/etc/sudoers",
+					"||",
+					"echo",
+					fmt.Sprintf("'%v ALL=(ALL) NOPASSWD:ALL'", c.client.Username()),
+					"|",
+					"sudo",
+					"tee",
+					"-a",
+					"/etc/sudoers",
+				}
+
+				_, err := c.client.RunCommand(cmd, sudoArgs)
+				fullCommand := fmt.Sprintf("%v %v", cmd, strings.Join(sudoArgs, " "))
+				tflog.Info(c.ctx, "Full command: "+fullCommand)
+				if err != nil {
+					return installed_dependencies, errors.New("Error setting up sudo access for brew without password, error: " + err.Error())
+				}
 			case "git":
 				gitPresent := c.findPath("git")
 				brewPresent := c.findPath("brew")
@@ -151,6 +184,8 @@ func (c *DevOpsServiceClient) UninstallDependencies(installedDependencies []stri
 	if !ok {
 		for _, dep := range installedDependencies {
 			switch dep {
+			case "brew":
+				continue
 			case "git":
 				if err := c.UninstallGit(); err != nil {
 					uninstalllErrors = append(uninstalllErrors, err)
@@ -164,7 +199,7 @@ func (c *DevOpsServiceClient) UninstallDependencies(installedDependencies []stri
 					uninstalllErrors = append(uninstalllErrors, err)
 				}
 			default:
-				uninstalllErrors = append(uninstalllErrors, errors.New("Unsupported dependency"))
+				uninstalllErrors = append(uninstalllErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
 			}
 		}
 	} else {

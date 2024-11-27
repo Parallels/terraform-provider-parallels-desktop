@@ -879,7 +879,9 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 		}
 		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
+			return installed_dependencies, diag
 		}
+
 		diag.AddError("Error installing parallels desktop", err.Error())
 		return installed_dependencies, diag
 	}

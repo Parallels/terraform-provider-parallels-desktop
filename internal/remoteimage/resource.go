@@ -134,9 +134,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	// Checking if the VM already exists in the host
-	vm, vmDiag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
-	if vmDiag.HasError() {
-		resp.Diagnostics.Append(vmDiag...)
+	vms, createVmResponseDiag := apiclient.GetVms(ctx, hostConfig, "Name", data.Name.String())
+	if createVmResponseDiag.HasError() {
+		resp.Diagnostics.Append(createVmResponseDiag...)
 		return
 	}
 
@@ -155,9 +155,17 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		}
 	}
 
-	if len(vm) > 0 {
-		resp.Diagnostics.AddError("Vm already exists", "The vm "+data.Name.ValueString()+" already exists")
-		return
+	if len(vms) > 0 {
+		if !data.ForceChanges.ValueBool() {
+			resp.Diagnostics.AddError("Vm already exists", "The vm "+data.Name.ValueString()+" already exists")
+			return
+		} else {
+			// if we have force changes, we will remove the vm
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.Name.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
+				return
+			}
+		}
 	}
 
 	version := catalogManifest.Version
@@ -187,18 +195,24 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		createMachineRequest.Owner = data.Owner.ValueString()
 	}
 
-	response, vmDiag := apiclient.CreateVm(ctx, hostConfig, createMachineRequest)
-	if vmDiag.HasError() {
-		resp.Diagnostics.Append(vmDiag...)
+	createVmResponse, createVmResponseDiag := apiclient.CreateVm(ctx, hostConfig, createMachineRequest)
+	if createVmResponseDiag.HasError() {
+		common.EnsureMachineIsRemoved(ctx, hostConfig, data.Name.ValueString())
+		resp.Diagnostics.Append(createVmResponseDiag...)
 		return
 	}
 
-	data.ID = types.StringValue(response.ID)
+	data.ID = types.StringValue(createVmResponse.ID)
 	tflog.Info(ctx, "Created vm with id "+data.ID.ValueString())
 
-	createdVM, vmDiag := apiclient.GetVm(ctx, hostConfig, response.ID)
-	if vmDiag.HasError() {
-		resp.Diagnostics.Append(vmDiag...)
+	createdVM, createVmResponseDiag := apiclient.GetVm(ctx, hostConfig, createVmResponse.ID)
+	if createVmResponseDiag.HasError() {
+		if data.ID.ValueString() != "" {
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
+			}
+		}
+		resp.Diagnostics.Append(createVmResponseDiag...)
 		return
 	}
 
@@ -212,9 +226,14 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	// stopping the machine as it might need some operations where the machine needs to be stopped
 	// add anything here in sequence that needs to be done before the machine is started
 	// so we do not loose time waiting for the machine to stop
-	stoppedVm, vmDiag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
-	if vmDiag.HasError() {
-		resp.Diagnostics.Append(vmDiag...)
+	stoppedVm, createVmResponseDiag := common.EnsureMachineStopped(ctx, hostConfig, createdVM)
+	if createVmResponseDiag.HasError() {
+		if data.ID.ValueString() != "" {
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
+			}
+		}
+		resp.Diagnostics.Append(createVmResponseDiag...)
 	}
 
 	// Applying the Specs block
@@ -222,13 +241,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		if diags := common.SpecsBlockOnCreate(ctx, hostConfig, stoppedVm, data.Specs); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			if data.ID.ValueString() != "" {
-				// If we have an ID, we need to delete the machine
-				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 			}
 			return
 		}
@@ -238,13 +253,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	if vmBlockDiag := common.VmConfigBlockOnCreate(ctx, hostConfig, stoppedVm, data.Config); vmBlockDiag.HasError() {
 		resp.Diagnostics.Append(vmBlockDiag...)
 		if data.ID.ValueString() != "" {
-			// If we have an ID, we need to delete the machine
-			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
-				return
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
 			}
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}
 		return
 	}
@@ -253,13 +264,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	if prlctlDiag := common.PrlCtlBlockOnCreate(ctx, hostConfig, stoppedVm, data.PrlCtl); prlctlDiag.HasError() {
 		resp.Diagnostics.Append(prlctlDiag...)
 		if data.ID.ValueString() != "" {
-			// If we have an ID, we need to delete the machine
-			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
-				return
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
 			}
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}
 		return
 	}
@@ -268,13 +275,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	if sharedFolderDiag := common.SharedFoldersBlockOnCreate(ctx, hostConfig, stoppedVm, data.SharedFolder); sharedFolderDiag.HasError() {
 		resp.Diagnostics.Append(sharedFolderDiag...)
 		if data.ID.ValueString() != "" {
-			// If we have an ID, we need to delete the machine
-			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
-				return
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
 			}
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}
 		return
 	}
@@ -283,13 +286,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	if postProcessDiag := common.RunPostProcessorScript(ctx, hostConfig, stoppedVm, data.PostProcessorScripts); postProcessDiag.HasError() {
 		resp.Diagnostics.Append(postProcessDiag...)
 		if data.ID.ValueString() != "" {
-			// If we have an ID, we need to delete the machine
-			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
-				return
+			if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+				resp.Diagnostics.Append(ensureRemoveDiag...)
 			}
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}
 		return
 	}
@@ -299,6 +298,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		rpHostConfig.HostId = stoppedVm.HostId
 		rpHosts, updateDiag := updateReverseProxyHostsTarget(ctx, &data, rpHostConfig, stoppedVm)
 		if updateDiag.HasError() {
+			if data.ID.ValueString() != "" {
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
+				}
+			}
 			resp.Diagnostics.Append(updateDiag...)
 			return
 		}
@@ -312,14 +316,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			}
 
 			if data.ID.ValueString() != "" {
-				// If we have an ID, we need to delete the machine
-				apiclient.SetMachineState(ctx, rpHostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				if _, diag := common.EnsureMachineStopped(ctx, rpHostConfig, stoppedVm); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
 				}
-
-				apiclient.DeleteVm(ctx, rpHostConfig, data.ID.ValueString())
 			}
 			return
 		}
@@ -334,20 +333,21 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, stoppedVm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			if data.ID.ValueString() != "" {
-				// If we have an ID, we need to delete the machine
-				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 			}
 			return
 		}
 
-		_, diag := apiclient.GetVm(ctx, hostConfig, response.ID)
+		_, diag := apiclient.GetVm(ctx, hostConfig, createVmResponse.ID)
 		if diag.HasError() {
 			resp.Diagnostics.Append(diag...)
+			if data.ID.ValueString() != "" {
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
+				}
+			}
 			return
 		}
 	} else {
@@ -355,13 +355,9 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			if data.ID.ValueString() != "" {
-				// If we have an ID, we need to delete the machine
-				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-					resp.Diagnostics.Append(diag...)
-					return
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 			}
 			return
 		}
@@ -413,6 +409,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			mappedObject, diag := result.MapObject(ctx)
 			if diag.HasError() {
 				resp.Diagnostics.Append(diag...)
+				if data.ID.ValueString() != "" {
+					if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+						resp.Diagnostics.Append(ensureRemoveDiag...)
+					}
+				}
 				return
 			}
 
@@ -420,6 +421,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			listValue, diag := types.ListValue(result.ElementType(ctx), elements)
 			if diag.HasError() {
 				resp.Diagnostics.Append(diag...)
+				if data.ID.ValueString() != "" {
+					if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+						resp.Diagnostics.Append(ensureRemoveDiag...)
+					}
+				}
 				return
 			}
 
@@ -431,6 +437,11 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	if (data.RunAfterCreate.ValueBool() || data.RunAfterCreate.IsUnknown() || data.RunAfterCreate.IsNull()) && (refreshVm.State == "stopped") {
 		if _, diag := common.EnsureMachineRunning(ctx, hostConfig, refreshVm); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
+			if data.ID.ValueString() != "" {
+				if ensureRemoveDiag := common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString()); ensureRemoveDiag.HasError() {
+					resp.Diagnostics.Append(ensureRemoveDiag...)
+				}
+			}
 			return
 		}
 	}
@@ -438,13 +449,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		if data.ID.ValueString() != "" {
-			// If we have an ID, we need to delete the machine
-			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, stoppedVm); diag.HasError() {
-				resp.Diagnostics.Append(diag...)
-				return
-			}
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			common.EnsureMachineIsRemoved(ctx, hostConfig, data.ID.ValueString())
 		}
 		return
 	}

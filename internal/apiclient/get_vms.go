@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/constants"
@@ -18,6 +19,7 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.VirtualMachine, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
+	filterValue = strings.ReplaceAll(filterValue, "\"", "")
 	var url string
 
 	if config.IsOrchestrator {

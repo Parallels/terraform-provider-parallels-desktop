@@ -173,3 +173,15 @@ func (c *SshClient) TransferFile(localFile, remoteFile string) error {
 
 	return nil
 }
+
+func (c *SshClient) Close() error {
+	return nil
+}
+
+func (c *SshClient) Username() string {
+	return c.Auth.User
+}
+
+func (c *SshClient) Password() string {
+	return c.Auth.Password
+}

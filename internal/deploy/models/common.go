@@ -73,7 +73,7 @@ func (p *ParallelsDesktopDevOps) MapObject() basetypes.ObjectValue {
 	return types.ObjectValueMust(attributeTypes, attrs)
 }
 
-func ApiConfigHasChanges(context context.Context, planState, currentState *ParallelsDesktopDevopsConfigV2) bool {
+func ApiConfigHasChanges(context context.Context, planState, currentState *ParallelsDesktopDevopsConfigV3) bool {
 	if planState == nil && currentState == nil {
 		return false
 	}
@@ -159,6 +159,34 @@ func ApiConfigHasChanges(context context.Context, planState, currentState *Paral
 	}
 
 	if planState.EnableLogging != currentState.EnableLogging {
+		return true
+	}
+
+	if planState.LogPath != currentState.LogPath {
+		return true
+	}
+
+	if planState.EnablePortForwarding != currentState.EnablePortForwarding {
+		return true
+	}
+
+	if planState.UseLatestBeta != currentState.UseLatestBeta {
+		return true
+	}
+
+	if planState.CatalogCacheAllowCacheAboveKeepFreeDiskSpace != currentState.CatalogCacheAllowCacheAboveKeepFreeDiskSpace {
+		return true
+	}
+
+	if planState.CatalogCacheKeepFreeDiskSpace != currentState.CatalogCacheKeepFreeDiskSpace {
+		return true
+	}
+
+	if planState.CatalogCacheMaxSize != currentState.CatalogCacheMaxSize {
+		return true
+	}
+
+	if planState.DisableCatalogCachingStream != currentState.DisableCatalogCachingStream {
 		return true
 	}
 

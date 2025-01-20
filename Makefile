@@ -6,8 +6,9 @@ TFPROVIDERLINT = tfproviderlint
 DEPS_TOOLS = deps_tools
 GOFUMPT = gofumpt
 TFDOCS-PLUGIN = tfdocs-plugin
+MISSPELL = misspell
 
-DEVELOPMENT_TOOLS = $(GOX) $(GOLANGCI_LINT) $(TFPROVIDERLINT) $(GOFUMPT) $(TFDOCS-PLUGIN)
+DEVELOPMENT_TOOLS = $(GOX) $(GOLANGCI_LINT) $(TFPROVIDERLINT) $(GOFUMPT) $(TFDOCS-PLUGIN) $(MISSPELL)
 SECURITY_TOOLS = $(GOSEC)
 
 MARKDOWNLINT_IMG := 06kellyjac/markdownlint-cli
@@ -59,14 +60,22 @@ docs:
 	# generate the documents
 	go generate ./...
 
-.PHONY: docs-check
-docs-check:
-	# markdown linter for the documents
+.PHONY: docs-lint
+docs-lint:
+	@echo "Running markdown linter for the documents"
 	docker run --rm \
 		-v $$(pwd):/markdown:ro \
 		$(MARKDOWNLINT_IMG):$(MARKDOWNLINT_TAG) \
 		--config .markdownlint.yml \
 		docs
+
+.PHONY: docs-misspell
+docs-misspell:
+	@echo "Running misspell for the documents"
+	@misspell -error -source text docs/
+
+.PHONY: docs-check
+docs-check: docs-lint docs-misspell
 
 .PHONY: sweep
 sweep:
@@ -102,6 +111,10 @@ $(TFPROVIDERLINT):
 $(TFDOCS-PLUGIN):
 	@echo "Installing tfdocs-plugin..."
 	@go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+
+$(MISSPELL):
+	@echo "Installing misspell..."
+	@go install github.com/client9/misspell/cmd/misspell@latest
 
 $(DEPS_TOOLS):
 	@echo "Installing Terraform Provider tools..."

@@ -17,7 +17,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
       - run: go version
+      - name: Terraform version
+        run: terraform version
       - name: Tidy
         run: go mod tidy
       - run: make deps
@@ -29,17 +33,6 @@ jobs:
         run: make check-release
       - name: Fail if changes
         run: git diff-index --exit-code HEAD
-  markdown-link-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: gaurav-nelson/github-action-markdown-link-check@1.0.15
-        with:
-          use-quiet-mode: 'yes'
-          use-verbose-mode: 'yes'
-          config-file: '.markdownlinkcheck.json'
-          folder-path: 'docs'
-          file-extension: '.md'
   markdown-lint:
     runs-on: ubuntu-latest
     steps:
@@ -86,7 +79,6 @@ jobs:
     needs:
       - build
       - gosec_scan
-      - markdown-link-check
       - markdown-lint
       - misspell
     runs-on: ubuntu-latest

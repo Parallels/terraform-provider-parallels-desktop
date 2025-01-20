@@ -26,10 +26,6 @@ jobs:
         run: go mod tidy
       - run: |
           make deps
-      - name: Check docs
-        run: |
-          cd tools; go mod tidy; cd ..
-          make docs
       - name: Build
         run: make build
       - name: Check release

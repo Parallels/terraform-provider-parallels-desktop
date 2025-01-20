@@ -24,9 +24,12 @@ jobs:
         run: terraform version
       - name: Tidy
         run: go mod tidy
-      - run: make deps
+      - run: |
+          make deps
       - name: Check docs
-        run: make docs
+        run: |
+          go get github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+          make docs
       - name: Build
         run: make build
       - name: Check release
@@ -71,7 +74,7 @@ jobs:
       - name: Tidy
         run: go mod tidy
       - name: Check gosec
-        run: make security
+        run: make security-check
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:

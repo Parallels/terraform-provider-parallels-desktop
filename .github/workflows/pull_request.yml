@@ -28,7 +28,7 @@ jobs:
           make deps
       - name: Check docs
         run: |
-          go get github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+          cd tools; go mod tidy; cd ..
           make docs
       - name: Build
         run: make build

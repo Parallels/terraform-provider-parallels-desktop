@@ -58,7 +58,7 @@ unit-test:
 .PHONY: docs
 docs:
 	# generate the documents
-	go generate ./...
+	cd tools; go generate ./...
 
 .PHONY: docs-lint
 docs-lint:

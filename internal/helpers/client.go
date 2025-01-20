@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -208,8 +209,14 @@ func (c *HttpCaller) GetJwtToken(ctx context.Context, baseUrl, username, passwor
 }
 
 func (c *HttpCaller) GetFileFromUrl(ctx context.Context, fileUrl string, destinationPath string) error {
+	// Validate and clean the destination path
+	cleanPath := filepath.Clean(destinationPath)
+	if strings.Contains(cleanPath, "..") {
+		return errors.New("invalid destination path: path traversal attempt detected")
+	}
+
 	// Create the file in the tmp folder
-	file, err := os.Create(destinationPath)
+	file, err := os.OpenFile(cleanPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

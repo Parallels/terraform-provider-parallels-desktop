@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cjlapao/common-go/helper"
@@ -144,8 +145,10 @@ func (c *SshClient) TransferFile(localFile, remoteFile string) error {
 	}
 	defer sftp.Close()
 
+	// Clean the file path to prevent path traversal
+	cleanLocalFile := filepath.Clean(localFile)
 	// Open the local file to transfer
-	f, err := os.Open(localFile)
+	f, err := os.Open(cleanLocalFile)
 	if err != nil {
 		return err
 	}

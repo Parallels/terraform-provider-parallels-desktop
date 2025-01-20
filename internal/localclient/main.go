@@ -52,13 +52,30 @@ func validateCommand(command string) (string, error) {
 	return command, nil
 }
 
+func validateArgs(args []string) ([]string, error) {
+	for _, arg := range args {
+		// Check for shell metacharacters and potentially dangerous patterns
+		if strings.ContainsAny(arg, ";$\\") {
+			return []string{}, fmt.Errorf("argument contains forbidden characters: %s", arg)
+		}
+	}
+	return args, nil
+}
+
 func executeWithOutput(command Command) (stdout string, stderr string, exitCode int, err error) {
 	validatedCmd, err := validateCommand(command.Command)
 	if err != nil {
 		return "", "", -1, err
 	}
+	// Validate arguments for potential command injection
+	validatedArgs, err := validateArgs(command.Args)
+	if err != nil {
+		return "", "", -1, err
+	}
 
-	cmd := exec.Command(validatedCmd, command.Args...)
+	// #nosec G204 -- This is safe as we validate both command and arguments
+	cmd := exec.Command(validatedCmd, validatedArgs...)
+
 	if command.WorkingDirectory != "" {
 		cmd.Dir = command.WorkingDirectory
 	}

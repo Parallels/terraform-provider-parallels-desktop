@@ -83,8 +83,8 @@ sweep:
 	@echo "WARNING: This will destroy infrastructure. Use only in development accounts."
 	go test -v ./$(PKG_NAME) -sweep=$(SWEEP) $(ARGS)
 
-.PHONY: security
-security: $(SECURITY_TOOLS)
+.PHONY: security-check
+security-check: $(SECURITY_TOOLS)
 	# run security checks
 	GO111MODULE="on" && gosec -exclude=G104,G106,G115,G402 ./...
 

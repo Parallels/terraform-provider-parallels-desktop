@@ -29,7 +29,41 @@ jobs:
         run: make check-release
       - name: Fail if changes
         run: git diff-index --exit-code HEAD
-
+  markdown-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gaurav-nelson/github-action-markdown-link-check@1.0.15
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.markdownlinkcheck.json'
+          folder-path: 'docs'
+          file-extension: '.md'
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: avto-dev/markdown-lint@v1.5.0
+        with:
+          config: '.markdownlint.yml'
+          args: 'docs'
+  misspell:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout should always be before setup-go to ensure caching is working
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/cache@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
+      - run: go install github.com/client9/misspell/cmd/misspell@latest
+      - run: misspell -error -source text docs/
   gosec_scan:
     runs-on: ubuntu-latest
     env:
@@ -49,7 +83,12 @@ jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
-    needs: [build, gosec_scan]
+    needs:
+      - build
+      - gosec_scan
+      - markdown-link-check
+      - markdown-lint
+      - misspell
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

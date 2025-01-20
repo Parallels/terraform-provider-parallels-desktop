@@ -6,9 +6,8 @@ TFPROVIDERLINT = tfproviderlint
 DEPS_TOOLS = deps_tools
 GOFUMPT = gofumpt
 TFDOCS-PLUGIN = tfdocs-plugin
-GH_CLIENT = GH_CLIENT
 
-DEVELOPMENT_TOOLS = $(GOX) $(GOLANGCI_LINT) $(TFPROVIDERLINT) $(GOFUMPT) $(TFDOCS-PLUGIN) $(GH_CLIENT)
+DEVELOPMENT_TOOLS = $(GOX) $(GOLANGCI_LINT) $(TFPROVIDERLINT) $(GOFUMPT) $(TFDOCS-PLUGIN)
 SECURITY_TOOLS = $(GOSEC)
 
 MARKDOWNLINT_IMG := 06kellyjac/markdownlint-cli
@@ -110,7 +109,3 @@ $(DEPS_TOOLS):
 	@cd tools && go get github.com/golangci/golangci-lint/cmd/golangci-lint
 	@cd tools && go mod tidy
 	@go generate -tags tools tools/tools.go
-
-$(GH_CLIENT):
-	@echo "Installing GitHub CLI..."
-	@brew install gh

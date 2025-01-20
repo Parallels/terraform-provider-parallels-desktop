@@ -25,7 +25,7 @@ func GetUser(ctx context.Context, config HostConfig, userId string) (*apimodels.
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {
 				return nil, diagnostic

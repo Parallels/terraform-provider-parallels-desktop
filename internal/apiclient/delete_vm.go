@@ -33,7 +33,7 @@ func DeleteVm(ctx context.Context, config HostConfig, machineId string) diag.Dia
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if _, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
+	if _, err := client.DeleteDataFromClient(ctx, url, nil, auth, nil); err != nil {
 		diagnostic.AddError("There was an error deleting the vm", err.Error())
 		return diagnostic
 	}

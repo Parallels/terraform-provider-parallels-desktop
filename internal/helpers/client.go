@@ -33,7 +33,6 @@ func (v HttpCallerVerb) String() string {
 }
 
 type HttpCaller struct {
-	ctx                    context.Context
 	disableTlsVerification bool
 }
 
@@ -50,29 +49,28 @@ type HttpCallerResponse struct {
 
 func NewHttpCaller(ctx context.Context, disableTlsVerification bool) *HttpCaller {
 	return &HttpCaller{
-		ctx:                    ctx,
 		disableTlsVerification: disableTlsVerification,
 	}
 }
 
-func (c *HttpCaller) GetDataFromClient(url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
-	return c.RequestDataToClient(HttpCallerVerbGet, url, headers, nil, auth, destination)
+func (c *HttpCaller) GetDataFromClient(ctx context.Context, url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+	return c.RequestDataToClient(ctx, HttpCallerVerbGet, url, headers, nil, auth, destination)
 }
 
-func (c *HttpCaller) PostDataToClient(url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
-	return c.RequestDataToClient(HttpCallerVerbPost, url, headers, data, auth, destination)
+func (c *HttpCaller) PostDataToClient(ctx context.Context, url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+	return c.RequestDataToClient(ctx, HttpCallerVerbPost, url, headers, data, auth, destination)
 }
 
-func (c *HttpCaller) PutDataToClient(url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
-	return c.RequestDataToClient(HttpCallerVerbPut, url, headers, data, auth, destination)
+func (c *HttpCaller) PutDataToClient(ctx context.Context, url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+	return c.RequestDataToClient(ctx, HttpCallerVerbPut, url, headers, data, auth, destination)
 }
 
-func (c *HttpCaller) DeleteDataFromClient(url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
-	return c.RequestDataToClient(HttpCallerVerbDelete, url, headers, nil, auth, destination)
+func (c *HttpCaller) DeleteDataFromClient(ctx context.Context, url string, headers *map[string]string, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+	return c.RequestDataToClient(ctx, HttpCallerVerbDelete, url, headers, nil, auth, destination)
 }
 
-func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
-	tflog.Info(c.ctx, fmt.Sprintf("%v data from %s", verb, url))
+func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVerb, url string, headers *map[string]string, data interface{}, auth *HttpCallerAuth, destination interface{}) (*HttpCallerResponse, error) {
+	tflog.Info(ctx, fmt.Sprintf("%v data from %s", verb, url))
 	var err error
 	clientResponse := HttpCallerResponse{
 		StatusCode: 0,
@@ -104,7 +102,7 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 
 	if data != nil {
 		reqBody, err := json.MarshalIndent(data, "", "  ")
-		tflog.Info(c.ctx, fmt.Sprintf("Request body: %s", reqBody))
+		tflog.Info(ctx, fmt.Sprintf("Request body: %s", reqBody))
 		if err != nil {
 			return &clientResponse, fmt.Errorf("error marshalling data, err: %v", err)
 		}
@@ -120,13 +118,13 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	}
 
 	if req == nil {
-		return &clientResponse, fmt.Errorf("request is nil")
+		return &clientResponse, errors.New("request is nil")
 	}
 
 	if auth != nil {
 		if auth.BearerToken != "" {
-			tflog.Info(c.ctx, fmt.Sprintf("Setting Authorization header to Bearer %s", auth.BearerToken))
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.BearerToken))
+			tflog.Info(ctx, "Setting Authorization header to Bearer "+auth.BearerToken)
+			req.Header.Set("Authorization", "Bearer "+auth.BearerToken)
 		} else if auth.ApiKey != "" {
 			req.Header.Set("X-Api-Key", auth.ApiKey)
 		}
@@ -144,6 +142,7 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	if err != nil {
 		return &clientResponse, fmt.Errorf("error %s data on %s, err: %v", verb, url, err)
 	}
+	defer response.Body.Close()
 
 	clientResponse.StatusCode = response.StatusCode
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -185,7 +184,7 @@ func (c *HttpCaller) RequestDataToClient(verb HttpCallerVerb, url string, header
 	return &clientResponse, nil
 }
 
-func (c *HttpCaller) GetJwtToken(baseUrl, username, password string) (string, error) {
+func (c *HttpCaller) GetJwtToken(ctx context.Context, baseUrl, username, password string) (string, error) {
 	if username == "" {
 		return "", errors.New("username cannot be empty")
 	}
@@ -199,16 +198,16 @@ func (c *HttpCaller) GetJwtToken(baseUrl, username, password string) (string, er
 		Password: password,
 	}
 
-	tflog.Info(c.ctx, "Getting token from %s"+baseUrl+"/api/v1/auth/token with username"+username+" and password"+password+"")
+	tflog.Info(ctx, "Getting token from %s"+baseUrl+"/api/v1/auth/token with username"+username+" and password"+password+"")
 
 	var tokenResponse clientmodels.TokenLoginResponse
-	if _, err := c.PostDataToClient(baseUrl+"/api/v1/auth/token", nil, tokenRequest, nil, &tokenResponse); err != nil {
+	if _, err := c.PostDataToClient(ctx, baseUrl+"/api/v1/auth/token", nil, tokenRequest, nil, &tokenResponse); err != nil {
 		return "", err
 	}
 	return tokenResponse.Token, nil
 }
 
-func (c *HttpCaller) GetFileFromUrl(fileUrl string, destinationPath string) error {
+func (c *HttpCaller) GetFileFromUrl(ctx context.Context, fileUrl string, destinationPath string) error {
 	// Create the file in the tmp folder
 	file, err := os.Create(destinationPath)
 	if err != nil {
@@ -217,8 +216,17 @@ func (c *HttpCaller) GetFileFromUrl(fileUrl string, destinationPath string) erro
 
 	defer file.Close()
 
-	// Download the file from the URL
-	resp, err := http.Get(fileUrl)
+	// Download the file from the URL using a client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

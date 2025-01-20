@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,8 +34,8 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 	}
 
 	var config *ssh.ClientConfig
-	if sslClient.Auth.KeyFile != "" {
-
+	switch {
+	case sslClient.Auth.KeyFile != "":
 		key, err := helper.ReadFromFile(sslClient.Auth.KeyFile)
 		if err != nil {
 			return nil, err
@@ -50,7 +51,7 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 				ssh.PublicKeys(signer),
 			},
 		}
-	} else if sslClient.Auth.PrivateKey != "" {
+	case sslClient.Auth.PrivateKey != "":
 		key, err := ssh.ParsePrivateKey([]byte(sslClient.Auth.PrivateKey))
 		if err != nil {
 			return nil, err
@@ -61,7 +62,7 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 				ssh.PublicKeys(key),
 			},
 		}
-	} else {
+	default:
 		// Connect to the remote host
 		config = &ssh.ClientConfig{
 			User: sslClient.Auth.User,
@@ -80,7 +81,7 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 
 func (c *SshClient) Connect() error {
 	if c.config == nil {
-		return fmt.Errorf("SSH Client not configured")
+		return errors.New("SSH Client not configured")
 	}
 
 	conn, err := ssh.Dial("tcp", c.BaseAddress(), c.config)
@@ -168,8 +169,6 @@ func (c *SshClient) TransferFile(localFile, remoteFile string) error {
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("File %s transferred to %s:%s\n", localFile, c.BaseAddress(), remoteFile)
 
 	return nil
 }

@@ -17,9 +17,9 @@ func CreateVm(ctx context.Context, config HostConfig, request apimodels.CreateVm
 	urlHost := helpers.GetHostUrl(config.Host)
 	var url string
 	if config.IsOrchestrator {
-		url = fmt.Sprintf("%s/orchestrator/machines", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/machines"
 	} else {
-		url = fmt.Sprintf("%s/machines", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/machines"
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
@@ -30,7 +30,7 @@ func CreateVm(ctx context.Context, config HostConfig, request apimodels.CreateVm
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	var response apimodels.CreateVmResponse
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error creating vm: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

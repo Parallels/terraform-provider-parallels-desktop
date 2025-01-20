@@ -26,7 +26,7 @@ func CreateRole(ctx context.Context, config HostConfig, roleName string) (*apimo
 
 	tflog.Info(ctx, "Creating Role "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/roles", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/auth/roles"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -35,7 +35,7 @@ func CreateRole(ctx context.Context, config HostConfig, roleName string) (*apimo
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error creating role: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

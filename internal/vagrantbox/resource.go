@@ -74,7 +74,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
@@ -392,7 +392,7 @@ func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -463,7 +463,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -774,7 +774,7 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return

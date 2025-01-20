@@ -1,7 +1,7 @@
 #!/bin/bash
 # this script is used to generate release notes for a given release
 # first argument is the repository name
-# the secon is the pull request id for the last release
+# the second is the pull request id for the last release
 # and the third is the new release number
 
 # the script then grabs every pull request merged since that pull request
@@ -28,7 +28,7 @@ CHANGELIST=$(gh pr list --repo "$REPO_NAME" --base main --state merged --json ti
 echo "Release $NEW_RELEASE" >>releasenotes.md
 
 echo "$CHANGELIST" | jq -r '.[].title' | while read -r line; do
-	echo " - $line" >>releasenotes.md
+  echo " - $line" >>releasenotes.md
 done
 
 echo " "

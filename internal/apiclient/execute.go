@@ -35,7 +35,7 @@ func ExecuteScript(ctx context.Context, config HostConfig, r apimodels.PostScrip
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	var response apimodels.VmExecuteCommandResponse
-	if clientResponse, err := client.PutDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PutDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error executing script on vm: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

@@ -18,7 +18,7 @@ func GetPackerTemplates(ctx context.Context, config HostConfig, filterField, fil
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.PackerTemplate, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/templates/packer", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/templates/packer"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -34,7 +34,7 @@ func GetPackerTemplates(ctx context.Context, config HostConfig, filterField, fil
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, &filter, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, &filter, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting packer templates: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

@@ -74,7 +74,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
@@ -191,7 +191,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -253,7 +253,7 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -387,7 +387,7 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -427,8 +427,6 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 		Operation:     priorStateData.Operation,
 		CurrentState:  priorStateData.CurrentState,
 	}
-
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }

@@ -1,8 +1,5 @@
-# Terraform Provider testing workflow.
-name: Tests
+name: Pull Requests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
 on:
   pull_request:
     paths-ignore:
@@ -13,42 +10,46 @@ permissions:
   contents: read
 
 jobs:
-  # Ensure project builds before running testing matrix
   build:
-    name: Build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
-          cache: true
-      - run: go mod download
-      - run: go build -v .
-      - name: Run linters
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+          go-version: 'stable'
+      - run: go version
+      - name: Tidy
+        run: go mod tidy
+      - run: make deps
+      - name: Check docs
+        run: make docs
+      - name: Build
+        run: make build
+      - name: Check release
+        run: make check-release
+      - name: Fail if changes
+        run: git diff-index --exit-code HEAD
 
-  generate:
+  gosec_scan:
     runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
-          cache: true
-      - run: go generate ./...
-      - name: git diff
-        run: |
-          git diff --compact-summary --exit-code || \
-            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+          go-version: 'stable'
+      - run: go version
+      - name: Tidy
+        run: go mod tidy
+      - name: Check gosec
+        run: make security
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
-    needs: build
+    needs: [build, gosec_scan]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

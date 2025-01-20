@@ -29,8 +29,36 @@ func (l *LocalClient) RunCommand(command string, arguments []string) (string, er
 	return stdout, err
 }
 
+func validateCommand(command string) (string, error) {
+	// Whitelist of allowed commands
+	allowedCommands := map[string]bool{
+		"prlctl":    true,
+		"prlsrvctl": true,
+		"brew":      true,
+		"vagrant":   true,
+		"packer":    true,
+		"git":       true,
+		"curl":      true,
+		"wget":      true,
+		"tar":       true,
+		"unzip":     true,
+		"zip":       true,
+		"devops":    true,
+	}
+
+	if !allowedCommands[command] {
+		return "", fmt.Errorf("command '%s' is not allowed", command)
+	}
+	return command, nil
+}
+
 func executeWithOutput(command Command) (stdout string, stderr string, exitCode int, err error) {
-	cmd := exec.Command(command.Command, command.Args...)
+	validatedCmd, err := validateCommand(command.Command)
+	if err != nil {
+		return "", "", -1, err
+	}
+
+	cmd := exec.Command(validatedCmd, command.Args...)
 	if command.WorkingDirectory != "" {
 		cmd.Dir = command.WorkingDirectory
 	}

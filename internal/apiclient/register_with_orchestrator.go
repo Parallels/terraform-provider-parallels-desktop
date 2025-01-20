@@ -15,7 +15,7 @@ import (
 func RegisterWithOrchestrator(ctx context.Context, config HostConfig, request apimodels.OrchestratorHostRequest) (*apimodels.OrchestratorHostResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/orchestrator/hosts", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "%s/orchestrator/hosts"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -25,7 +25,7 @@ func RegisterWithOrchestrator(ctx context.Context, config HostConfig, request ap
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
 	var response apimodels.OrchestratorHostResponse
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error Registering the host: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

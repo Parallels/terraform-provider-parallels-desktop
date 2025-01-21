@@ -18,7 +18,7 @@ MARKDOWNLINT_TAG := 0.28.1
 default: build
 
 .PHONY: build
-build: format docs
+build: format docs-check
 	# trying to copy .goreleaser.yaml
 	go build -a -ldflags '-s -extldflags "-static"'
 

@@ -510,7 +510,7 @@ func (c *DevOpsServiceClient) CompareLicenses(ctx context.Context, license strin
 	return false, nil
 }
 
-func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, config models.ParallelsDesktopDevopsConfigV2) (string, error) {
+func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, config models.ParallelsDesktopDevopsConfigV3) (string, error) {
 	// Installing DevOps Service
 
 	devopsPath := c.findPath(ctx, "prldevops")

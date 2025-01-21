@@ -818,7 +818,7 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
-func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV2) (*ssh.SshClient, error) {
+func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV3) (*ssh.SshClient, error) {
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -924,7 +924,7 @@ func (r *DeployResource) installParallelsDesktop(ctx context.Context, parallelsC
 	return installed_dependencies, diag
 }
 
-func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_models.DeployResourceModelV2, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_models.DeployResourceModelV3, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"

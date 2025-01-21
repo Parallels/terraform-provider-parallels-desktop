@@ -129,9 +129,14 @@ jobs:
       VERSION: ''
     steps:
       - uses: actions/checkout@v4
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
       - name: Announce on discord
         id: announce_discord
         run: |
-          ./.github/workflow_scripts/announce_discord.sh --webhook-url $DISCORD_WEBHOOK
+          ./.github/workflow_scripts/announce_discord.sh --webhook-url $DISCORD_WEBHOOK --version $VERSION
         env:
           SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}

@@ -39,7 +39,12 @@ CHANGELOG_CONTENT=$("$SCRIPT_DIR/get-latest-changelog.sh")
 CHANGELOG_CONTENT=$(echo "$CHANGELOG_CONTENT" | jq -Rs .)
 CHANGELOG_CONTENT=${CHANGELOG_CONTENT#\"} # Remove leading quote
 CHANGELOG_CONTENT=${CHANGELOG_CONTENT%\"} # Remove trailing quote
-echo "Changelog content: $CHANGELOG_CONTENT"
+
+# Check if changelog content is longer than 4096 characters
+if [ ${#CHANGELOG_CONTENT} -gt 4096 ]; then
+  CHANGELOG_CONTENT="${CHANGELOG_CONTENT:0:3900}..."
+  CHANGELOG_CONTENT+=$"\nFor the complete changelog, visit: https://github.com/Parallels/terraform-provider-parallels-desktop/releases/tag/v${VERSION}"
+fi
 
 # Create the JSON payload
 JSON_PAYLOAD=$(
@@ -55,7 +60,7 @@ EOF
 )
 echo "$JSON_PAYLOAD"
 
-Send the webhook request
+# Send the webhook request
 curl -H "Content-Type: application/json" \
   -d "$JSON_PAYLOAD" \
   "$WEBHOOK_URL"

@@ -813,8 +813,6 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 		InstallLocal:          priorStateData.InstallLocal,
 	}
 
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 

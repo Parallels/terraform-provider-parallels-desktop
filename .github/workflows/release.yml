@@ -23,9 +23,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Unshallow
-        run: git fetch --prune --unshallow
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'

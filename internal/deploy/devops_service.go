@@ -796,8 +796,10 @@ func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopD
 		return "", err
 	}
 
+	escapedConfig := strings.ReplaceAll(string(jsonConfig), `\`, `\\`)
+	escapedConfig = strings.ReplaceAll(escapedConfig, "'", `\'`)
 	cmd := "echo"
-	arguments := []string{"'" + string(jsonConfig) + "' ", ">", configPath}
+	arguments := []string{"'" + escapedConfig + "' ", ">", configPath}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}

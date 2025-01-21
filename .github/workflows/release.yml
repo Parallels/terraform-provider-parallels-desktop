@@ -120,3 +120,22 @@ jobs:
                 `Timeout waiting for Linode Provider v${TARGET_VERSION} publication on ${REGISTRY}`
               );
             }
+  discord-announce:
+    needs: verify-publications
+    name: Announce on Discord
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      VERSION: ''
+    steps:
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+      - name: Announce on discord
+        id: announce_discord
+        run: |
+          ./.github/workflow_scripts/announce_discord.sh   --webhook-url $DISCORD_WEBHOOK
+        env:
+          SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}

@@ -66,17 +66,23 @@ func (r *VirtualMachineStateResource) Configure(ctx context.Context, req resourc
 func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data resource_models.VirtualMachineStateResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
+	// Setting the default timeout
+	ctxTimeout := 10 * time.Minute
+
+	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
+	defer cancel()
+
+	telemetrySvc := telemetry.Get(apiCtx)
 	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
+		apiCtx,
 		r.provider.License.String(),
 		telemetry.EventVirtualMachineState, telemetry.ModeCreate,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
 
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(apiCtx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -110,13 +116,13 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	vm, diag := apiclient.GetVm(apiCtx, hostConfig, data.ID.ValueString())
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 	if vm == nil {
-		resp.State.RemoveResource(ctx)
+		resp.State.RemoveResource(apiCtx)
 		return
 	}
 
@@ -127,7 +133,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 	}
 
 	if !isInState {
-		result, diag := apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), r.GetOpState(data.Operation.ValueString()))
+		result, diag := apiclient.SetMachineState(apiCtx, hostConfig, data.ID.ValueString(), r.GetOpState(data.Operation.ValueString()))
 		if diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return
@@ -145,7 +151,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 
 			retries := 0
 			for {
-				refreshedVm, refreshDiag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+				refreshedVm, refreshDiag := apiclient.GetVm(apiCtx, hostConfig, data.ID.ValueString())
 				if diag.HasError() {
 					resp.Diagnostics.Append(refreshDiag...)
 					return
@@ -174,26 +180,32 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 		data.CurrentState = types.StringValue(vm.State)
 	}
 
-	tflog.Trace(ctx, "virtual machine "+vm.Name+" state changed to "+data.Operation.ValueString())
+	tflog.Trace(apiCtx, "virtual machine "+vm.Name+" state changed to "+data.Operation.ValueString())
 
 	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(apiCtx, &data)...)
 }
 
 func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data resource_models.VirtualMachineStateResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
+	// Setting the default timeout
+	ctxTimeout := 10 * time.Minute
+
+	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
+	defer cancel()
+
+	telemetrySvc := telemetry.Get(apiCtx)
 	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
+		apiCtx,
 		r.provider.License.String(),
 		telemetry.EventVirtualMachineState, telemetry.ModeRead,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
 
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -222,19 +234,19 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 		DisableTlsValidation: r.provider.DisableTlsValidation.ValueBool(),
 	}
 
-	vm, diag := apiclient.GetVm(ctx, hostConfig, data.ID.ValueString())
+	vm, diag := apiclient.GetVm(apiCtx, hostConfig, data.ID.ValueString())
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 	if vm == nil {
-		resp.State.RemoveResource(ctx)
+		resp.State.RemoveResource(apiCtx)
 		return
 	}
 
 	data.CurrentState = types.StringValue(vm.State)
 
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -244,6 +256,12 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data resource_models.VirtualMachineStateResourceModelV1
 	var currentData resource_models.VirtualMachineStateResourceModelV1
+
+	// Setting the default timeout
+	ctxTimeout := 10 * time.Minute
+
+	ctx, cancel := context.WithTimeout(ctx, ctxTimeout)
+	defer cancel()
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -379,18 +397,24 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data resource_models.VirtualMachineStateResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
+	// Setting the default timeout
+	ctxTimeout := 10 * time.Minute
+
+	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
+	defer cancel()
+
+	telemetrySvc := telemetry.Get(apiCtx)
 	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
+		apiCtx,
 		r.provider.License.String(),
 		telemetry.EventVirtualMachineState, telemetry.ModeDestroy,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
 
 	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return

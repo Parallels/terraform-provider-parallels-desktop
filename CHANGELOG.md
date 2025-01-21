@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed an issue where if we enabled the HTTPS for a host and registered it with an orchestrator, it would fail due to the wrong port
 - Added the new resource called vm_state to set an existing VM to a state
 - Fixed an issue in the telemetry not being sent correctly
-- Fixed #53 an issue where the specs where not being applied correctly if the machine was stop at some points 
+- Fixed #53 an issue where the specs where not being applied correctly if the machine was stop at some points
 - Fixed an issue where the specs cpu_count and memory_count where not being calculated correctly
 - Resolved #54 Added the ability to use the vm datasource with the orchestrator
 - Resolved #58 Added the new shared block to allow port forwarding in the the following providers, clone_vm, remote_image, vagrant_box and deploy
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an option to update the devops service in a deploy resource
 - fixed a bug where the deploy resource would update but failed to report correctly
 - Fixed an issue with the client apiresponse being empty
--  Added better error messages when checking for resources
+- Added better error messages when checking for resources
 - Fixed an issue where by mistake the remoteimage was reporting it did not support  orchestrator
 - Fixed an issue where remote_vm, vagrant_box and clone_vm would fail if this was pointing to an orchestrator
 - Added the ability of only running post scripts if something changed on them

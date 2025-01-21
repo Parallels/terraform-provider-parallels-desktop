@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"strings"
 
@@ -509,7 +510,7 @@ func (c *DevOpsServiceClient) CompareLicenses(ctx context.Context, license strin
 	return false, nil
 }
 
-func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, config models.ParallelsDesktopDevopsConfigV2) (string, error) {
+func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, config models.ParallelsDesktopDevopsConfigV3) (string, error) {
 	// Installing DevOps Service
 
 	devopsPath := c.findPath(ctx, "prldevops")
@@ -551,6 +552,37 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 		// Setting the environment variables for the prldevops service port forwarding
 		if config.EnablePortForwarding.ValueBool() {
 			configFile.EnvironmentVariables["ENABLE_REVERSE_PROXY"] = "true"
+		}
+		// Setting the caching options for the service
+		if config.CatalogCacheKeepFreeDiskSpace.ValueBigFloat() != nil {
+			configValue := config.CatalogCacheKeepFreeDiskSpace.ValueBigFloat()
+			zeroValue := big.NewFloat(0)
+			if configValue.Cmp(zeroValue) == 1 {
+				configFile.EnvironmentVariables["CATALOG_CACHE_KEEP_FREE_DISK_SPACE"] = config.CatalogCacheKeepFreeDiskSpace.ValueBigFloat().String()
+			}
+		}
+		if config.CatalogCacheMaxSize.ValueBigFloat() != nil {
+			configValue := config.CatalogCacheMaxSize.ValueBigFloat()
+			zeroValue := big.NewFloat(0)
+			if configValue.Cmp(zeroValue) == 1 {
+				configFile.EnvironmentVariables["CATALOG_CACHE_MAX_SIZE"] = config.CatalogCacheMaxSize.ValueBigFloat().String()
+			}
+		}
+		if config.CatalogCacheAllowCacheAboveKeepFreeDiskSpace.ValueBool() {
+			configFile.EnvironmentVariables["CATALOG_CACHE_ALLOW_CACHE_ABOVE_KEEP_FREE_DISK_SPACE"] = "true"
+		}
+		if config.DisableCatalogCachingStream.ValueBool() {
+			configFile.EnvironmentVariables["DISABLE_CATALOG_PROVIDER_STREAMING"] = "true"
+		}
+
+		// Setting the logging options for the service
+		if config.EnableLogging.ValueBool() {
+			configFile.EnvironmentVariables["PRL_DEVOPS_LOG_TO_FILE"] = "true"
+		}
+		if config.LogPath.ValueString() != "" {
+			configFile.EnvironmentVariables["PRL_DEVOPS_LOG_FILE_PATH"] = config.LogPath.ValueString()
+		} else {
+			configFile.EnvironmentVariables["PRL_DEVOPS_LOG_FILE_PATH"] = "."
 		}
 
 		yamlConfig, err := yaml.Marshal(configFile)
@@ -704,7 +736,7 @@ func (c *DevOpsServiceClient) GenerateDefaultRootPassword(ctx context.Context) (
 	return encoded, nil
 }
 
-func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopDevopsConfigV2) (string, error) {
+func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopDevopsConfigV3) (string, error) {
 	configPath := "/tmp/service_config.json"
 	configMap := make(map[string]interface{})
 	if config.Port.ValueString() != "" {
@@ -757,9 +789,6 @@ func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopD
 	}
 	if config.SystemReservedDisk.ValueString() != "" {
 		configMap["system_reserved_disk"] = config.SystemReservedDisk.ValueString()
-	}
-	if config.EnableLogging.ValueBool() {
-		configMap["log_output"] = true
 	}
 
 	jsonConfig, err := json.Marshal(configMap)

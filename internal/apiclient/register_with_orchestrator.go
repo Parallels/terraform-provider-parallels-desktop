@@ -15,7 +15,7 @@ import (
 func RegisterWithOrchestrator(ctx context.Context, config HostConfig, request apimodels.OrchestratorHostRequest) (*apimodels.OrchestratorHostResponse, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "%s/orchestrator/hosts"
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/hosts"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {

@@ -48,7 +48,7 @@ func (r *DeployResource) Metadata(ctx context.Context, req resource.MetadataRequ
 }
 
 func (r *DeployResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schemas.DeployResourceSchemaV2
+	resp.Schema = schemas.DeployResourceSchemaV3
 }
 
 func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -71,7 +71,7 @@ func (r *DeployResource) Configure(ctx context.Context, req resource.ConfigureRe
 }
 
 func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data deploy_models.DeployResourceModelV2
+	var data deploy_models.DeployResourceModelV3
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	telemetrySvc := telemetry.Get(ctx)
@@ -229,7 +229,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data deploy_models.DeployResourceModelV2
+	var data deploy_models.DeployResourceModelV3
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
 		ctx,
@@ -316,8 +316,8 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data deploy_models.DeployResourceModelV2
-	var currentData deploy_models.DeployResourceModelV2
+	var data deploy_models.DeployResourceModelV3
+	var currentData deploy_models.DeployResourceModelV3
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -604,7 +604,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data deploy_models.DeployResourceModelV2
+	var data deploy_models.DeployResourceModelV3
 
 	telemetrySvc := telemetry.Get(ctx)
 	telemetryEvent := telemetry.NewTelemetryItem(
@@ -714,6 +714,10 @@ func (r *DeployResource) UpgradeState(ctx context.Context) map[int64]resource.St
 			PriorSchema:   &schemas.DeployResourceSchemaV1,
 			StateUpgrader: UpgradeStateToV2,
 		},
+		2: {
+			PriorSchema:   &schemas.DeployResourceSchemaV2,
+			StateUpgrader: UpgradeStateToV2,
+		},
 	}
 }
 
@@ -812,7 +816,7 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
-func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV2) (*ssh.SshClient, error) {
+func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV3) (*ssh.SshClient, error) {
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -918,16 +922,16 @@ func (r *DeployResource) installParallelsDesktop(ctx context.Context, parallelsC
 	return installed_dependencies, diag
 }
 
-func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_models.DeployResourceModelV2, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_models.DeployResourceModelV3, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"
 	apiVersion := "latest"
 
 	// Installing parallels DevOps service
-	var config deploy_models.ParallelsDesktopDevopsConfigV2
+	var config deploy_models.ParallelsDesktopDevopsConfigV3
 	if data.ApiConfig == nil {
-		config = deploy_models.ParallelsDesktopDevopsConfigV2{
+		config = deploy_models.ParallelsDesktopDevopsConfigV3{
 			DevOpsVersion: types.StringValue(apiVersion),
 			Port:          types.StringValue(targetPort),
 			TLSPort:       types.StringValue(targetTlsPort),
@@ -998,7 +1002,7 @@ func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_
 	return &apiData, diag
 }
 
-func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, currentData *deploy_models.DeployResourceModelV2) diag.Diagnostics {
+func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, currentData *deploy_models.DeployResourceModelV3) diag.Diagnostics {
 	diagnostic := diag.Diagnostics{}
 	if data.Orchestrator == nil {
 		return diagnostic
@@ -1090,7 +1094,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 	return diagnostic
 }
 
-func (r *DeployResource) unregisterWithOrchestrator(ctx context.Context, data *deploy_models.DeployResourceModelV2) diag.Diagnostics {
+func (r *DeployResource) unregisterWithOrchestrator(ctx context.Context, data *deploy_models.DeployResourceModelV3) diag.Diagnostics {
 	diagnostic := diag.Diagnostics{}
 	if data.Orchestrator == nil {
 		return diagnostic

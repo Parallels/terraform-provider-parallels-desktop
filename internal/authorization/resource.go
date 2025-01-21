@@ -427,10 +427,10 @@ func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteR
 	for _, apiKey := range data.ApiKeys {
 		diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Id.ValueString())
 		if diag.HasError() {
-			tflog.Info(ctx, fmt.Sprintf("Error deleting api key %s", apiKey.Key.ValueString()))
+			tflog.Info(ctx, "Error deleting api key "+apiKey.Key.ValueString())
 			diag := apiclient.DeleteApiKey(ctx, hostConfig, apiKey.Key.ValueString())
 			if diag.HasError() {
-				tflog.Info(ctx, fmt.Sprintf("Error1 deleting api key %s", apiKey.Key.ValueString()))
+				tflog.Info(ctx, "Error1 deleting api key "+apiKey.Key.ValueString())
 				resp.Diagnostics.Append(diag...)
 				return
 			}
@@ -523,10 +523,10 @@ func updateClaims(ctx context.Context, hostConfig apiclient.HostConfig, data, cu
 			}
 		}
 		if !found {
-			tflog.Info(ctx, fmt.Sprintf("Creating claim %s", claim.Name.ValueString()))
+			tflog.Info(ctx, "Creating claim "+claim.Name.ValueString())
 			response, diag := apiclient.CreateClaim(ctx, hostConfig, claim.Name.ValueString())
 			if diag.HasError() {
-				tflog.Info(ctx, fmt.Sprintf("Error creating claim %s", claim.Name.ValueString()))
+				tflog.Info(ctx, "Error creating claim "+claim.Name.ValueString())
 
 				diagnostics.Append(diag...)
 			} else {
@@ -595,10 +595,10 @@ func updateRoles(ctx context.Context, hostConfig apiclient.HostConfig, data, cur
 			}
 		}
 		if !found {
-			tflog.Info(ctx, fmt.Sprintf("Creating Role %s", role.Name.ValueString()))
+			tflog.Info(ctx, "Creating Role "+role.Name.ValueString())
 			response, diag := apiclient.CreateRole(ctx, hostConfig, role.Name.ValueString())
 			if diag.HasError() {
-				tflog.Info(ctx, fmt.Sprintf("Error creating role %s", role.Name.ValueString()))
+				tflog.Info(ctx, "Error creating role "+role.Name.ValueString())
 				diagnostics.Append(diag...)
 				data.Roles[i].Id = types.StringValue("-")
 				continue
@@ -670,7 +670,7 @@ func updateApiKeys(ctx context.Context, hostConfig apiclient.HostConfig, data, c
 			}
 		}
 		if !found {
-			tflog.Info(ctx, fmt.Sprintf("Creating api key %s", apiKey.Name.ValueString()))
+			tflog.Info(ctx, "Creating api key "+apiKey.Name.ValueString())
 			request := apimodels.ApiKeyRequest{
 				Name:   apiKey.Name.ValueString(),
 				Key:    apiKey.Key.ValueString(),
@@ -679,14 +679,13 @@ func updateApiKeys(ctx context.Context, hostConfig apiclient.HostConfig, data, c
 
 			response, diag := apiclient.CreateApiKey(ctx, hostConfig, request)
 			if diag.HasError() {
-				tflog.Info(ctx, fmt.Sprintf("Error creating api key %s", apiKey.Name.ValueString()))
+				tflog.Info(ctx, "Error creating api key "+apiKey.Name.ValueString())
 				diagnostics.Append(diag...)
 				continue
 			} else {
 				tflog.Info(ctx, fmt.Sprintf("Api Key %s created", apiKey.Name.ValueString()))
 				data.ApiKeys[i].Id = types.StringValue(response.ID)
 				data.ApiKeys[i].ApiKey = types.StringValue(helpers.Base64Encode(fmt.Sprintf("%s:%s", apiKey.Key.ValueString(), apiKey.Secret.ValueString())))
-
 			}
 		} else {
 			tflog.Info(ctx, fmt.Sprintf("Api Key %s already exists", apiKey.Name.ValueString()))
@@ -753,7 +752,7 @@ func updateUsers(ctx context.Context, hostConfig apiclient.HostConfig, data, cur
 			}
 		}
 		if !found {
-			tflog.Info(ctx, fmt.Sprintf("Creating User %s", user.Username.ValueString()))
+			tflog.Info(ctx, "Creating User "+user.Username.ValueString())
 			request := apimodels.UserRequest{
 				Name:     user.Name.ValueString(),
 				Email:    user.Email.ValueString(),
@@ -763,7 +762,7 @@ func updateUsers(ctx context.Context, hostConfig apiclient.HostConfig, data, cur
 
 			response, diag := apiclient.CreateUser(ctx, hostConfig, request)
 			if diag.HasError() {
-				tflog.Info(ctx, fmt.Sprintf("Error creating user %s", user.Username.ValueString()))
+				tflog.Info(ctx, "Error creating user "+user.Username.ValueString())
 				diagnostics.Append(diag...)
 				continue
 			} else {

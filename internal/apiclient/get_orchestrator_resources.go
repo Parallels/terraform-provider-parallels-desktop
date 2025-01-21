@@ -17,7 +17,7 @@ func GetOrchestratorResources(ctx context.Context, config HostConfig) ([]*apimod
 	var response []*apimodels.SystemUsageResponse
 	urlHost := helpers.GetHostUrl(config.Host)
 
-	url := fmt.Sprintf("%s/orchestrator/overview/resources", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/overview/resources"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -26,7 +26,7 @@ func GetOrchestratorResources(ctx context.Context, config HostConfig) ([]*apimod
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error orchestrator resources: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

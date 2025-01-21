@@ -25,7 +25,6 @@ var (
 
 type DevOpsServiceClient struct {
 	client interfaces.CommandClient
-	ctx    context.Context
 }
 
 type DevOpsServiceConfigFile struct {
@@ -35,12 +34,11 @@ type DevOpsServiceConfigFile struct {
 func NewDevOpsServiceClient(ctx context.Context, client interfaces.CommandClient) *DevOpsServiceClient {
 	return &DevOpsServiceClient{
 		client: client,
-		ctx:    ctx,
 	}
 }
 
-func (c *DevOpsServiceClient) GetInfo() (*clientmodels.ParallelsServerInfo, error) {
-	cmd := c.findPath("prlsrvctl")
+func (c *DevOpsServiceClient) GetInfo(ctx context.Context) (*clientmodels.ParallelsServerInfo, error) {
+	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"info", "--json"}
 	output, err := c.client.RunCommand(cmd, arguments)
 	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
@@ -60,8 +58,8 @@ func (c *DevOpsServiceClient) GetInfo() (*clientmodels.ParallelsServerInfo, erro
 	return &parallelsInfo, nil
 }
 
-func (c *DevOpsServiceClient) GetVersion() (string, error) {
-	parallelsInfo, err := c.GetInfo()
+func (c *DevOpsServiceClient) GetVersion(ctx context.Context) (string, error) {
+	parallelsInfo, err := c.GetInfo(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -79,11 +77,11 @@ func (c *DevOpsServiceClient) RestartServer() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]string, error) {
+func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToInstall []string) ([]string, error) {
 	installed_dependencies := []string{}
 	_, ok := c.client.(*localclient.LocalClient)
 
-	if err := c.InstallBrew(); err != nil {
+	if err := c.InstallBrew(ctx); err != nil {
 		return installed_dependencies, err
 	}
 	installed_dependencies = append(installed_dependencies, "brew")
@@ -92,9 +90,9 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 		for _, dep := range listToInstall {
 			switch strings.ToLower(dep) {
 			case "brew":
-				brewPresent := c.findPath("brew")
+				brewPresent := c.findPath(ctx, "brew")
 				if brewPresent == "" {
-					if err := c.InstallBrew(); err != nil {
+					if err := c.InstallBrew(ctx); err != nil {
 						return installed_dependencies, err
 					}
 					isAlreadyInInstalledDependencies := false
@@ -136,33 +134,33 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 
 				_, err := c.client.RunCommand(cmd, sudoArgs)
 				fullCommand := fmt.Sprintf("%v %v", cmd, strings.Join(sudoArgs, " "))
-				tflog.Info(c.ctx, "Full command: "+fullCommand)
+				tflog.Info(ctx, "Full command: "+fullCommand)
 				if err != nil {
 					return installed_dependencies, errors.New("Error setting up sudo access for brew without password, error: " + err.Error())
 				}
 			case "git":
-				gitPresent := c.findPath("git")
-				brewPresent := c.findPath("brew")
+				gitPresent := c.findPath(ctx, "git")
+				brewPresent := c.findPath(ctx, "brew")
 				if gitPresent == "" && brewPresent == "" {
-					if err := c.InstallGit(); err != nil {
+					if err := c.InstallGit(ctx); err != nil {
 						return installed_dependencies, err
 					}
 					installed_dependencies = append(installed_dependencies, "git")
 				}
 			case "packer":
-				packerPresent := c.findPath("packer")
-				brewPresent := c.findPath("brew")
+				packerPresent := c.findPath(ctx, "packer")
+				brewPresent := c.findPath(ctx, "brew")
 				if packerPresent == "" && brewPresent == "" {
-					if err := c.InstallPacker(); err != nil {
+					if err := c.InstallPacker(ctx); err != nil {
 						return installed_dependencies, err
 					}
 					installed_dependencies = append(installed_dependencies, "packer")
 				}
 			case "vagrant":
-				vagrantPresent := c.findPath("vagrant")
-				brewPresent := c.findPath("brew")
+				vagrantPresent := c.findPath(ctx, "vagrant")
+				brewPresent := c.findPath(ctx, "brew")
 				if vagrantPresent == "" && brewPresent == "" {
-					if err := c.InstallVagrant(); err != nil {
+					if err := c.InstallVagrant(ctx); err != nil {
 						return installed_dependencies, err
 					}
 					installed_dependencies = append(installed_dependencies, "vagrant")
@@ -178,44 +176,44 @@ func (c *DevOpsServiceClient) InstallDependencies(listToInstall []string) ([]str
 	return installed_dependencies, nil
 }
 
-func (c *DevOpsServiceClient) UninstallDependencies(installedDependencies []string) []error {
+func (c *DevOpsServiceClient) UninstallDependencies(ctx context.Context, installedDependencies []string) []error {
 	_, ok := c.client.(*localclient.LocalClient)
-	uninstalllErrors := []error{}
+	uninstallErrors := []error{}
 	if !ok {
 		for _, dep := range installedDependencies {
 			switch dep {
 			case "brew":
 				continue
 			case "git":
-				if err := c.UninstallGit(); err != nil {
-					uninstalllErrors = append(uninstalllErrors, err)
+				if err := c.UninstallGit(ctx); err != nil {
+					uninstallErrors = append(uninstallErrors, err)
 				}
 			case "packer":
-				if err := c.UninstallPacker(); err != nil {
-					uninstalllErrors = append(uninstalllErrors, err)
+				if err := c.UninstallPacker(ctx); err != nil {
+					uninstallErrors = append(uninstallErrors, err)
 				}
 			case "vagrant":
-				if err := c.UninstallVagrant(); err != nil {
-					uninstalllErrors = append(uninstalllErrors, err)
+				if err := c.UninstallVagrant(ctx); err != nil {
+					uninstallErrors = append(uninstallErrors, err)
 				}
 			default:
-				uninstalllErrors = append(uninstalllErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
+				uninstallErrors = append(uninstallErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
 			}
 		}
 	} else {
-		uninstalllErrors = append(uninstalllErrors, errors.New("Unsupported client"))
+		uninstallErrors = append(uninstallErrors, errors.New("Unsupported client"))
 	}
 
-	return uninstalllErrors
+	return uninstallErrors
 }
 
-func (c *DevOpsServiceClient) InstallBrew() error {
+func (c *DevOpsServiceClient) InstallBrew(ctx context.Context) error {
 	// Installing Brew
 	var cmd string
 	var brewPath string
 	var arguments []string
 
-	brewPath = c.findPath("brew")
+	brewPath = c.findPath(ctx, "brew")
 	if brewPath == "" {
 		cmd = "/bin/bash"
 		arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
@@ -225,7 +223,7 @@ func (c *DevOpsServiceClient) InstallBrew() error {
 		}
 	}
 
-	if c.findPath("brew") == "" {
+	if c.findPath(ctx, "brew") == "" {
 		return errors.New("Error running brew install command, error: brew not found")
 	}
 
@@ -237,16 +235,16 @@ func (c *DevOpsServiceClient) UninstallBrew() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallGit() error {
+func (c *DevOpsServiceClient) InstallGit(ctx context.Context) error {
 	// Installing Git
-	cmd := c.findPath("brew")
+	cmd := c.findPath(ctx, "brew")
 	if cmd == "" {
 		return errors.New("Error running git install command, error: brew not found")
 	}
 
 	arguments := []string{"install", "git"}
 	out, err := c.client.RunCommand(cmd, arguments)
-	tflog.Info(c.ctx, "Git install output: "+out)
+	tflog.Info(ctx, "Git install output: "+out)
 	if err != nil {
 		return errors.New("Error running git install command, error: " + err.Error())
 	}
@@ -254,21 +252,21 @@ func (c *DevOpsServiceClient) InstallGit() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) UninstallGit() error {
+func (c *DevOpsServiceClient) UninstallGit(ctx context.Context) error {
 	// Uninstalling Git
-	gitPresent := c.findPath("git")
+	gitPresent := c.findPath(ctx, "git")
 	if gitPresent == "" {
 		return nil
 	}
 
-	cmd := c.findPath("brew")
+	cmd := c.findPath(ctx, "brew")
 	if cmd == "" {
 		return errors.New("Error running git install command, error: brew not found")
 	}
 
 	arguments := []string{"uninstall", "git"}
 	out, err := c.client.RunCommand(cmd, arguments)
-	tflog.Info(c.ctx, "Git uninstall output: "+out)
+	tflog.Info(ctx, "Git uninstall output: "+out)
 	if err != nil {
 		return errors.New("Error running git uninstall command, error: " + err.Error())
 	}
@@ -276,16 +274,16 @@ func (c *DevOpsServiceClient) UninstallGit() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallPacker() error {
+func (c *DevOpsServiceClient) InstallPacker(ctx context.Context) error {
 	// Installing Packer
-	cmd := c.findPath("brew")
-	if c.findPath("brew") == "" {
+	cmd := c.findPath(ctx, "brew")
+	if c.findPath(ctx, "brew") == "" {
 		return nil
 	}
 
 	arguments := []string{"install", "packer"}
 	out, err := c.client.RunCommand(cmd, arguments)
-	tflog.Info(c.ctx, "Packer install output: "+out)
+	tflog.Info(ctx, "Packer install output: "+out)
 	if err != nil {
 		return errors.New("Error running packer install command, error: " + err.Error())
 	}
@@ -293,21 +291,21 @@ func (c *DevOpsServiceClient) InstallPacker() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) UninstallPacker() error {
+func (c *DevOpsServiceClient) UninstallPacker(ctx context.Context) error {
 	// Uninstalling Packer
-	packerPresent := c.findPath("packer")
+	packerPresent := c.findPath(ctx, "packer")
 	if packerPresent == "" {
 		return nil
 	}
 
-	cmd := c.findPath("brew")
+	cmd := c.findPath(ctx, "brew")
 	if cmd == "" {
 		return errors.New("Error running packer uninstall command, error: brew not found")
 	}
 
 	arguments := []string{"uninstall", "packer"}
 	out, err := c.client.RunCommand(cmd, arguments)
-	tflog.Info(c.ctx, "Packer uninstall output: "+out)
+	tflog.Info(ctx, "Packer uninstall output: "+out)
 	if err != nil {
 		return errors.New("Error running packer uninstall command, error: " + err.Error())
 	}
@@ -315,22 +313,22 @@ func (c *DevOpsServiceClient) UninstallPacker() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallVagrant() error {
+func (c *DevOpsServiceClient) InstallVagrant(ctx context.Context) error {
 	// Installing Vagrant
-	cmd := c.findPath("brew")
+	cmd := c.findPath(ctx, "brew")
 
-	if c.findPath("brew") == "" {
+	if c.findPath(ctx, "brew") == "" {
 		return nil
 	}
 
 	arguments := []string{"install", "vagrant"}
 	out, err := c.client.RunCommand(cmd, arguments)
-	tflog.Info(c.ctx, "Vagrant install output: "+out)
+	tflog.Info(ctx, "Vagrant install output: "+out)
 	if err != nil {
 		return errors.New("Error running vagrant install command, error: " + err.Error())
 	}
 
-	vagrantCommand := c.findPath("vagrant")
+	vagrantCommand := c.findPath(ctx, "vagrant")
 	if vagrantCommand == "" {
 		return errors.New("Error running vagrant install command, error: vagrant not found")
 	}
@@ -338,7 +336,7 @@ func (c *DevOpsServiceClient) InstallVagrant() error {
 	// Installing Vagrant Parallels Plugin
 	arguments = []string{"plugin", "install", "vagrant-parallels"}
 	out, err = c.client.RunCommand(vagrantCommand, arguments)
-	tflog.Info(c.ctx, "Vagrant plugin install output: "+out)
+	tflog.Info(ctx, "Vagrant plugin install output: "+out)
 	if err != nil {
 		return errors.New("Error running vagrant plugin install command, error: " + err.Error())
 	}
@@ -346,18 +344,18 @@ func (c *DevOpsServiceClient) InstallVagrant() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) UninstallVagrant() error {
+func (c *DevOpsServiceClient) UninstallVagrant(ctx context.Context) error {
 	// Uninstalling Vagrant Parallels Plugin
-	vagrantPresent := c.findPath("vagrant")
+	vagrantPresent := c.findPath(ctx, "vagrant")
 	if vagrantPresent == "" {
 		return nil
 	}
-	brewCmd := c.findPath("brew")
+	brewCmd := c.findPath(ctx, "brew")
 	if brewCmd == "" {
 		return errors.New("Error running vagrant uninstall plugin command, error: brew not found")
 	}
 
-	vagrantCmd := c.findPath("vagrant")
+	vagrantCmd := c.findPath(ctx, "vagrant")
 	arguments := []string{"plugin", "uninstall", "vagrant-parallels"}
 	_, err := c.client.RunCommand(vagrantCmd, arguments)
 	if err != nil {
@@ -367,7 +365,7 @@ func (c *DevOpsServiceClient) UninstallVagrant() error {
 	// Uninstalling Vagrant
 	arguments = []string{"uninstall", "vagrant"}
 	out, err := c.client.RunCommand(brewCmd, arguments)
-	tflog.Info(c.ctx, "Vagrant uninstall output: "+out)
+	tflog.Info(ctx, "Vagrant uninstall output: "+out)
 	if err != nil {
 		return errors.New("Error running vagrant uninstall command, error: " + err.Error())
 	}
@@ -375,9 +373,9 @@ func (c *DevOpsServiceClient) UninstallVagrant() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) InstallParallelsDesktop() error {
+func (c *DevOpsServiceClient) InstallParallelsDesktop(ctx context.Context) error {
 	// checking if is already installed
-	cmd := c.findPath("prlctl")
+	cmd := c.findPath(ctx, "prlctl")
 	arguments := []string{"--version"}
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err == nil {
@@ -385,7 +383,7 @@ func (c *DevOpsServiceClient) InstallParallelsDesktop() error {
 	}
 
 	// Installing parallels desktop using command line
-	cmd = c.findPath("brew")
+	cmd = c.findPath(ctx, "brew")
 	arguments = []string{"install", "parallels"}
 	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -395,16 +393,16 @@ func (c *DevOpsServiceClient) InstallParallelsDesktop() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) UninstallParallelsDesktop() error {
+func (c *DevOpsServiceClient) UninstallParallelsDesktop(ctx context.Context) error {
 	// checking if the prlctl is indeed installed, if not we do not need to do anything
-	cmd := c.findPath("prlctl")
+	cmd := c.findPath(ctx, "prlctl")
 	arguments := []string{"--version"}
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return err
 	}
 
-	cmd = c.findPath("brew")
+	cmd = c.findPath(ctx, "brew")
 	arguments = []string{"uninstall", "parallels"}
 	_, err = c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -414,8 +412,8 @@ func (c *DevOpsServiceClient) UninstallParallelsDesktop() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) GetLicense() (*models.ParallelsDesktopLicense, error) {
-	cmd := c.findPath("prlsrvctl")
+func (c *DevOpsServiceClient) GetLicense(ctx context.Context) (*models.ParallelsDesktopLicense, error) {
+	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"info", "--json"}
 	output, err := c.client.RunCommand(cmd, arguments)
 	output = strings.ReplaceAll(output, "This feature is not available in this edition of Parallels Desktop. \n", "")
@@ -437,7 +435,7 @@ func (c *DevOpsServiceClient) GetLicense() (*models.ParallelsDesktopLicense, err
 	return &parallelsLicense, nil
 }
 
-func (c *DevOpsServiceClient) InstallLicense(key string, username, password string) error {
+func (c *DevOpsServiceClient) InstallLicense(ctx context.Context, key string, username, password string) error {
 	if username != "" && password != "" {
 		// Generating the license password file
 		cmd := "echo"
@@ -446,14 +444,14 @@ func (c *DevOpsServiceClient) InstallLicense(key string, username, password stri
 			return err
 		}
 
-		cmd = c.findPath("prlsrvctl")
+		cmd = c.findPath(ctx, "prlsrvctl")
 		arguments = []string{"web-portal", "signin", username, "--read-passwd", "~/parallels_password.txt"}
 		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 			return err
 		}
 	}
 
-	cmd := c.findPath("prlsrvctl")
+	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"install-license", "--key", key, "--activate-online-immediately"}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return err
@@ -462,8 +460,8 @@ func (c *DevOpsServiceClient) InstallLicense(key string, username, password stri
 	return nil
 }
 
-func (c *DevOpsServiceClient) DeactivateLicense() error {
-	cmd := c.findPath("prlsrvctl")
+func (c *DevOpsServiceClient) DeactivateLicense(ctx context.Context) error {
+	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"deactivate-license", "--skip-network-errors"}
 
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
@@ -473,48 +471,48 @@ func (c *DevOpsServiceClient) DeactivateLicense() error {
 	return nil
 }
 
-func (c *DevOpsServiceClient) CompareLicenses(license string) (bool, error) {
-	currentLicense, err := c.GetLicense()
+func (c *DevOpsServiceClient) CompareLicenses(ctx context.Context, license string) (bool, error) {
+	currentLicense, err := c.GetLicense(ctx)
 	if err != nil || currentLicense == nil {
 		return false, err
 	}
 
 	if currentLicense.Key.IsUnknown() || currentLicense.Key.IsNull() {
-		tflog.Info(c.ctx, "Current license: "+currentLicense.Key.ValueString())
+		tflog.Info(ctx, "Current license: "+currentLicense.Key.ValueString())
 	} else {
-		tflog.Info(c.ctx, "Current license key is nil")
+		tflog.Info(ctx, "Current license key is nil")
 	}
 
-	if currentLicense == nil && license == "" {
-		tflog.Info(c.ctx, "No license found")
+	if license == "" {
+		tflog.Info(ctx, "No license found")
 		return true, nil
 	}
 
 	if currentLicense.Key.ValueString() == "" && license == "" {
-		tflog.Info(c.ctx, "No license found1")
+		tflog.Info(ctx, "No license found1")
 		return true, nil
 	}
 
 	currentLicenseKeyParts := strings.Split(currentLicense.Key.ValueString(), "-")
 	licenseKeyParts := strings.Split(license, "-")
 	if len(currentLicenseKeyParts) != len(licenseKeyParts) {
-		tflog.Info(c.ctx, "License key parts not equal")
+		tflog.Info(ctx, "License key parts not equal")
 		return false, nil
 	}
 	if strings.EqualFold(currentLicenseKeyParts[0], licenseKeyParts[0]) &&
 		strings.EqualFold(currentLicenseKeyParts[len(currentLicenseKeyParts)-1], licenseKeyParts[len(licenseKeyParts)-1]) {
-		tflog.Info(c.ctx, "License key parts equal")
+		tflog.Info(ctx, "License key parts equal")
 		return true, nil
 	}
 
-	tflog.Info(c.ctx, "License key parts not equal1")
+	tflog.Info(ctx, "License key parts not equal1")
 	return false, nil
 }
 
-func (c *DevOpsServiceClient) InstallDevOpsService(license string, config models.ParallelsDesktopDevopsConfigV2) (string, error) {
+func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, config models.ParallelsDesktopDevopsConfigV2) (string, error) {
 	// Installing DevOps Service
 
-	devopsPath := c.findPath("prldevops")
+	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		cmd := "/bin/bash"
 		arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "-", "--no-service"}
@@ -530,12 +528,12 @@ func (c *DevOpsServiceClient) InstallDevOpsService(license string, config models
 		}
 	}
 
-	devopsPath = c.findPath("prldevops")
+	devopsPath = c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		return "", errors.New("Error running devops install command, error: brew not found")
 	}
 
-	folderPath := c.findPathFolder("prldevops")
+	folderPath := c.findPathFolder(ctx, "prldevops")
 	if folderPath == "" {
 		return "", errors.New("Error running devops install command, error: prldevops folder not found")
 	}
@@ -616,14 +614,14 @@ func (c *DevOpsServiceClient) InstallDevOpsService(license string, config models
 		return "", err
 	}
 
-	tflog.Info(c.ctx, "Done")
+	tflog.Info(ctx, "Done")
 	return finalVersion, nil
 }
 
-func (c *DevOpsServiceClient) UninstallDevOpsService() error {
-	tflog.Info(c.ctx, "Uninstalling the Parallels Desktop DevOps Service")
+func (c *DevOpsServiceClient) UninstallDevOpsService(ctx context.Context) error {
+	tflog.Info(ctx, "Uninstalling the Parallels Desktop DevOps Service")
 
-	devopsPath := c.findPath("prldevops")
+	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		return nil
 	}
@@ -659,8 +657,8 @@ func (c *DevOpsServiceClient) GetDevOpsVersion() (string, error) {
 	return strings.ReplaceAll(output, "\n", ""), nil
 }
 
-func (c *DevOpsServiceClient) GetPackerVersion() (string, error) {
-	cmd := c.findPath("packer")
+func (c *DevOpsServiceClient) GetPackerVersion(ctx context.Context) (string, error) {
+	cmd := c.findPath(ctx, "packer")
 	arguments := []string{"--version"}
 	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -670,8 +668,8 @@ func (c *DevOpsServiceClient) GetPackerVersion() (string, error) {
 	return strings.ReplaceAll(output, "\n", ""), nil
 }
 
-func (c *DevOpsServiceClient) GetVagrantVersion() (string, error) {
-	cmd := c.findPath("vagrant")
+func (c *DevOpsServiceClient) GetVagrantVersion(ctx context.Context) (string, error) {
+	cmd := c.findPath(ctx, "vagrant")
 	arguments := []string{"--version"}
 	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -681,8 +679,8 @@ func (c *DevOpsServiceClient) GetVagrantVersion() (string, error) {
 	return strings.ReplaceAll(strings.ReplaceAll(output, "\n", ""), "Vagrant  ", ""), nil
 }
 
-func (c *DevOpsServiceClient) GetGitVersion() (string, error) {
-	cmd := c.findPath("git")
+func (c *DevOpsServiceClient) GetGitVersion(ctx context.Context) (string, error) {
+	cmd := c.findPath(ctx, "git")
 	arguments := []string{"--version"}
 	output, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -692,8 +690,8 @@ func (c *DevOpsServiceClient) GetGitVersion() (string, error) {
 	return strings.ReplaceAll(strings.ReplaceAll(output, "\n", ""), "git version ", ""), nil
 }
 
-func (c *DevOpsServiceClient) GenerateDefaultRootPassword() (string, error) {
-	info, err := c.GetInfo()
+func (c *DevOpsServiceClient) GenerateDefaultRootPassword(ctx context.Context) (string, error) {
+	info, err := c.GetInfo(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -778,21 +776,21 @@ func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopD
 	return configPath, nil
 }
 
-func (s *DevOpsServiceClient) findPath(cmd string) string {
-	tflog.Info(s.ctx, "Getting "+cmd+" executable")
-	out, err := s.client.RunCommand("which", []string{cmd})
+func (c *DevOpsServiceClient) findPath(ctx context.Context, cmd string) string {
+	tflog.Info(ctx, "Getting "+cmd+" executable")
+	out, err := c.client.RunCommand("which", []string{cmd})
 	path := strings.ReplaceAll(strings.TrimSpace(out), "\n", "")
 	if err != nil || path == "" {
-		tflog.Info(s.ctx, cmd+" executable not found, trying to find it in the default locations")
+		tflog.Info(ctx, cmd+" executable not found, trying to find it in the default locations")
 		path = ""
 	}
 
 	folders := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin"}
 
 	for _, folder := range folders {
-		if _, err := s.client.RunCommand("ls", []string{filepath.Join(folder, cmd)}); err == nil {
+		if _, err := c.client.RunCommand("ls", []string{filepath.Join(folder, cmd)}); err == nil {
 			path = filepath.Join(folder, cmd)
-			tflog.Info(s.ctx, "Found "+cmd+" executable at "+path)
+			tflog.Info(ctx, "Found "+cmd+" executable at "+path)
 			break
 		}
 	}
@@ -800,14 +798,14 @@ func (s *DevOpsServiceClient) findPath(cmd string) string {
 	return path
 }
 
-func (s *DevOpsServiceClient) findPathFolder(cmd string) string {
-	tflog.Info(s.ctx, "Getting "+cmd+" executable folder")
-	path := s.findPath(cmd)
+func (c *DevOpsServiceClient) findPathFolder(ctx context.Context, cmd string) string {
+	tflog.Info(ctx, "Getting "+cmd+" executable folder")
+	path := c.findPath(ctx, cmd)
 	if path == "" {
 		return ""
 	}
 	folder := filepath.Dir(path)
-	tflog.Info(s.ctx, "Found "+cmd+" executable folder at "+folder)
+	tflog.Info(ctx, "Found "+cmd+" executable folder at "+folder)
 	return folder
 }
 

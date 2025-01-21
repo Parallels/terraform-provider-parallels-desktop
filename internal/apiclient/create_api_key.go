@@ -23,7 +23,7 @@ func CreateApiKey(ctx context.Context, config HostConfig, request apimodels.ApiK
 
 	tflog.Info(ctx, "Creating API Key "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/api_keys", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/auth/api_keys"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -32,7 +32,7 @@ func CreateApiKey(ctx context.Context, config HostConfig, request apimodels.ApiK
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error adding api key: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

@@ -21,7 +21,6 @@ func CheckIfEnoughSpecs(ctx context.Context, hostConfig apiclient.HostConfig, sp
 	var diag diag.Diagnostics
 
 	if hostConfig.IsOrchestrator {
-
 		if arch == "" {
 			arch = "arm64"
 		}

@@ -9,15 +9,15 @@ import (
 // DeployResourceModel describes the resource data model.
 
 type DeployResourceModelV0 struct {
-	SshConnection         *DeployResourceSshConnection           `tfsdk:"ssh_connection"`
+	SSHConnection         *DeployResourceSshConnection           `tfsdk:"ssh_connection"`
 	CurrentVersion        types.String                           `tfsdk:"current_version"`
 	CurrentPackerVersion  types.String                           `tfsdk:"current_packer_version"`
 	CurrentVagrantVersion types.String                           `tfsdk:"current_vagrant_version"`
 	CurrentGitVersion     types.String                           `tfsdk:"current_git_version"`
 	License               types.Object                           `tfsdk:"license"`
 	Orchestrator          *orchestrator.OrchestratorRegistration `tfsdk:"orchestrator_registration"`
-	ApiConfig             *ParallelsDesktopDevopsConfigV0        `tfsdk:"api_config"`
-	Api                   types.Object                           `tfsdk:"api"`
+	APIConfig             *ParallelsDesktopDevopsConfigV0        `tfsdk:"api_config"`
+	API                   types.Object                           `tfsdk:"api"`
 	InstalledDependencies types.List                             `tfsdk:"installed_dependencies"`
 	InstallLocal          types.Bool                             `tfsdk:"install_local"`
 }
@@ -39,7 +39,7 @@ type ParallelsDesktopDevopsConfigV0 struct {
 	Mode                     types.String `tfsdk:"mode" json:"mode,omitempty"`
 	UseOrchestratorResources types.Bool   `tfsdk:"use_orchestrator_resources"`
 	SystemReservedMemory     types.String `tfsdk:"system_reserved_memory"`
-	SystemReservedCpu        types.String `tfsdk:"system_reserved_cpu"`
+	SystemReservedCPU        types.String `tfsdk:"system_reserved_cpu"`
 	SystemReservedDisk       types.String `tfsdk:"system_reserved_disk"`
 	EnableLogging            types.Bool   `tfsdk:"enable_logging"`
 }

@@ -21,7 +21,7 @@ func GetSystemUsage(ctx context.Context, config HostConfig) (*apimodels.SystemUs
 	if config.IsOrchestrator {
 		url = fmt.Sprintf("%s/orchestrator/hosts/%s/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost), config.HostId)
 	} else {
-		url = fmt.Sprintf("%s/config/hardware", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/config/hardware"
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
@@ -31,7 +31,7 @@ func GetSystemUsage(ctx context.Context, config HostConfig) (*apimodels.SystemUs
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

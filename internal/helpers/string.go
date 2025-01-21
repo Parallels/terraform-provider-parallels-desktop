@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
 	"terraform-provider-parallels-desktop/internal/constants"
 )
 
@@ -27,6 +28,7 @@ func Base64Decode(input string) (string, error) {
 	}
 	return string(b), nil
 }
+
 func GetHostUrl(host string) string {
 	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 		host = "http://" + host

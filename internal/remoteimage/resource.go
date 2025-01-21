@@ -55,7 +55,7 @@ func (r *RemoteVmResource) Configure(ctx context.Context, req resource.Configure
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *common_modesl.ParallelsProviderModel, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *common_models .ParallelsProviderModel, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -74,7 +74,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -466,7 +466,7 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -539,7 +539,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -879,7 +879,7 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -1045,8 +1045,6 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 		ReverseProxyHosts:    make([]*reverseproxy.ReverseProxyHost, 0),
 	}
 
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
@@ -1087,8 +1085,6 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 		KeepRunning:          priorStateData.KeepRunning,
 		ReverseProxyHosts:    priorStateData.ReverseProxyHosts,
 	}
-
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }

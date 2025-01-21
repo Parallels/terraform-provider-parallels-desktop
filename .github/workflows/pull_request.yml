@@ -1,0 +1,109 @@
+name: Pull Requests
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - run: go version
+      - name: Terraform version
+        run: terraform version
+      - name: Tidy
+        run: go mod tidy
+      - run: |
+          make deps
+      - name: Build
+        run: make build
+      - name: Check release
+        run: make check-release
+      - name: Fail if changes
+        run: git diff-index --exit-code HEAD
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: avto-dev/markdown-lint@v1.5.0
+        with:
+          config: '.markdownlint.yml'
+          args: 'docs'
+  misspell:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout should always be before setup-go to ensure caching is working
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/cache@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
+      - run: go install github.com/client9/misspell/cmd/misspell@latest
+      - run: misspell -error -source text docs/
+  gosec_scan:
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - run: go version
+      - name: Tidy
+        run: go mod tidy
+      - name: Check gosec
+        run: make security-check
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  test:
+    name: Terraform Provider Acceptance Tests
+    needs:
+      - build
+      - gosec_scan
+      - markdown-lint
+      - misspell
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # list whatever Terraform versions here you would like to support
+        terraform:
+          - '1.0.*'
+          - '1.1.*'
+          - '1.2.*'
+          - '1.3.*'
+          - '1.4.*'
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2.0.3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - run: go mod download
+      - env:
+          TF_ACC: '1'
+        run: go test -v -cover ./internal/provider/
+        timeout-minutes: 10

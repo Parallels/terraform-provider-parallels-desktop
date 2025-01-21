@@ -3,6 +3,7 @@ package packertemplate
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -288,7 +289,7 @@ func (r *PackerTemplateVirtualMachineResource) Update(ctx context.Context, req r
 	}
 
 	if data.Specs != nil {
-		if data.Specs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
+		if data.Specs.CpuCount.ValueString() != strconv.FormatInt(vm.Hardware.CPU.Cpus, 10) {
 			updateValue := data.Specs.CpuCount.ValueString()
 			if updateValue == "" {
 				updateValue = "2"

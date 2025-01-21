@@ -9,13 +9,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func GetAuthenticator(ctx context.Context, host string, license string, authenticator *Authentication, disableTlsVerification bool) (*helpers.HttpCallerAuth, error) {
-	client := helpers.NewHttpCaller(ctx, disableTlsVerification)
+func GetAuthenticator(ctx context.Context, host string, license string, authenticator *Authentication, disableTLSVerification bool) (*helpers.HttpCallerAuth, error) {
+	client := helpers.NewHttpCaller(ctx, disableTLSVerification)
 	var auth helpers.HttpCallerAuth
 	if authenticator == nil {
 		tflog.Info(ctx, "Authenticator is nil, using root access")
 		password := license
-		token, err := client.GetJwtToken(host, constants.RootUser, password)
+		token, err := client.GetJwtToken(ctx, host, constants.RootUser, password)
 		if err != nil {
 			return nil, err
 		}
@@ -27,7 +27,7 @@ func GetAuthenticator(ctx context.Context, host string, license string, authenti
 	} else {
 		if authenticator.Username.ValueString() != "" {
 			password := authenticator.Password.ValueString()
-			token, err := client.GetJwtToken(host, authenticator.Username.ValueString(), password)
+			token, err := client.GetJwtToken(ctx, host, authenticator.Username.ValueString(), password)
 			if err != nil {
 				return nil, err
 			}
@@ -40,6 +40,5 @@ func GetAuthenticator(ctx context.Context, host string, license string, authenti
 			}
 		}
 		return &auth, nil
-
 	}
 }

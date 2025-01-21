@@ -82,7 +82,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -103,20 +103,20 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
 
-	dependencies, diag := r.installParallelsDesktop(parallelsClient)
+	dependencies, diag := r.installParallelsDesktop(ctx, parallelsClient)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 
-	_, diag = r.installDevOpsService(&data, dependencies, parallelsClient)
+	_, diag = r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
 	}
 
 	// getting parallels version
-	if version, err := parallelsClient.GetVersion(); err != nil {
+	if version, err := parallelsClient.GetVersion(ctx); err != nil {
 		resp.Diagnostics.AddError("Error getting parallels version", err.Error())
 		return
 	} else {
@@ -124,37 +124,37 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	// getting git version
-	if version, err := parallelsClient.GetGitVersion(); err != nil {
+	if version, err := parallelsClient.GetGitVersion(ctx); err != nil {
 		data.CurrentGitVersion = types.StringValue("-")
 	} else {
 		data.CurrentGitVersion = types.StringValue(version)
 	}
 
 	// getting packer version
-	if version, err := parallelsClient.GetPackerVersion(); err != nil {
+	if version, err := parallelsClient.GetPackerVersion(ctx); err != nil {
 		data.CurrentPackerVersion = types.StringValue("-")
 	} else {
 		data.CurrentPackerVersion = types.StringValue(version)
 	}
 
 	// getting Vagrant version
-	if version, err := parallelsClient.GetVagrantVersion(); err != nil {
+	if version, err := parallelsClient.GetVagrantVersion(ctx); err != nil {
 		data.CurrentVagrantVersion = types.StringValue("-")
 	} else {
 		data.CurrentVagrantVersion = types.StringValue(version)
 	}
 
 	// getting parallels license
-	if license, err := parallelsClient.GetLicense(); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+	if license, err := parallelsClient.GetLicense(ctx); err != nil {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+		if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 		resp.Diagnostics.AddError("Error getting parallels license", err.Error())
@@ -165,18 +165,17 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Register with orchestrator if needed
 	if data.Orchestrator != nil {
-
 		diag := r.registerWithOrchestrator(ctx, &data, nil)
 		if diag.HasError() {
-			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+			if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 				for _, uninstallError := range uninstallErrors {
 					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 				}
 			}
-			if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 			}
-			if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			}
 			diags := r.unregisterWithOrchestrator(ctx, &data)
@@ -239,7 +238,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	tflog.Info(ctx, "Read request to see logs")
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -263,7 +262,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
 
 	// getting parallels version
-	if version, err := parallelsClient.GetVersion(); err != nil {
+	if version, err := parallelsClient.GetVersion(ctx); err != nil {
 		resp.Diagnostics.AddWarning("Error getting parallels version", err.Error())
 		return
 	} else {
@@ -271,7 +270,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	// getting parallels license
-	if license, err := parallelsClient.GetLicense(); err != nil {
+	if license, err := parallelsClient.GetLicense(ctx); err != nil {
 		resp.Diagnostics.AddWarning("Error getting parallels license", err.Error())
 		return
 	} else {
@@ -328,7 +327,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -355,8 +354,8 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	parallelsClient := NewDevOpsServiceClient(ctx, runClient)
 
 	// checking if we still have parallels desktop installed
-	if _, err := parallelsClient.GetVersion(); err != nil {
-		dependencies, restartDiag = r.installParallelsDesktop(parallelsClient)
+	if _, err := parallelsClient.GetVersion(ctx); err != nil {
+		dependencies, restartDiag = r.installParallelsDesktop(ctx, parallelsClient)
 		if restartDiag.HasError() {
 			resp.Diagnostics.AddError("Error reinstalling Parallels desktop", err.Error())
 			return
@@ -366,30 +365,30 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// checking if we still have the devops service running
 	_, devOpsErr := parallelsClient.GetDevOpsVersion()
 	if devOpsErr != nil {
-		r.installDevOpsService(&data, dependencies, parallelsClient)
+		r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 	}
 
 	// Check if the API config has changed
 	if deploy_models.ApiConfigHasChanges(ctx, data.ApiConfig, currentData.ApiConfig) {
-		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+		if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			return
 		}
-		if _, diag := r.installDevOpsService(&data, dependencies, parallelsClient); diag.HasError() {
+		if _, diag := r.installDevOpsService(ctx, &data, dependencies, parallelsClient); diag.HasError() {
 			resp.Diagnostics.Append(diag...)
 			return
 		}
 
 		if diag := r.registerWithOrchestrator(ctx, &data, &currentData); diag.HasError() {
-			if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+			if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 				for _, uninstallError := range uninstallErrors {
 					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 				}
 			}
-			if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+			if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 			}
-			if err := parallelsClient.UninstallDevOpsService(); err != nil {
+			if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 				resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 			}
 			resp.Diagnostics.Append(diag...)
@@ -401,7 +400,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// restart parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
-		dependencies, restartDiag = r.installParallelsDesktop(parallelsClient)
+		dependencies, restartDiag = r.installParallelsDesktop(ctx, parallelsClient)
 		if restartDiag.HasError() {
 			resp.Diagnostics.AddError("Error restarting parallels service", err.Error())
 			return
@@ -410,21 +409,21 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if r.provider.License.ValueString() != "" {
 		// Licenses are the same, no changes
-		equal, err := parallelsClient.CompareLicenses(r.provider.License.ValueString())
+		equal, err := parallelsClient.CompareLicenses(ctx, r.provider.License.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error comparing parallels licenses", err.Error())
 			return
 		}
 
 		if !equal {
-			currentLicense, err := parallelsClient.GetLicense()
+			currentLicense, err := parallelsClient.GetLicense(ctx)
 			if err != nil {
 				resp.Diagnostics.AddError("Error getting parallels license", err.Error())
 				return
 			}
 			if currentLicense.State.ValueString() == "valid" {
 				// deactivating parallels license
-				if err := parallelsClient.DeactivateLicense(); err != nil {
+				if err := parallelsClient.DeactivateLicense(ctx); err != nil {
 					resp.Diagnostics.AddError("Error deactivating parallels license", err.Error())
 					return
 				}
@@ -438,23 +437,21 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 			password := r.provider.MyAccountPassword.ValueString()
 
 			// installing parallels license
-			if err := parallelsClient.InstallLicense(key, username, password); err != nil {
+			if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
 				resp.Diagnostics.AddError("Error installing parallels license", err.Error())
 				return
 			}
 		}
-	} else {
-		if !data.License.IsNull() || !data.License.IsUnknown() {
-			// deactivating parallels license
-			if err := parallelsClient.DeactivateLicense(); err != nil {
-				resp.Diagnostics.AddError("Error deactivating parallels license", err.Error())
-				return
-			}
+	} else if !data.License.IsNull() || !data.License.IsUnknown() {
+		// deactivating parallels license
+		if err := parallelsClient.DeactivateLicense(ctx); err != nil {
+			resp.Diagnostics.AddError("Error deactivating parallels license", err.Error())
+			return
 		}
 	}
 
 	// getting parallels version
-	if version, err := parallelsClient.GetVersion(); err != nil {
+	if version, err := parallelsClient.GetVersion(ctx); err != nil {
 		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
@@ -462,7 +459,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// getting git version
-	if version, err := parallelsClient.GetGitVersion(); err != nil {
+	if version, err := parallelsClient.GetGitVersion(ctx); err != nil {
 		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
@@ -470,7 +467,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// getting packer version
-	if version, err := parallelsClient.GetPackerVersion(); err != nil {
+	if version, err := parallelsClient.GetPackerVersion(ctx); err != nil {
 		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
@@ -478,7 +475,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// getting Vagrant version
-	if version, err := parallelsClient.GetVagrantVersion(); err != nil {
+	if version, err := parallelsClient.GetVagrantVersion(ctx); err != nil {
 		data.CurrentVagrantVersion = types.StringValue("-")
 		return
 	} else {
@@ -486,7 +483,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// getting parallels license
-	if license, err := parallelsClient.GetLicense(); err != nil {
+	if license, err := parallelsClient.GetLicense(ctx); err != nil {
 		resp.Diagnostics.AddError("Error getting parallels license", err.Error())
 		return
 	} else {
@@ -501,7 +498,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion()
 	if getVersionError != nil {
 		if getVersionError.Error() == "Parallels Desktop DevOps Service not found" {
-			_, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
+			_, apiDiag := r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 			if apiDiag.HasError() {
 				resp.Diagnostics.Append(apiDiag...)
 				return
@@ -521,7 +518,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if !desiredApiData.IsUnknown() && !desiredApiData.IsNull() {
 		desiredVersion := strings.ReplaceAll(desiredApiData.Attributes()["version"].String(), "\"", "")
 		if installedVersion != desiredVersion {
-			devOpsData, apiDiag := r.installDevOpsService(&data, dependencies, parallelsClient)
+			devOpsData, apiDiag := r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 			if apiDiag.HasError() {
 				resp.Diagnostics.Append(apiDiag...)
 				return
@@ -537,15 +534,15 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if data.Orchestrator != nil {
 		if orchestrator.HasChanges(ctx, data.Orchestrator, currentData.Orchestrator) {
 			if diag := r.registerWithOrchestrator(ctx, &data, &currentData); diag.HasError() {
-				if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+				if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 					for _, uninstallError := range uninstallErrors {
 						diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 					}
 				}
-				if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+				if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 					resp.Diagnostics.AddError("Error uninstalling dependencies", err.Error())
 				}
-				if err := parallelsClient.UninstallDevOpsService(); err != nil {
+				if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 					resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 				}
 				resp.Diagnostics.Append(diag...)
@@ -617,7 +614,7 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -638,12 +635,12 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	parallelsService := NewDevOpsServiceClient(ctx, runClient)
 
 	// deactivating parallels license
-	if err := parallelsService.DeactivateLicense(); err != nil {
+	if err := parallelsService.DeactivateLicense(ctx); err != nil {
 		resp.Diagnostics.AddWarning("Error deactivating parallels license", err.Error())
 	}
 
 	// uninstalling parallels desktop
-	if err := parallelsService.UninstallParallelsDesktop(); err != nil {
+	if err := parallelsService.UninstallParallelsDesktop(ctx); err != nil {
 		resp.Diagnostics.AddWarning("Error uninstalling parallels desktop", err.Error())
 	}
 
@@ -657,7 +654,7 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	// uninstalling dependencies
-	if uninstallErrors := parallelsService.UninstallDependencies(installedDependencies); len(uninstallErrors) > 0 {
+	if uninstallErrors := parallelsService.UninstallDependencies(ctx, installedDependencies); len(uninstallErrors) > 0 {
 		for _, err := range uninstallErrors {
 			resp.Diagnostics.AddWarning("Error uninstalling dependencies", err.Error())
 		}
@@ -671,7 +668,7 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		"restricted": types.BoolType,
 	})
 
-	if err := parallelsService.UninstallDevOpsService(); err != nil {
+	if err := parallelsService.UninstallDevOpsService(ctx); err != nil {
 		resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
 	}
 
@@ -729,7 +726,7 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 	}
 
 	upgradedStateData := deploy_models.DeployResourceModelV1{
-		SshConnection:         priorStateData.SshConnection,
+		SshConnection:         priorStateData.SSHConnection,
 		CurrentVersion:        priorStateData.CurrentVersion,
 		CurrentPackerVersion:  priorStateData.CurrentPackerVersion,
 		CurrentVagrantVersion: priorStateData.CurrentVagrantVersion,
@@ -737,33 +734,31 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 		License:               priorStateData.License,
 		Orchestrator:          priorStateData.Orchestrator,
 		ApiConfig: &deploy_models.ParallelsDesktopDevopsConfigV1{
-			Port:                     priorStateData.ApiConfig.Port,
-			Prefix:                   priorStateData.ApiConfig.Prefix,
-			DevOpsVersion:            priorStateData.ApiConfig.DevOpsVersion,
-			RootPassword:             priorStateData.ApiConfig.RootPassword,
-			HmacSecret:               priorStateData.ApiConfig.HmacSecret,
-			EncryptionRsaKey:         priorStateData.ApiConfig.EncryptionRsaKey,
-			LogLevel:                 priorStateData.ApiConfig.LogLevel,
-			EnableTLS:                priorStateData.ApiConfig.EnableTLS,
-			TLSPort:                  priorStateData.ApiConfig.TLSPort,
-			TLSCertificate:           priorStateData.ApiConfig.TLSCertificate,
-			TLSPrivateKey:            priorStateData.ApiConfig.TLSPrivateKey,
-			DisableCatalogCaching:    priorStateData.ApiConfig.DisableCatalogCaching,
-			TokenDurationMinutes:     priorStateData.ApiConfig.TokenDurationMinutes,
-			Mode:                     priorStateData.ApiConfig.Mode,
-			UseOrchestratorResources: priorStateData.ApiConfig.UseOrchestratorResources,
-			SystemReservedMemory:     priorStateData.ApiConfig.SystemReservedMemory,
-			SystemReservedCpu:        priorStateData.ApiConfig.SystemReservedCpu,
-			SystemReservedDisk:       priorStateData.ApiConfig.SystemReservedDisk,
-			EnableLogging:            priorStateData.ApiConfig.EnableLogging,
+			Port:                     priorStateData.APIConfig.Port,
+			Prefix:                   priorStateData.APIConfig.Prefix,
+			DevOpsVersion:            priorStateData.APIConfig.DevOpsVersion,
+			RootPassword:             priorStateData.APIConfig.RootPassword,
+			HmacSecret:               priorStateData.APIConfig.HmacSecret,
+			EncryptionRsaKey:         priorStateData.APIConfig.EncryptionRsaKey,
+			LogLevel:                 priorStateData.APIConfig.LogLevel,
+			EnableTLS:                priorStateData.APIConfig.EnableTLS,
+			TLSPort:                  priorStateData.APIConfig.TLSPort,
+			TLSCertificate:           priorStateData.APIConfig.TLSCertificate,
+			TLSPrivateKey:            priorStateData.APIConfig.TLSPrivateKey,
+			DisableCatalogCaching:    priorStateData.APIConfig.DisableCatalogCaching,
+			TokenDurationMinutes:     priorStateData.APIConfig.TokenDurationMinutes,
+			Mode:                     priorStateData.APIConfig.Mode,
+			UseOrchestratorResources: priorStateData.APIConfig.UseOrchestratorResources,
+			SystemReservedMemory:     priorStateData.APIConfig.SystemReservedMemory,
+			SystemReservedCpu:        priorStateData.APIConfig.SystemReservedCPU,
+			SystemReservedDisk:       priorStateData.APIConfig.SystemReservedDisk,
+			EnableLogging:            priorStateData.APIConfig.EnableLogging,
 			EnvironmentVariables:     make(map[string]basetypes.StringValue),
 		},
-		Api:                   priorStateData.Api,
+		Api:                   priorStateData.API,
 		InstalledDependencies: priorStateData.InstalledDependencies,
 		InstallLocal:          priorStateData.InstallLocal,
 	}
-
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
@@ -814,8 +809,6 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 		InstallLocal:          priorStateData.InstallLocal,
 	}
 
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }
 
@@ -848,7 +841,7 @@ func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV2) 
 	return sshClient, nil
 }
 
-func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceClient) ([]string, diag.Diagnostics) {
+func (r *DeployResource) installParallelsDesktop(ctx context.Context, parallelsClient *DevOpsServiceClient) ([]string, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	var installDependenciesError error
 	var installed_dependencies []string
@@ -859,9 +852,9 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	}
 
 	// installing dependencies
-	installed_dependencies, installDependenciesError = parallelsClient.InstallDependencies(mandatoryDependencies)
+	installed_dependencies, installDependenciesError = parallelsClient.InstallDependencies(ctx, mandatoryDependencies)
 	if installDependenciesError != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
@@ -871,13 +864,13 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	}
 
 	// installing parallels desktop
-	if err := parallelsClient.InstallParallelsDesktop(); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+	if err := parallelsClient.InstallParallelsDesktop(ctx); err != nil {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 			return installed_dependencies, diag
 		}
@@ -888,12 +881,12 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 
 	// restarting parallels service
 	if err := parallelsClient.RestartServer(); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
 		diag.AddError("Error restarting parallels service", err.Error())
@@ -905,13 +898,13 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	password := r.provider.MyAccountPassword.ValueString()
 
 	// installing parallels license
-	if err := parallelsClient.InstallLicense(key, username, password); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(installed_dependencies); len(uninstallErrors) > 0 {
+	if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
 		diag.AddError("Error installing parallels license", err.Error())
@@ -925,7 +918,7 @@ func (r *DeployResource) installParallelsDesktop(parallelsClient *DevOpsServiceC
 	return installed_dependencies, diag
 }
 
-func (r *DeployResource) installDevOpsService(data *deploy_models.DeployResourceModelV2, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
+func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_models.DeployResourceModelV2, dependencies []string, parallelsClient *DevOpsServiceClient) (*deploy_models.ParallelsDesktopDevOps, diag.Diagnostics) {
 	diag := diag.Diagnostics{}
 	targetPort := "8080"
 	targetTlsPort := "8443"
@@ -947,17 +940,17 @@ func (r *DeployResource) installDevOpsService(data *deploy_models.DeployResource
 		config.RootPassword = r.provider.License
 	}
 
-	_, err := parallelsClient.InstallDevOpsService(r.provider.License.ValueString(), config)
+	_, err := parallelsClient.InstallDevOpsService(ctx, r.provider.License.ValueString(), config)
 	if err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+		if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 			diag.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 
@@ -967,15 +960,15 @@ func (r *DeployResource) installDevOpsService(data *deploy_models.DeployResource
 
 	currentVersion, err := parallelsClient.GetDevOpsVersion()
 	if err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(dependencies); len(uninstallErrors) > 0 {
+		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
 				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
 			}
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(); err != nil {
+		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
 			diag.AddError("Error uninstalling dependencies", err.Error())
 		}
-		if err := parallelsClient.UninstallDevOpsService(); err != nil {
+		if err := parallelsClient.UninstallDevOpsService(ctx); err != nil {
 			diag.AddError("Error uninstalling parallels DevOps service", err.Error())
 		}
 		diag.AddError("Error getting parallels api version", err.Error())

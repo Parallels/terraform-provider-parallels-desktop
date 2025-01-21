@@ -22,7 +22,7 @@ func CreateReverseProxyHost(ctx context.Context, config HostConfig, request apim
 	if config.IsOrchestrator {
 		url = fmt.Sprintf("%s/orchestrator/hosts/%s/reverse-proxy/hosts", helpers.GetHostApiVersionedBaseUrl(urlHost), config.HostId)
 	} else {
-		url = fmt.Sprintf("%s/reverse-proxy/hosts", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/reverse-proxy/hosts"
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
@@ -32,7 +32,7 @@ func CreateReverseProxyHost(ctx context.Context, config HostConfig, request apim
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error creating reverse proxy: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

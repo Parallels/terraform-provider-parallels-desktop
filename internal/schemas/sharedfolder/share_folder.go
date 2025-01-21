@@ -95,7 +95,10 @@ func (s *SharedFolder) Add(ctx context.Context, config apiclient.HostConfig, vm 
 		diagnostic.Append(diag...)
 		return diagnostic
 	}
-	out, _ := json.MarshalIndent(response, "", "  ")
+	out, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		tflog.Error(ctx, "Error marshalling response: "+err.Error())
+	}
 	tflog.Info(ctx, "response: "+string(out))
 
 	if response == nil {
@@ -105,7 +108,6 @@ func (s *SharedFolder) Add(ctx context.Context, config apiclient.HostConfig, vm 
 	for _, op := range response.Operations {
 		tflog.Info(ctx, "op error: "+op.Error)
 		if op.Error != "" {
-
 			diagnostic.AddError("There was an error adding the shared folder", op.Error)
 			return diagnostic
 		}
@@ -145,7 +147,10 @@ func (s *SharedFolder) Update(ctx context.Context, config apiclient.HostConfig, 
 		diagnostic.Append(diag...)
 		return diagnostic
 	}
-	out, _ := json.MarshalIndent(response, "", "  ")
+	out, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		tflog.Error(ctx, "Error marshalling response: "+err.Error())
+	}
 	tflog.Info(ctx, "response: "+string(out))
 
 	if response == nil {
@@ -177,7 +182,10 @@ func (s *SharedFolder) Delete(ctx context.Context, config apiclient.HostConfig, 
 		diagnostic.Append(diag...)
 		return diagnostic
 	}
-	out, _ := json.MarshalIndent(response, "", "  ")
+	out, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		tflog.Error(ctx, "Error marshalling response: "+err.Error())
+	}
 	tflog.Info(ctx, "response: "+string(out))
 	if response == nil {
 		diagnostic.AddError("There was an error deleting the shared folder", "response is nil")

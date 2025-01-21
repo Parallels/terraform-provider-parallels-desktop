@@ -23,9 +23,9 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	var url string
 
 	if config.IsOrchestrator {
-		url = fmt.Sprintf("%s/orchestrator/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/machines/"
 	} else {
-		url = fmt.Sprintf("%s/machines/", helpers.GetHostApiVersionedBaseUrl(urlHost))
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/machines/"
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
@@ -42,7 +42,7 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, &filter, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, &filter, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

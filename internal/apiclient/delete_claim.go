@@ -28,7 +28,7 @@ func DeleteClaim(ctx context.Context, config HostConfig, claimId string) diag.Di
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
+	if clientResponse, err := client.DeleteDataFromClient(ctx, url, nil, auth, nil); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {
 				tflog.Info(ctx, "Claim "+claimId+" not found")

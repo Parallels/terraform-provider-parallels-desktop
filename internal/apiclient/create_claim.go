@@ -26,7 +26,7 @@ func CreateClaim(ctx context.Context, config HostConfig, claimName string) (*api
 
 	tflog.Info(ctx, "Creating Claim "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/claims", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/auth/claims"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -35,7 +35,7 @@ func CreateClaim(ctx context.Context, config HostConfig, claimName string) (*api
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error creating claim: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

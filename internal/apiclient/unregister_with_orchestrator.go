@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -23,9 +24,9 @@ func UnregisterWithOrchestrator(ctx context.Context, config HostConfig, hostId s
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.DeleteDataFromClient(url, nil, auth, nil); err != nil {
+	if clientResponse, err := client.DeleteDataFromClient(ctx, url, nil, auth, nil); err != nil {
 		if clientResponse != nil {
-			if clientResponse.StatusCode == 404 {
+			if clientResponse.StatusCode == http.StatusNotFound {
 				tflog.Warn(ctx, fmt.Sprintf("Host %s not found", hostId))
 				return diagnostics
 			}

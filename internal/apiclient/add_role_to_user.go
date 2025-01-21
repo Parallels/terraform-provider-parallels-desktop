@@ -35,7 +35,7 @@ func AddRoleToUser(ctx context.Context, config HostConfig, userId string, role s
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error adding role to user: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

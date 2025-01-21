@@ -168,7 +168,7 @@ resource "parallels-desktop_clone_vm" "example" {
 
 Optional:
 
-- `api_key` (String, Sensitive) Parallels desktop API API Key
+- `api_key` (String, Sensitive) Parallels desktop API Key
 - `password` (String, Sensitive) Parallels desktop API Password
 - `username` (String) Parallels desktop API Username
 

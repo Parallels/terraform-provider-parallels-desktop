@@ -95,10 +95,19 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
-			// Set a timeout for the client for 15 seconds to avoid hanging
 			Timeout: 60 * time.Second,
 		}
 	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := time.Until(deadline)
+		if timeout > 0 {
+			client = &http.Client{
+				Timeout: timeout,
+			}
+		}
+	}
+
 	var req *http.Request
 
 	if data != nil {

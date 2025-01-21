@@ -45,6 +45,10 @@ func SetMachineState(ctx context.Context, config HostConfig, machineId string, o
 		diagnostics = append(diagnostics, diag...)
 		return false, diagnostics
 	}
+	if vm == nil {
+		diagnostics.AddError("There was an error getting the vm", "vm is nil")
+		return false, diagnostics
+	}
 
 	if vm.State == string(op) {
 		tflog.Info(ctx, fmt.Sprintf("Machine %s is already in state %s", machineId, op))

@@ -35,5 +35,7 @@ website/vendor
 *.winfile eol=crlf
 
 terraform-provider-*
+*.local.*
+*.tmp*
 .local/
 __debug*

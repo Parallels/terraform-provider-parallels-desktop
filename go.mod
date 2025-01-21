@@ -8,7 +8,7 @@ require (
 	github.com/amplitude/analytics-go v1.0.2
 	github.com/cjlapao/common-go v0.0.41
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
-	github.com/hashicorp/terraform-plugin-framework-timeouts v0.4.1
+	github.com/hashicorp/terraform-plugin-framework-timeouts v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.16.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/pkg/errors v0.9.1

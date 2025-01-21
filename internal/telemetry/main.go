@@ -20,7 +20,6 @@ var (
 func New(context context.Context) *TelemetryService {
 	svc := &TelemetryService{
 		EnableTelemetry: true,
-		ctx:             context,
 		CallBackChan:    make(chan types.ExecuteResult),
 	}
 
@@ -38,7 +37,7 @@ func New(context context.Context) *TelemetryService {
 	config.FlushInterval = time.Second * 3
 	// adding a callback to read what is the status
 	config.ExecuteCallback = func(result types.ExecuteResult) {
-		svc.Callback(result)
+		svc.Callback(context, result)
 	}
 
 	svc.client = amplitude.NewClient(config)
@@ -59,11 +58,11 @@ func Get(context context.Context) *TelemetryService {
 	return globalTelemetryService
 }
 
-func TrackEvent(context context.Context, item TelemetryItem) {
-	svc := Get(context)
+func TrackEvent(ctx context.Context, item TelemetryItem) {
+	svc := Get(ctx)
 	if !svc.EnableTelemetry {
 		return
 	}
 
-	svc.TrackEvent(item)
+	svc.TrackEvent(ctx, item)
 }

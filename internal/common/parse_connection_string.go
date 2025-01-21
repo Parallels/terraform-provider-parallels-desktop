@@ -1,7 +1,7 @@
 package common
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
@@ -17,7 +17,7 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 	// Split at '@' to separate credentials and host
 	atIndex := strings.LastIndex(connStr, "@")
 	if atIndex == -1 {
-		return nil, fmt.Errorf("invalid connection string format")
+		return nil, errors.New("invalid connection string format")
 	}
 
 	credentials := connStr[:atIndex]
@@ -47,7 +47,7 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 	// Split credentials at ':' to get username and password
 	credIndex := strings.Index(credentials, ":")
 	if credIndex == -1 {
-		return nil, fmt.Errorf("invalid credentials format")
+		return nil, errors.New("invalid credentials format")
 	}
 	username := credentials[:credIndex]
 	password := credentials[credIndex+1:]

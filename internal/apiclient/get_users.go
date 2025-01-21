@@ -18,7 +18,7 @@ func GetUsers(ctx context.Context, config HostConfig, filterField, filterValue s
 	diagnostic := diag.Diagnostics{}
 	response := make([]apimodels.UserResponse, 0)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/auth/users"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -34,7 +34,7 @@ func GetUsers(ctx context.Context, config HostConfig, filterField, filterValue s
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, &filter, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, &filter, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting users: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

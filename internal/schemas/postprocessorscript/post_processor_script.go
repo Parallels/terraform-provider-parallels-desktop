@@ -3,6 +3,7 @@ package postprocessorscript
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
@@ -64,7 +65,7 @@ func (s *PostProcessorScript) Apply(ctx context.Context, config apiclient.HostCo
 			return diagnostic
 		} else {
 			result := PostProcessorScriptRunResult{
-				ExitCode: types.StringValue(fmt.Sprintf("%v", resp.ExitCode)),
+				ExitCode: types.StringValue(strconv.FormatInt(int64(resp.ExitCode), 10)),
 				Stdout:   types.StringValue(resp.Stdout),
 				Stderr:   types.StringValue(resp.Stderr),
 				Script:   types.StringValue(value),

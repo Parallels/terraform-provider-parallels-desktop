@@ -16,7 +16,7 @@ func PullCatalog(ctx context.Context, config HostConfig, request apimodels.PullC
 	diagnostic := diag.Diagnostics{}
 	var response apimodels.PullCatalogResponse
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/catalog/pull", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/catalog/pull"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -25,7 +25,7 @@ func PullCatalog(ctx context.Context, config HostConfig, request apimodels.PullC
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PutDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PutDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error getting vms: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

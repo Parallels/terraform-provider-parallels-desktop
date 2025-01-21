@@ -30,7 +30,7 @@ func GetOrchestratorHost(ctx context.Context, config HostConfig, hostId string) 
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {
 				return nil, diagnostics
@@ -51,7 +51,7 @@ func GetOrchestratorHosts(ctx context.Context, config HostConfig) ([]apimodels.O
 	var response []apimodels.OrchestratorHost
 	urlHost := helpers.GetHostUrl(config.Host)
 
-	url := fmt.Sprintf("%s/orchestrator/hosts", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/hosts"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -60,7 +60,7 @@ func GetOrchestratorHosts(ctx context.Context, config HostConfig) ([]apimodels.O
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(url, nil, auth, &response); err != nil {
+	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			if clientResponse.ApiError.Code == 404 {
 				return nil, diagnostics

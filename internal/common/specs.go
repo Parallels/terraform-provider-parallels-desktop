@@ -49,7 +49,7 @@ func SpecsBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm
 		return diagnostics
 	}
 
-	if planSpecs.CpuCount.ValueString() != fmt.Sprintf("%v", vm.Hardware.CPU.Cpus) {
+	if planSpecs.CpuCount.ValueString() != strconv.FormatInt(vm.Hardware.CPU.Cpus, 10) {
 		updateValue := planSpecs.CpuCount.ValueString()
 		if updateValue == "" {
 			updateValue = "2"
@@ -62,7 +62,7 @@ func SpecsBlockOnUpdate(ctx context.Context, hostConfig apiclient.HostConfig, vm
 		}
 
 		if hardwareInfo.TotalAvailable.LogicalCpuCount-int64(updateValueInt) <= 0 {
-			diagnostics.AddError("Not enough cpus", "You requested more cpus than available, the machine will need "+updateValue+" cpus and we have "+fmt.Sprintf("%v", hardwareInfo.TotalAvailable.LogicalCpuCount))
+			diagnostics.AddError("Not enough cpus", "You requested more cpus than available, the machine will need "+updateValue+" cpus and we have "+strconv.FormatInt(hardwareInfo.TotalAvailable.LogicalCpuCount, 10))
 			return diagnostics
 		}
 

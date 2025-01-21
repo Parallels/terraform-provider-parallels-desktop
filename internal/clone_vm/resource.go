@@ -74,7 +74,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -410,7 +410,7 @@ func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, re
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -483,7 +483,7 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -794,7 +794,7 @@ func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest
 		nil,
 		nil,
 	)
-	telemetrySvc.TrackEvent(telemetryEvent)
+	telemetrySvc.TrackEvent(ctx, telemetryEvent)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -917,8 +917,6 @@ func UpgradeStateToV1(ctx context.Context, req resource.UpgradeStateRequest, res
 		KeepRunning:          types.BoolValue(true),
 		ReverseProxyHosts:    make([]*reverseproxy.ReverseProxyHost, 0),
 	}
-
-	println(fmt.Sprintf("Upgrading state from version %v", upgradedStateData))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &upgradedStateData)...)
 }

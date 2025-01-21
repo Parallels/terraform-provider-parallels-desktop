@@ -33,7 +33,7 @@ func ConfigureMachine(ctx context.Context, config HostConfig, machineId string, 
 		url = fmt.Sprintf("%s/machines/%s/set", helpers.GetHostApiVersionedBaseUrl(urlHost), machineId)
 	}
 
-	if clientResponse, err := client.PutDataToClient(url, nil, configSet, auth, &response); err != nil {
+	if clientResponse, err := client.PutDataToClient(ctx, url, nil, configSet, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error configuring vm: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

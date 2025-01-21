@@ -1,11 +1,14 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Carlos Lapao
 
-//go:build tools
+//go:build generate
 
 package tools
 
 import (
-	// Documentation generation
 	_ "github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs"
 )
+
+//go:generate terraform fmt -recursive ../examples/
+
+// Generate documentation.
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-dir .. -provider-name terraform-provider-parallels-desktop

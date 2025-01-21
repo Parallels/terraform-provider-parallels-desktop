@@ -22,7 +22,7 @@ func CreateUser(ctx context.Context, config HostConfig, request apimodels.UserRe
 
 	tflog.Info(ctx, "Creating User "+request.Name)
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/auth/users", helpers.GetHostApiVersionedBaseUrl(urlHost))
+	url := helpers.GetHostApiVersionedBaseUrl(urlHost) + "/auth/users"
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -31,7 +31,7 @@ func CreateUser(ctx context.Context, config HostConfig, request apimodels.UserRe
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.PostDataToClient(url, nil, request, auth, &response); err != nil {
+	if clientResponse, err := client.PostDataToClient(ctx, url, nil, request, auth, &response); err != nil {
 		if clientResponse != nil && clientResponse.ApiError != nil {
 			tflog.Error(ctx, fmt.Sprintf("Error creating user: %v, api message: %s", err, clientResponse.ApiError.Message))
 		}

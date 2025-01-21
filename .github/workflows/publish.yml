@@ -52,7 +52,7 @@ jobs:
             const release = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag: `release-v${version}`,
+              tag: `v${version}`,
             }).catch(() => null);
 
             // If the release exists, the version has not changed
@@ -96,7 +96,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: fs.readFileSync("release_notes.md", "utf8"),
-              tag_name: "release-v${{ env.EXT_VERSION }}",
+              tag_name: "v${{ env.EXT_VERSION }}",
               name: "v${{ env.EXT_VERSION }}",
               draft: true,
               prerelease: false

@@ -11,12 +11,13 @@ permissions:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.22.x'
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
       - run: go version
@@ -32,31 +33,33 @@ jobs:
         run: make check-release
       - name: Fail if changes
         run: git diff-index --exit-code HEAD
-  markdown-lint:
+  linters:
+    name: Linters
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: avto-dev/markdown-lint@v1.5.0
-        with:
-          config: '.markdownlint.yml'
-          args: 'docs'
-  misspell:
-    runs-on: ubuntu-latest
-    steps:
-      # Checkout should always be before setup-go to ensure caching is working
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.22.x'
       - uses: actions/cache@v4
         continue-on-error: true
         timeout-minutes: 2
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
-      - run: go install github.com/client9/misspell/cmd/misspell@latest
-      - run: misspell -error -source text docs/
+      - name: Install Dependencies
+        run: make deps
+      - name: Run Linters
+        run: make lint
+      - name: Run Markdown Lint
+        uses: avto-dev/markdown-lint@v1.5.0
+        with:
+          config: '.markdownlint.yml'
+          args: 'docs'
+      - name: Misspell
+        run: misspell -error -source text docs/
   gosec_scan:
+    name: Gosec Scan
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on
@@ -78,8 +81,7 @@ jobs:
     needs:
       - build
       - gosec_scan
-      - markdown-lint
-      - misspell
+      - linters
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

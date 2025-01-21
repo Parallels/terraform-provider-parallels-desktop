@@ -98,7 +98,7 @@ jobs:
               body: fs.readFileSync("release_notes.md", "utf8"),
               tag_name: "release-v${{ env.EXT_VERSION }}",
               name: "v${{ env.EXT_VERSION }}",
-              draft: false,
+              draft: true,
               prerelease: false
             });
             core.exportVariable('UPLOAD_URL', release.data.upload_url);

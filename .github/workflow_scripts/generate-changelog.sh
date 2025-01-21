@@ -66,14 +66,20 @@ done
 function generate_release_notes() {
   #get when the last release was merged
   LAST_RELEASE_MERGED_AT=$(gh pr list --repo "$REPO_NAME" --base main --json mergedAt --state merged --search "label:release-request" | jq -r '.[0].mergedAt')
-  CHANGELIST=$(gh pr list --repo "$REPO_NAME" --base main --state merged --json body --search "merged:>$LAST_RELEASE_MERGED_AT -label:release-request")
+  if [ "$LAST_RELEASE_MERGED_AT" = "null" ]; then
+    CHANGELIST=$(gh pr list --repo "$REPO_NAME" --base main --state merged --json body)
+  else
+    CHANGELIST=$(gh pr list --repo "$REPO_NAME" --base main --state merged --json body --search "merged:>$LAST_RELEASE_MERGED_AT -label:release-request")
+  fi
 
   temp_file=$(mktemp)
 
   CONTENT=$(echo "$CHANGELIST" | jq -r '.[].body')
   echo "$CONTENT" | while read -r line; do
     if [[ $line != -* ]]; then
-      echo "- $line" >>"$temp_file"
+      if [[ ! $line =~ ^[[:space:]]*$ ]]; then
+        echo "- $line" >>"$temp_file"
+      fi
     else
       echo "$line" >>"$temp_file"
     fi

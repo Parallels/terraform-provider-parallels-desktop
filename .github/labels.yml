@@ -48,6 +48,3 @@
 - name: release-request
   description: issues that request a release
   color: 225fee
-- name: testing-carlos
-  description: issues that are for testing purposes
-  color: 933ac9

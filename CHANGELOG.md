@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.12] - 2025-01-21
+
+- fixed an issue where brew would give an error when trying to install PD into an intel mac
+
 ## [0.5.11] - 2025-01-21
 
 - Fixed an issue where if the api stopped responding the provider would crash

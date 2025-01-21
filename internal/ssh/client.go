@@ -124,7 +124,12 @@ func (c *SshClient) RunCommand(command string, arguments []string) (string, erro
 	// Run the command
 	output, err := session.CombinedOutput(cmd)
 	if err != nil {
-		return string(output), err
+		stdOut := string(output)
+		outputErr := errors.New(err.Error())
+		if stdOut != "" {
+			outputErr = errors.New(string(output) + "\n" + err.Error())
+		}
+		return string(output), outputErr
 	}
 
 	conn.Close()

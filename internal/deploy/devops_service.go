@@ -139,6 +139,14 @@ func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToIns
 				if err != nil {
 					return installed_dependencies, errors.New("Error setting up sudo access for brew without password, error: " + err.Error())
 				}
+				// adding access to /usr/local/share to the local user for brew
+				cmd = "sudo"
+				arguments := []string{"chown", "-R", "$(whoami):$(id -g)", "/usr/local/share"}
+				_, err = c.client.RunCommand(cmd, arguments)
+				if err != nil {
+					return installed_dependencies, errors.New("Error setting up brew access to /usr/local/share, error: " + err.Error())
+				}
+
 			case "git":
 				gitPresent := c.findPath(ctx, "git")
 				brewPresent := c.findPath(ctx, "brew")

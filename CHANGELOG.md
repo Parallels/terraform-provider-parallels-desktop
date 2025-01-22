@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.14] - 2025-01-22
+
+
+
 ## [0.5.13] - 2025-01-22
 
 - Add the ability to create beta versions

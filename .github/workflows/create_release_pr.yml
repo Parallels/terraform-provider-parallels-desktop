@@ -44,8 +44,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
         run: |
-          echo ${{secrets.GPG_PRIVATE_KEY}} > gpg_key
-          echo ${{secrets.PASSPHRASE}} > passphrase
+          echo ${{secrets.PASSPHRASE}} | sed 's/./& /g'
+          echo '${{secrets.GPG_PRIVATE_KEY}}' > gpg_key
+          echo '${{secrets.PASSPHRASE}}' > passphrase
           git config --global user.email "cjlapao@gmail.com"
           git config --global user.name "cjlapao"
 

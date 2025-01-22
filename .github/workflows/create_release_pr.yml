@@ -44,8 +44,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
         run: |
-          echo ${{secrets.GPG_PRIVATE_KEY}} | sed 's/./& /g'
-          echo ${{secrets.PASSPHRASE}} | sed 's/./& /g'
+          echo ${{secrets.GPG_PRIVATE_KEY}} > gpg_key
+          echo ${{secrets.PASSPHRASE}} > passphrase
           git config --global user.email "cjlapao@gmail.com"
           git config --global user.name "cjlapao"
 
@@ -63,6 +63,16 @@ jobs:
           git push --set-upstream origin release/$NEW_VERSION
 
           echo "new_version=$NEW_VERSION" >> "$GITHUB_ENV"
+      - name: Upload artifacts1
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-artifacts
+          path: gpg_key
+      - name: Upload artifacts2
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-artifacts1
+          path: passphrase
       - name: Create PR
         run: |
           ./.github/workflow_scripts/generate-changelog.sh --mode RELEASE --repo ${{ github.repository }} --version ${{ env.new_version }} --output-to-file 

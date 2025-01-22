@@ -64,12 +64,12 @@ jobs:
 
           echo "new_version=$NEW_VERSION" >> "$GITHUB_ENV"
       - name: Upload artifacts1
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: release-artifacts
           path: gpg_key
       - name: Upload artifacts2
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: release-artifacts1
           path: passphrase

@@ -1,6 +1,7 @@
 #!/bin/bash
 WEBHOOK_URL=""
 VERSION=""
+BETA="FALSE"
 while [[ $# -gt 0 ]]; do
   case $1 in
   --webhook-url)
@@ -11,6 +12,10 @@ while [[ $# -gt 0 ]]; do
   --version)
     VERSION=$2
     shift
+    shift
+    ;;
+  --beta)
+    BETA="TRUE"
     shift
     ;;
   *)
@@ -46,12 +51,17 @@ if [ ${#CHANGELOG_CONTENT} -gt 4096 ]; then
   CHANGELOG_CONTENT+=$"\nFor the complete changelog, visit: https://github.com/Parallels/terraform-provider-parallels-desktop/releases/tag/v${VERSION}"
 fi
 
+TITLE="📢 New Release v${VERSION}"
+if [ "$BETA" = "TRUE" ]; then
+  TITLE="🧪 New Beta Release v${VERSION}"
+fi
+
 # Create the JSON payload
 JSON_PAYLOAD=$(
   cat <<EOF
 {
   "embeds": [{
-  "title": "📢 New Release v${VERSION}",
+  "title": "${TITLE}",
   "description": "${CHANGELOG_CONTENT}",
   "color": 3447003
   }]
@@ -68,6 +78,6 @@ curl -H "Content-Type: application/json" \
 if [ $? -eq 0 ]; then
   echo "Successfully posted changelog to Discord"
 else
-  echo "Failed to post changelog to Discord"
+  echo "Failed to post changelog to Discord webhook"
   exit 1
 fi

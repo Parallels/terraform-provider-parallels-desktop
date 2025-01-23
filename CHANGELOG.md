@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.12926508568] - 2025-01-23
+
+- Updated the discord announcement script
+- Added a script to get the beta changelog
+- Updated the way we generate release notes to match the type of release
+
 ## [0.5.13] - 2025-01-22
 
 - Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change.

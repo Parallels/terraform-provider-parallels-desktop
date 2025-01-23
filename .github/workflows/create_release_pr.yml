@@ -46,18 +46,17 @@ jobs:
       - name: Bump version and push
         env:
           GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
-          VERSION: ${{ github.event.inputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           git config --global user.email "cjlapao@gmail.com"
           git config --global user.name "cjlapao"
 
-
           echo "$VERSION" > ./VERSION
 
-          git checkout -b release/"$NEW_VERSION"
+          git checkout -b release/"$VERSION"
 
           # Generate changelog for the new version
-          ./.github/workflow_scripts/generate-changelog.sh --repo ${{ github.repository }} --version $NEW_VERSION
+          ./.github/workflow_scripts/generate-changelog.sh --repo ${{ github.repository }} --version $VERSION
 
           git add VERSION CHANGELOG.md
           git commit -m "Release extension version $VERSION"

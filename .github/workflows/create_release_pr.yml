@@ -67,11 +67,15 @@ jobs:
         run: |
           ./.github/workflow_scripts/get-latest-beta-changelog.sh --repo ${{ github.repository }} --output-to-file --version "${{ env.VERSION }}"
           cat release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
       - name: Generate release notes
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}
         run: |
           ./.github/workflow_scripts/get-latest-changelog.sh --output-to-file
           cat release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
       - name: Create PR
         run: |
           gh pr create \

@@ -65,7 +65,7 @@ jobs:
       - name: Generate beta release notes
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
         run: |
-          ./.github/workflow_scripts/get-latest-beta-changelog.sh --repo ${{ github.repository }} --output-to-file --version "${EXT_VERSION}"
+          ./.github/workflow_scripts/get-latest-beta-changelog.sh --repo ${{ github.repository }} --output-to-file --version "${{ env.VERSION }}"
           cat release_notes.md
       - name: Generate release notes
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}

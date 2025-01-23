@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.13] - 2025-01-22
+
+- Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change.
+- fixes # (issue)
+- Fixed an issue with the installation of brew in both mac intel and arm variants
+- Added a new provider for the beta versions
+
 ## [0.5.12] - 2025-01-21
 
 - fixed an issue where brew would give an error when trying to install PD into an intel mac

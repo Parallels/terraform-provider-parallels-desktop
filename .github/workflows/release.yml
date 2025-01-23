@@ -138,13 +138,13 @@ jobs:
         id: announce_discord_beta
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
         run: |
-          ./.github/workflow_scripts/announce_discord.sh --webhook-url $DISCORD_WEBHOOK --version $VERSION --beta
+          ./.github/workflow_scripts/announce_discord.sh --repo ${{ github.repository }} --webhook-url $DISCORD_WEBHOOK --version $VERSION --beta
         env:
           SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}
       - name: Announce on discord stable
         id: announce_discord
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}
         run: |
-          ./.github/workflow_scripts/announce_discord.sh --webhook-url $DISCORD_WEBHOOK --version $VERSION
+          ./.github/workflow_scripts/announce_discord.sh --repo ${{ github.repository }} --webhook-url $DISCORD_WEBHOOK --version $VERSION
         env:
           SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}

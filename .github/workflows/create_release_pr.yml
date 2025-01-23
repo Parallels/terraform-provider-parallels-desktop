@@ -33,9 +33,9 @@ jobs:
       - name: Set new beta version
         if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
         run: |
-          VERSION=${{ github.event.inputs.version }}
-          MAJOR_VERSION=${VERSION%.*}
-          NEW_VERSION=${VERSION%.*}.${{ github.run_id }}
+          UPDATED_VERSION=$(./.github/workflow_scripts/increment-version.sh -t ${{ inputs.version }} -f VERSION)
+          MAJOR_VERSION=${UPDATED_VERSION%.*}
+          NEW_VERSION=${UPDATED_VERSION%.*}.${{ github.run_id }}
           echo "VERSION=${NEW_VERSION}" >> "$GITHUB_ENV"
           echo "MAJOR_VERSION=${MAJOR_VERSION}" >> "$GITHUB_ENV"
       - name: Set new version

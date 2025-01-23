@@ -51,7 +51,6 @@ jobs:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
           AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
           RELEASE_NAME: ${{ vars.RELEASE_NAME }}
-
   verify-publications:
     needs: terraform-provider-release
     runs-on: ubuntu-latest

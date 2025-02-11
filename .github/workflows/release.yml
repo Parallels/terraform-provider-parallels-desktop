@@ -50,7 +50,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
           AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
-
+          RELEASE_NAME: ${{ vars.RELEASE_NAME }}
   verify-publications:
     needs: terraform-provider-release
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
               if (targetVersion.startsWith('v')) {
                 targetVersion = targetVersion.substring(1);
               }
-              const url = `${registry}/providers/Parallels/parallels-desktop/versions`;
+              const url = `${registry}/providers/Parallels/${{ vars.RELEASE_NAME }}/versions`;
 
               const response = await fetch(url);
               if (!response.ok) {
@@ -134,9 +134,17 @@ jobs:
         run: |
           VERSION=$(cat VERSION)
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-      - name: Announce on discord
-        id: announce_discord
+      - name: Announce on discord beta
+        id: announce_discord_beta
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
         run: |
-          ./.github/workflow_scripts/announce_discord.sh --webhook-url $DISCORD_WEBHOOK --version $VERSION
+          ./.github/workflow_scripts/announce_discord.sh --repo ${{ github.repository }} --webhook-url $DISCORD_WEBHOOK --version $VERSION --beta
+        env:
+          SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}
+      - name: Announce on discord stable
+        id: announce_discord
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}
+        run: |
+          ./.github/workflow_scripts/announce_discord.sh --repo ${{ github.repository }} --webhook-url $DISCORD_WEBHOOK --version $VERSION
         env:
           SLACK_WEBHOOKS: ${{ env.DISCORD_WEBHOOK }}

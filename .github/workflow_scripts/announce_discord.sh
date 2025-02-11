@@ -1,6 +1,9 @@
 #!/bin/bash
 WEBHOOK_URL=""
 VERSION=""
+BETA="FALSE"
+CANARY="FALSE"
+REPO=""
 while [[ $# -gt 0 ]]; do
   case $1 in
   --webhook-url)
@@ -10,6 +13,19 @@ while [[ $# -gt 0 ]]; do
     ;;
   --version)
     VERSION=$2
+    shift
+    shift
+    ;;
+  --beta)
+    BETA="TRUE"
+    shift
+    ;;
+  --canary)
+    CANARY="TRUE"
+    shift
+    ;;
+  --repo)
+    REPO=$2
     shift
     shift
     ;;
@@ -33,7 +49,23 @@ fi
 
 # Get the latest changelog content
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
-CHANGELOG_CONTENT=$("$SCRIPT_DIR/get-latest-changelog.sh")
+if [ "$BETA" = "TRUE" ]; then
+  CHANGELOG_CONTENT=$("$SCRIPT_DIR/get-latest-beta-changelog.sh" "--repo" "$REPO" "--version" "$VERSION")
+elif [ "$CANARY" = "TRUE" ]; then
+  CHANGELOG_CONTENT=$("$SCRIPT_DIR/get-latest-beta-changelog.sh" "--repo" "$REPO" "--version" "$VERSION")
+else
+  CHANGELOG_CONTENT=$("$SCRIPT_DIR/get-latest-changelog.sh")
+fi
+
+if [ $? -ne 0 ]; then
+  echo "Failed to get changelog content"
+  exit 1
+fi
+
+if [ -z "$CHANGELOG_CONTENT" ]; then
+  echo "No changelog content found"
+  exit 1
+fi
 
 # Escape special characters for JSON
 CHANGELOG_CONTENT=$(echo "$CHANGELOG_CONTENT" | jq -Rs .)
@@ -46,14 +78,29 @@ if [ ${#CHANGELOG_CONTENT} -gt 4096 ]; then
   CHANGELOG_CONTENT+=$"\nFor the complete changelog, visit: https://github.com/Parallels/terraform-provider-parallels-desktop/releases/tag/v${VERSION}"
 fi
 
+if [[ ! $VERSION == v* ]]; then
+  VERSION="v${VERSION}"
+fi
+
+TITLE="📢 New Release ${VERSION}"
+COLOR="5763719"
+if [ "$BETA" = "TRUE" ]; then
+  TITLE="🧪 New Beta Release ${VERSION}"
+  COLOR="3447003"
+fi
+if [ "$CANARY" = "TRUE" ]; then
+  TITLE="🐤 New Canary Release ${VERSION}"
+  COLOR="16776960"
+fi
+
 # Create the JSON payload
 JSON_PAYLOAD=$(
   cat <<EOF
 {
   "embeds": [{
-  "title": "📢 New Release v${VERSION}",
+  "title": "${TITLE}",
   "description": "${CHANGELOG_CONTENT}",
-  "color": 3447003
+  "color": ${COLOR}
   }]
 }
 EOF
@@ -68,6 +115,6 @@ curl -H "Content-Type: application/json" \
 if [ $? -eq 0 ]; then
   echo "Successfully posted changelog to Discord"
 else
-  echo "Failed to post changelog to Discord"
+  echo "Failed to post changelog to Discord webhook"
   exit 1
 fi

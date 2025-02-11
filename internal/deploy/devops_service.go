@@ -139,12 +139,21 @@ func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToIns
 				if err != nil {
 					return installed_dependencies, errors.New("Error setting up sudo access for brew without password, error: " + err.Error())
 				}
-				// adding access to /usr/local/share to the local user for brew
-				cmd = "sudo"
-				arguments := []string{"chown", "-R", "$(whoami):$(id -g)", "/usr/local/share"}
+
+				// adding access to /usr/local/share to the local user for brew if the folder exist, this is due to an issue with the permissions
+				// on some mac intel machines
+				// first we will check if the folder exists
+				cmd = "ls"
+				arguments := []string{"/usr/local/share"}
 				_, err = c.client.RunCommand(cmd, arguments)
-				if err != nil {
-					return installed_dependencies, errors.New("Error setting up brew access to /usr/local/share, error: " + err.Error())
+				if err == nil {
+					// if the folder does exist we will set the permissions
+					cmd = "sudo"
+					arguments := []string{"chown", "-R", "$(whoami):$(id -g)", "/usr/local/share"}
+					_, err = c.client.RunCommand(cmd, arguments)
+					if err != nil {
+						return installed_dependencies, errors.New("Error setting up brew access to /usr/local/share, error: " + err.Error())
+					}
 				}
 
 			case "git":
@@ -539,7 +548,7 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 
 	devopsPath = c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
-		return "", errors.New("Error running devops install command, error: brew not found")
+		return "", errors.New("Error running devops install command, error: prldevops exec was not found")
 	}
 
 	folderPath := c.findPathFolder(ctx, "prldevops")

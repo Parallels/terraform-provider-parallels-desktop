@@ -22,7 +22,7 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      new_version: ''
+      VERSION: ''
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
@@ -30,45 +30,59 @@ jobs:
         with:
           go-version: '1.22.x'
           cache-dependency-path: ${{ github.workspace }}/src/go.sum
-      - name: Check for Changes to the Changelog
-        id: diff
-        if: false
+      - name: Set new beta version
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
+        run: |
+          UPDATED_VERSION=$(./.github/workflow_scripts/increment-version.sh -t ${{ inputs.version }} -f VERSION)
+          MAJOR_VERSION=${UPDATED_VERSION%.*}
+          NEW_VERSION=${UPDATED_VERSION%.*}.${{ github.run_id }}
+          echo "VERSION=${NEW_VERSION}" >> "$GITHUB_ENV"
+          echo "MAJOR_VERSION=${MAJOR_VERSION}" >> "$GITHUB_ENV"
+      - name: Set new version
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}
         run: |
           NEW_VERSION=$(./.github/workflow_scripts/increment-version.sh -t ${{ inputs.version }} -f VERSION)
-          LAST_CHANGELOG_VERSION=$(./.github/workflow_scripts/get-latest-changelog-version.sh)
-          if [ "$NEW_VERSION" != "$LAST_CHANGELOG_VERSION" ]; then
-            echo "Changelog not updated for version $NEW_VERSION latest version is $LAST_CHANGELOG_VERSION"
-            exit 1
-          fi
+          echo "VERSION=${NEW_VERSION}" >> "$GITHUB_ENV"
       - name: Bump version and push
         env:
           GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
+          VERSION: ${{ env.VERSION }}
         run: |
           git config --global user.email "cjlapao@gmail.com"
           git config --global user.name "cjlapao"
 
-          NEW_VERSION=$(./.github/workflow_scripts/increment-version.sh -t ${{ inputs.version }} -f VERSION)
-          echo "$NEW_VERSION" > ./VERSION
+          echo "$VERSION" > ./VERSION
 
-          git checkout -b release/"$NEW_VERSION"
+          git checkout -b release/"$VERSION"
 
           # Generate changelog for the new version
-          ./.github/workflow_scripts/generate-changelog.sh --repo ${{ github.repository }} --version $NEW_VERSION
+          ./.github/workflow_scripts/generate-changelog.sh --repo ${{ github.repository }} --version $VERSION
 
           git add VERSION CHANGELOG.md
-          git commit -m "Release extension version $NEW_VERSION"
+          git commit -m "Release extension version $VERSION"
 
-          git push --set-upstream origin release/$NEW_VERSION
-
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_ENV"
+          git push --set-upstream origin release/$VERSION
+      - name: Generate beta release notes
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop-beta' }}
+        run: |
+          ./.github/workflow_scripts/get-latest-beta-changelog.sh --repo ${{ github.repository }} --output-to-file --version "${{ env.VERSION }}"
+          cat release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
+      - name: Generate release notes
+        if: ${{ vars.RELEASE_NAME == 'parallels-desktop' }}
+        run: |
+          ./.github/workflow_scripts/get-latest-changelog.sh --output-to-file
+          cat release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}
       - name: Create PR
         run: |
-          ./.github/workflow_scripts/generate-changelog.sh --mode RELEASE --repo ${{ github.repository }} --version ${{ env.new_version }} --output-to-file 
           gh pr create \
-            --title "Release version ${{ env.new_version }}" \
+            --title "Release version ${{ env.VERSION }}" \
             --body-file release_notes.md \
             --base main \
-            --head release/${{ env.new_version }}
+            --head release/${{ env.VERSION }}
           gh pr edit --add-label release-request
         env:
           GH_TOKEN: ${{ secrets.PARALLELS_WORKFLOW_PAT }}

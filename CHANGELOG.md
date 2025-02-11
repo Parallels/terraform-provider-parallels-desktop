@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.13261917284] - 2025-02-11
+
+- Fixed an issue where the deployment could fail if the packer was not installed
+- fixes # (issue)
+- Fixed an issue where we would have an error if the folder /usr/local/share did not exist
+
 ## [0.6.12926508568] - 2025-01-23
 
 - Updated the discord announcement script

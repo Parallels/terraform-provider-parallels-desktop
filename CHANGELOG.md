@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.13282186908] - 2025-02-12
+
+
+
 ## [0.6.12926508568] - 2025-01-23
 
 - Updated the discord announcement script

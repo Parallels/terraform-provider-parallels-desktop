@@ -1,5 +1,5 @@
-github.com/amplitude/analytics-go v1.0.2 h1:GiKYxFwuuEcEgNpw8p4lPiIXHL6z9iEXa8QlkZDQpUk=
-github.com/amplitude/analytics-go v1.0.2/go.mod h1:kAQG8OQ6aPOxZrEZ3+/NFCfxdYSyjqXZhgkjWFD3/vo=
+github.com/amplitude/analytics-go v1.2.0 h1:+WUKyAAKwlmSM8d03QWG+NjnrQIyc6VJRGPNkaa2ckI=
+github.com/amplitude/analytics-go v1.2.0/go.mod h1:kAQG8OQ6aPOxZrEZ3+/NFCfxdYSyjqXZhgkjWFD3/vo=
 github.com/bufbuild/protocompile v0.4.0 h1:LbFKd2XowZvQ/kajzguUp2DC9UEIQhIq77fZZlaQsNA=
 github.com/bufbuild/protocompile v0.4.0/go.mod h1:3v93+mbWn/v3xzN+31nwkJfrEpAUwp+BagBSZWx+TP8=
 github.com/cjlapao/common-go v0.0.41 h1:j30UKZJWVWIllJ66x3EOslJvIk/VjkyenrhEcH64dGM=

@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.13766604452] - 2025-03-10
+
+
+
 ## [0.6.13289211368] - 2025-02-12
 
 - Fixed some small bugs that would make the deploy fail when updating the pd devops in some scenarios where tools where missing

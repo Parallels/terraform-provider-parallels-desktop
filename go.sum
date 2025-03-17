@@ -2,8 +2,8 @@ github.com/amplitude/analytics-go v1.2.0 h1:+WUKyAAKwlmSM8d03QWG+NjnrQIyc6VJRGPN
 github.com/amplitude/analytics-go v1.2.0/go.mod h1:kAQG8OQ6aPOxZrEZ3+/NFCfxdYSyjqXZhgkjWFD3/vo=
 github.com/bufbuild/protocompile v0.4.0 h1:LbFKd2XowZvQ/kajzguUp2DC9UEIQhIq77fZZlaQsNA=
 github.com/bufbuild/protocompile v0.4.0/go.mod h1:3v93+mbWn/v3xzN+31nwkJfrEpAUwp+BagBSZWx+TP8=
-github.com/cjlapao/common-go v0.0.41 h1:j30UKZJWVWIllJ66x3EOslJvIk/VjkyenrhEcH64dGM=
-github.com/cjlapao/common-go v0.0.41/go.mod h1:ao5wEp0hYMNehJiHoarSjc5dKK5wi4LvnwjXaC2SxUI=
+github.com/cjlapao/common-go v0.0.42 h1:6y4aWLf6pKl6ALqBrmzvAwFzxu6T8bdPIuTOGUXzDU4=
+github.com/cjlapao/common-go v0.0.42/go.mod h1:X/S0XBrPNZ1C1ebN25J8ev+bqY5j36NMNLpD5u8UXUI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

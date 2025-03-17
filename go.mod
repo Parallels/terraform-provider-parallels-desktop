@@ -1,12 +1,9 @@
 module terraform-provider-parallels-desktop
 
 go 1.22.7
-
-toolchain go1.22.9
-
 require (
 	github.com/amplitude/analytics-go v1.2.0
-	github.com/cjlapao/common-go v0.0.41
+	github.com/cjlapao/common-go v0.0.42
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.17.0

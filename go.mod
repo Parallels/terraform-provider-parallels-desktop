@@ -1,7 +1,8 @@
 module terraform-provider-parallels-desktop
 
-go 1.22.7
-toolchain go1.24.1
+go 1.23.0
+
+toolchain go1.23.5
 
 require (
 	github.com/amplitude/analytics-go v1.2.0

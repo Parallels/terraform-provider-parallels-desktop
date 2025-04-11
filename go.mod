@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/amplitude/analytics-go v1.2.0
-	github.com/cjlapao/common-go v0.0.48
+	github.com/cjlapao/common-go v0.0.49
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.17.0

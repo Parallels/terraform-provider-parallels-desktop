@@ -9,7 +9,7 @@ require (
 	github.com/cjlapao/common-go v0.0.49
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.5.0
-	github.com/hashicorp/terraform-plugin-framework-validators v0.17.0
+	github.com/hashicorp/terraform-plugin-framework-validators v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.9

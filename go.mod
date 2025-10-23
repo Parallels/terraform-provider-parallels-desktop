@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.13.9
+	github.com/pkg/sftp v1.13.10
 	golang.org/x/crypto v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
 )

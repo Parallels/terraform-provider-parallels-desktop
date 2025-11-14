@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework v1.16.1
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
-	github.com/hashicorp/terraform-plugin-log v0.9.0
+	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.10
 	golang.org/x/crypto v0.43.0

@@ -177,7 +177,16 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Checking if we can find the base vm to clone
-	createdVms, createVmDiag := apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
+	var createdVms []apimodels.VirtualMachine
+	var createVmDiag diag.Diagnostics
+	for range 10 {
+		createdVms, createVmDiag = apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
+		if !createVmDiag.HasError() && len(createdVms) == 1 {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+
 	if createVmDiag.HasError() {
 		resp.Diagnostics.Append(createVmDiag...)
 		return
@@ -385,6 +394,11 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 
 			script.Result = listValue
 		}
+	}
+
+	// This is a fix for the issue where the keep_running is not set in the state
+	if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
+		data.KeepRunning = types.BoolValue(false)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -774,6 +788,11 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	tflog.Info(ctx, "Updated vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString())
+
+	// This is a fix for the issue where the keep_running is not set in the state
+	if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
+		data.KeepRunning = types.BoolValue(false)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {

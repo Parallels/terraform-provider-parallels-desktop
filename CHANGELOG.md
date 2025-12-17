@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.20301372484] - 2025-12-17
+## [0.7.0] - 2025-12-17
 
 - Fixed an issue where a new property that was unknown was making the clone resource crash
 - Added a retry policy during the clone process to allow for desync between DevOps Service and PDfM
@@ -99,3 +99,4 @@ FEATURES:
 - Added the ability to register a deployment with a orchestrator
 - Added the ability to run prlctl commands
 - Added the ability to run a script on destroy it
+

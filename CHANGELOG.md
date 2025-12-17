@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-12-17
+
+- Fixed an issue where a new property that was unknown was making the clone resource crash
+- Added a retry policy during the clone process to allow for desync between DevOps Service and PDfM
+- Fixed an issue where the deployment could fail if the packer was not installed
+- fixes # (issue)
+- Fixed an issue where we would have an error if the folder /usr/local/share did not exist
+- Updated the discord announcement script
+- Added a script to get the beta changelog
+- Updated the way we generate release notes to match the type of release
+
 ## [0.5.13] - 2025-01-22
 
 - Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change.
@@ -88,3 +99,4 @@ FEATURES:
 - Added the ability to register a deployment with a orchestrator
 - Added the ability to run prlctl commands
 - Added the ability to run a script on destroy it
+

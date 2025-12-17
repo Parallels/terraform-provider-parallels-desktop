@@ -179,7 +179,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	// Checking if we can find the base vm to clone
 	var createdVms []apimodels.VirtualMachine
 	var createVmDiag diag.Diagnostics
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		createdVms, createVmDiag = apiclient.GetVms(ctx, hostConfig, "name", data.Name.ValueString())
 		if !createVmDiag.HasError() && len(createdVms) == 1 {
 			break

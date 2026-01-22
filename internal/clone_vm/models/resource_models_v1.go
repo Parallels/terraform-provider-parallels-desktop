@@ -36,6 +36,6 @@ type CloneVmResourceModelV1 struct {
 	Timeouts             timeouts.Value                             `tfsdk:"timeouts"`
 	ForceChanges         types.Bool                                 `tfsdk:"force_changes"`
 	KeepRunning          types.Bool                                 `tfsdk:"keep_running"`
-  KeepAfterError        types.Bool                                 `tfsdk:"keep_after_error"`
+	KeepAfterError       types.Bool                                 `tfsdk:"keep_after_error"`
 	ReverseProxyHosts    []*reverseproxy.ReverseProxyHost           `tfsdk:"reverse_proxy_host"`
 }

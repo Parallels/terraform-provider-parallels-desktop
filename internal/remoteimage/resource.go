@@ -751,9 +751,9 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-        if !data.KeepAfterError.ValueBool() {
-				  apiclient.DeleteVm(aptCtx, hostConfig, data.ID.ValueString())
-        }
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(aptCtx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -1105,9 +1105,9 @@ func updateReverseProxyHostsTarget(ctx context.Context, data *models.RemoteVmRes
 			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, refreshedVm); diag.HasError() {
 				return nil, diag
 			}
-      if !data.KeepAfterError.ValueBool() {
-			  apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
-      }
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 		return nil, resultDiagnostic
 	}

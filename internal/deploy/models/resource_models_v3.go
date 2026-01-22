@@ -33,6 +33,7 @@ type DeployResourceModelV3 struct {
 	IsRegisteredInOrchestrator types.Bool                             `tfsdk:"is_registered_in_orchestrator"`
 	OrchestratorHost           types.String                           `tfsdk:"orchestrator_host"`
 	OrchestratorHostId         types.String                           `tfsdk:"orchestrator_host_id"`
+  KeepAfterError             types.Bool                             `tfsdk:"keep_after_error"`
 }
 
 type ParallelsDesktopDevopsConfigV3 struct {

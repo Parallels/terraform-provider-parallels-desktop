@@ -104,5 +104,9 @@ var DeployResourceSchemaV3 = schema.Schema{
 			MarkdownDescription: "Orchestrator host ID",
 			Computed:            true,
 		},
+    "keep_after_error": schema.BoolAttribute{
+			MarkdownDescription: "Keep the cloned VM after an error occurs during creation",
+			Optional:            true,
+		},
 	},
 }

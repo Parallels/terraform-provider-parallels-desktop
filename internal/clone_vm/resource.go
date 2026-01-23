@@ -157,6 +157,11 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	if vm.State != "stopped" {
+		resp.Diagnostics.AddError("Base VM must be stopped", "The base VM "+vm.Name+" must be stopped before cloning, currently "+vm.State)
+		return
+	}
+
 	cloneRequest := apimodels.NewVmConfigRequest(vm.User)
 	op := apimodels.NewVmConfigRequestOperation(cloneRequest)
 	op.WithGroup("machine")
@@ -215,7 +220,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 			if data.ID.ValueString() != "" {
 				// If we have an ID, we need to delete the machine
 				apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -227,7 +234,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 		return
 	}
@@ -238,7 +247,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 		return
 	}
@@ -249,7 +260,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 		return
 	}
@@ -260,7 +273,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 		return
 	}
@@ -290,7 +305,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 					return
 				}
 
-				apiclient.DeleteVm(ctx, rpHostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, rpHostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -311,7 +328,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -332,7 +351,9 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -397,16 +418,18 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// This is a fix for the issue where the keep_running is not set in the state
-	if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
-		data.KeepRunning = types.BoolValue(false)
-	}
+	// if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
+	// 	data.KeepRunning = types.BoolValue(false)
+	// }
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
-			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			if !data.KeepAfterError.ValueBool() {
+				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+			}
 		}
 
 		return
@@ -670,7 +693,9 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -691,7 +716,9 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 					resp.Diagnostics.Append(diag...)
 					return
 				}
-				apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				if !data.KeepAfterError.ValueBool() {
+					apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
+				}
 			}
 			return
 		}
@@ -790,9 +817,9 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	tflog.Info(ctx, "Updated vm with id "+data.ID.ValueString()+" and name "+data.Name.ValueString())
 
 	// This is a fix for the issue where the keep_running is not set in the state
-	if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
-		data.KeepRunning = types.BoolValue(false)
-	}
+	// if data.KeepRunning.IsUnknown() || data.KeepRunning.IsNull() {
+	// 	data.KeepRunning = types.BoolValue(false)
+	// }
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {

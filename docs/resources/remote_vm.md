@@ -150,6 +150,7 @@ resource "parallels-desktop_remote_vm" "example_box" {
 - `config` (Block, Optional) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--config))
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
 - `host` (String) Parallels Desktop DevOps Host
+- `keep_after_error` (Boolean) Keep the cloned VM after an error occurs during creation
 - `keep_running` (Boolean) This will keep the VM running after the terraform apply
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator

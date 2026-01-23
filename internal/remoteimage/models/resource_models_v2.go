@@ -42,4 +42,5 @@ type RemoteVmResourceModelV2 struct {
 	ForceChanges         types.Bool                                 `tfsdk:"force_changes"`
 	KeepRunning          types.Bool                                 `tfsdk:"keep_running"`
 	ReverseProxyHosts    []*reverseproxy.ReverseProxyHost           `tfsdk:"reverse_proxy_host"`
+	KeepAfterError       types.Bool                                 `tfsdk:"keep_after_error"`
 }

@@ -111,6 +111,7 @@ resource "parallels-desktop_deploy" "example" {
 
 - `api_config` (Block, Optional) Parallels Desktop DevOps configuration (see [below for nested schema](#nestedblock--api_config))
 - `install_local` (Boolean) Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine
+- `keep_after_error` (Boolean) Keep the cloned VM after an error occurs during creation
 - `orchestrator_registration` (Block, Optional) Orchestrator connection details (see [below for nested schema](#nestedblock--orchestrator_registration))
 - `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
 - `ssh_connection` (Block, Optional) Host connection details (see [below for nested schema](#nestedblock--ssh_connection))
@@ -134,6 +135,10 @@ resource "parallels-desktop_deploy" "example" {
 
 Optional:
 
+- `catalog_cache_allow_cache_above_keep_free_disk_space` (Boolean) Allow catalog cache to override the keep free disk space if it needs, this will render the keep free disk space useless
+- `catalog_cache_disable_stream` (Boolean) Disable catalog caching to stream, this will disable the ability of the caching to decompress the catalog items on the fly
+- `catalog_cache_keep_free_disk_space_size` (Number) Catalog cache keep free disk space in MB
+- `catalog_cache_max_size` (Number) Catalog cache max size in MB
 - `devops_version` (String) Parallels Desktop DevOps version to install, if empty the latest will be installed
 - `disable_catalog_caching` (Boolean) Disable catalog caching, this will disable the ability to cache catalog items that are pulled from a remote catalog
 - `enable_logging` (Boolean) Enable logging
@@ -143,6 +148,7 @@ Optional:
 - `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
 - `hmac_secret` (String, Sensitive) Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens
 - `log_level` (String) Parallels Desktop DevOps log level, you can choose between debug, info, warn, error
+- `log_path` (String) Path to store logs
 - `mode` (String, Sensitive) API Operation mode, either orchestrator or catalog
 - `port` (String) Parallels Desktop DevOps port
 - `prefix` (String) Parallels Desktop DevOps port

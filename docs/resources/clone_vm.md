@@ -144,6 +144,8 @@ resource "parallels-desktop_clone_vm" "example" {
 - `config` (Block, Optional) Virtual Machine config block, this is used set some of the most common settings for a VM (see [below for nested schema](#nestedblock--config))
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
 - `host` (String) Parallels Desktop DevOps Host
+- `keep_after_error` (Boolean) This will keep the VM even if there is an error during creation
+- `keep_running` (Boolean) This will keep the VM running after the terraform apply
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner
@@ -160,7 +162,6 @@ resource "parallels-desktop_clone_vm" "example" {
 - `external_ip` (String) VM external IP address
 - `id` (String) Virtual Machine Id
 - `internal_ip` (String) VM internal IP address
-- `keep_running` (Boolean) This will keep the VM running after the terraform apply
 - `os_type` (String) Virtual Machine OS type
 
 <a id="nestedblock--authenticator"></a>

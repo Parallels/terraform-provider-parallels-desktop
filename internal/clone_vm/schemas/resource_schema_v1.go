@@ -116,7 +116,11 @@ func GetCloneVmSchemaV1(ctx context.Context) schema.Schema {
 			},
 			"keep_running": schema.BoolAttribute{
 				MarkdownDescription: "This will keep the VM running after the terraform apply",
-				Computed:            true,
+				Optional:            true,
+			},
+			"keep_after_error": schema.BoolAttribute{
+				MarkdownDescription: "This will keep the VM even if there is an error during creation",
+				Optional:            true,
 			},
 		},
 	}

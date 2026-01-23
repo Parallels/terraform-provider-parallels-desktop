@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.21286760179] - 2026-01-23
+## [0.7.1] - 2026-01-23
 
 - Fixed an issue with the clone provider keep_running
 - Added a error management for when cloning a running vm
@@ -105,4 +105,5 @@ FEATURES:
 - Added the ability to register a deployment with a orchestrator
 - Added the ability to run prlctl commands
 - Added the ability to run a script on destroy it
+
 

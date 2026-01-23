@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.21286760179] - 2026-01-23
+
+- Fixed an issue with the clone provider keep_running
+- Added a error management for when cloning a running vm
+- Added the keep_after_error to allow vms to stay if there is an error
+
 ## [0.7.0] - 2025-12-17
 
 - Fixed an issue where a new property that was unknown was making the clone resource crash

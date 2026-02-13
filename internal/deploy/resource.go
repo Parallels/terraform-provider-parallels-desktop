@@ -665,7 +665,13 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	})
 
 	if err := parallelsService.UninstallDevOpsService(ctx); err != nil {
-		resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+		if data.InstallLocal.ValueBool() {
+			// For local installs, downgrade to warning so terraform destroy isn't blocked.
+			// The error message includes manual cleanup steps if needed.
+			resp.Diagnostics.AddWarning("Partial cleanup of DevOps service", err.Error())
+		} else {
+			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+		}
 	}
 
 	data.Api = types.ObjectUnknown(map[string]attr.Type{
@@ -900,17 +906,30 @@ func (r *DeployResource) installParallelsDesktop(ctx context.Context, parallelsC
 	username := r.provider.MyAccountUser.ValueString()
 	password := r.provider.MyAccountPassword.ValueString()
 
-	// installing parallels license
-	if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
-			for _, uninstallError := range uninstallErrors {
-				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+	// For local deployments, check if already licensed before trying to install
+	skipLicense := false
+	if license, err := parallelsClient.GetLicense(ctx); err == nil && license != nil {
+		if license.State.ValueString() == "valid" || license.State.ValueString() == "active" {
+			skipLicense = true
+		}
+	}
+
+	// installing parallels license (skip if already licensed or key is empty for local installs)
+	if !skipLicense && key != "" {
+		if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
+			if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
+				for _, uninstallError := range uninstallErrors {
+					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+				}
 			}
+			if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
+				diag.AddError("Error uninstalling dependencies", err.Error())
+			}
+			diag.AddError("Error installing parallels license", err.Error())
+			return installed_dependencies, diag
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
-		}
-		diag.AddError("Error installing parallels license", err.Error())
+	} else if !skipLicense && key == "" {
+		diag.AddError("Error installing parallels license", "No license key provided and no valid license found. Set the license in the provider configuration.")
 		return installed_dependencies, diag
 	}
 

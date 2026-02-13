@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -236,7 +237,7 @@ func (c *DevOpsServiceClient) InstallBrew(ctx context.Context) error {
 	brewPath = c.findPath(ctx, "brew")
 	if brewPath == "" {
 		cmd = "/bin/bash"
-		arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
+		arguments = []string{"-c", "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash"}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return errors.New("Error running brew install command, error: " + err.Error())
@@ -414,6 +415,11 @@ func (c *DevOpsServiceClient) InstallParallelsDesktop(ctx context.Context) error
 }
 
 func (c *DevOpsServiceClient) UninstallParallelsDesktop(ctx context.Context) error {
+	// For local clients, never uninstall Parallels Desktop from the user's machine
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		return nil
+	}
+
 	// checking if the prlctl is indeed installed, if not we do not need to do anything
 	cmd := c.findPath(ctx, "prlctl")
 	arguments := []string{"--version"}
@@ -481,6 +487,14 @@ func (c *DevOpsServiceClient) InstallLicense(ctx context.Context, key string, us
 }
 
 func (c *DevOpsServiceClient) DeactivateLicense(ctx context.Context) error {
+	// For local clients, never deactivate the host's Parallels Desktop license.
+	// We skip license installation during create (host is already licensed),
+	// so we must also skip deactivation during destroy.
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		tflog.Info(ctx, "Skipping license deactivation for local client — host license is not managed by Terraform")
+		return nil
+	}
+
 	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"deactivate-license", "--skip-network-errors"}
 
@@ -535,13 +549,14 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		cmd := "/bin/bash"
-		arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "-", "--no-service"}
+		installCmd := "curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh | bash -s -- --no-service"
 		if config.DevOpsVersion.ValueString() != "" && config.DevOpsVersion.ValueString() != "latest" && !config.UseLatestBeta.ValueBool() {
-			arguments = append(arguments, "--version", config.DevOpsVersion.ValueString())
+			installCmd += " --version " + config.DevOpsVersion.ValueString()
 		}
 		if config.UseLatestBeta.ValueBool() {
-			arguments = append(arguments, "--pre-release")
+			installCmd += " --pre-release"
 		}
+		arguments := []string{"-c", installCmd}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return "", errors.New("Error running devops install command, error: " + err.Error())
@@ -675,17 +690,66 @@ func (c *DevOpsServiceClient) UninstallDevOpsService(ctx context.Context) error 
 
 	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
+		tflog.Info(ctx, "prldevops binary not found — nothing to uninstall")
 		return nil
 	}
 
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		return c.uninstallDevOpsServiceLocal(ctx, devopsPath)
+	}
+
 	cmd := "/bin/bash"
-	arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "--", "--uninstall"}
+	arguments := []string{"-c", "curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh | bash -s -- --uninstall"}
 
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+// uninstallDevOpsServiceLocal performs a best-effort cleanup of the DevOps
+// service on the local machine. It does NOT use curl from the internet.
+// Steps:
+//  1. Stop & unregister the launchd service via "sudo prldevops uninstall service"
+//  2. Remove the prldevops binary
+//  3. Remove config files
+func (c *DevOpsServiceClient) uninstallDevOpsServiceLocal(ctx context.Context, devopsPath string) error {
+	var warnings []string
+
+	// Step 1: Unregister the launchd service (requires sudo)
+	tflog.Info(ctx, "Unregistering prldevops launchd service")
+	_, err := c.client.RunCommand("sudo", []string{devopsPath, "uninstall", "service"})
+	if err != nil {
+		warnings = append(warnings, "Failed to unregister launchd service: "+err.Error())
+		tflog.Warn(ctx, "Failed to unregister prldevops service (sudo may not be cached): "+err.Error())
+	}
+
+	// Step 2: Remove the prldevops binary
+	tflog.Info(ctx, "Removing prldevops binary at "+devopsPath)
+	_, err = c.client.RunCommand("rm", []string{"-f", devopsPath})
+	if err != nil {
+		// Try with sudo in case the binary is in a protected location
+		_, err2 := c.client.RunCommand("sudo", []string{"rm", "-f", devopsPath})
+		if err2 != nil {
+			warnings = append(warnings, "Failed to remove prldevops binary at "+devopsPath+": "+err2.Error())
+		}
+	}
+
+	// Step 3: Remove config file if it exists
+	homeDir, _ := os.UserHomeDir()
+	if homeDir != "" {
+		configPath := filepath.Join(homeDir, ".parallels-devops-service.json")
+		tflog.Info(ctx, "Removing config file at "+configPath)
+		_, _ = c.client.RunCommand("rm", []string{"-f", configPath})
+	}
+
+	if len(warnings) > 0 {
+		return fmt.Errorf("partial cleanup — manual steps may be needed: %s", strings.Join(warnings, "; "))
+	}
+
+	tflog.Info(ctx, "DevOps service uninstalled successfully (local)")
 	return nil
 }
 
@@ -837,7 +901,15 @@ func (c *DevOpsServiceClient) findPath(ctx context.Context, cmd string) string {
 		path = ""
 	}
 
+	homeDir, _ := os.UserHomeDir()
+	homeBin := ""
+	if homeDir != "" {
+		homeBin = filepath.Join(homeDir, "bin")
+	}
 	folders := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin"}
+	if homeBin != "" {
+		folders = append(folders, homeBin)
+	}
 
 	for _, folder := range folders {
 		if _, err := c.client.RunCommand("ls", []string{filepath.Join(folder, cmd)}); err == nil {

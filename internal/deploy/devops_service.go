@@ -80,34 +80,35 @@ func (c *DevOpsServiceClient) RestartServer() error {
 
 func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToInstall []string) ([]string, error) {
 	installed_dependencies := []string{}
-	_, ok := c.client.(*localclient.LocalClient)
+	_, isLocal := c.client.(*localclient.LocalClient)
 
 	if err := c.InstallBrew(ctx); err != nil {
 		return installed_dependencies, err
 	}
 	installed_dependencies = append(installed_dependencies, "brew")
 
-	if !ok {
-		for _, dep := range listToInstall {
-			switch strings.ToLower(dep) {
-			case "brew":
-				brewPresent := c.findPath(ctx, "brew")
-				if brewPresent == "" {
-					if err := c.InstallBrew(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					isAlreadyInInstalledDependencies := false
-					for _, installedDep := range installed_dependencies {
-						if installedDep == "brew" {
-							isAlreadyInInstalledDependencies = true
-						}
-					}
-					if !isAlreadyInInstalledDependencies {
-						installed_dependencies = append(installed_dependencies, "brew")
+	for _, dep := range listToInstall {
+		switch strings.ToLower(dep) {
+		case "brew":
+			brewPresent := c.findPath(ctx, "brew")
+			if brewPresent == "" {
+				if err := c.InstallBrew(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				isAlreadyInInstalledDependencies := false
+				for _, installedDep := range installed_dependencies {
+					if installedDep == "brew" {
+						isAlreadyInInstalledDependencies = true
 					}
 				}
-				// setting up sudo access for brew without password
-
+				if !isAlreadyInInstalledDependencies {
+					installed_dependencies = append(installed_dependencies, "brew")
+				}
+			}
+			// setting up sudo access for brew without password
+			// Skip for local clients -- shell pipe syntax does not work with exec.Command
+			// and the local user already has their own sudo configuration
+			if !isLocal {
 				cmd := "echo"
 				// " %v | sudo -S echo hello | sudo grep -q '^%v ALL=(ALL) NOPASSWD:ALL$' /etc/sudoers || echo '%v ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers", c.client.Password(), c.client.Username(), c.client.Username()
 				sudoArgs := []string{
@@ -155,71 +156,72 @@ func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToIns
 						return installed_dependencies, errors.New("Error setting up brew access to /usr/local/share, error: " + err.Error())
 					}
 				}
-
-			case "git":
-				gitPresent := c.findPath(ctx, "git")
-				brewPresent := c.findPath(ctx, "brew")
-				if gitPresent == "" && brewPresent == "" {
-					if err := c.InstallGit(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "git")
-				}
-			case "packer":
-				packerPresent := c.findPath(ctx, "packer")
-				brewPresent := c.findPath(ctx, "brew")
-				if packerPresent == "" && brewPresent == "" {
-					if err := c.InstallPacker(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "packer")
-				}
-			case "vagrant":
-				vagrantPresent := c.findPath(ctx, "vagrant")
-				brewPresent := c.findPath(ctx, "brew")
-				if vagrantPresent == "" && brewPresent == "" {
-					if err := c.InstallVagrant(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "vagrant")
-				}
-			default:
-				return installed_dependencies, errors.New("Unsupported dependency " + dep + " to install")
 			}
+
+		case "git":
+			gitPresent := c.findPath(ctx, "git")
+			brewPresent := c.findPath(ctx, "brew")
+			if gitPresent == "" && brewPresent == "" {
+				if err := c.InstallGit(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "git")
+			}
+		case "packer":
+			packerPresent := c.findPath(ctx, "packer")
+			brewPresent := c.findPath(ctx, "brew")
+			if packerPresent == "" && brewPresent == "" {
+				if err := c.InstallPacker(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "packer")
+			}
+		case "vagrant":
+			vagrantPresent := c.findPath(ctx, "vagrant")
+			brewPresent := c.findPath(ctx, "brew")
+			if vagrantPresent == "" && brewPresent == "" {
+				if err := c.InstallVagrant(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "vagrant")
+			}
+		default:
+			return installed_dependencies, errors.New("Unsupported dependency " + dep + " to install")
 		}
-	} else {
-		return installed_dependencies, errors.New("Unsupported client")
 	}
 
 	return installed_dependencies, nil
 }
 
 func (c *DevOpsServiceClient) UninstallDependencies(ctx context.Context, installedDependencies []string) []error {
-	_, ok := c.client.(*localclient.LocalClient)
+	_, isLocal := c.client.(*localclient.LocalClient)
 	uninstallErrors := []error{}
-	if !ok {
-		for _, dep := range installedDependencies {
-			switch dep {
-			case "brew":
-				continue
-			case "git":
-				if err := c.UninstallGit(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			case "packer":
-				if err := c.UninstallPacker(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			case "vagrant":
-				if err := c.UninstallVagrant(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			default:
-				uninstallErrors = append(uninstallErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
+
+	// For local clients, never uninstall system dependencies (brew, git, etc.)
+	// from the user's machine -- just no-op
+	if isLocal {
+		return uninstallErrors
+	}
+
+	for _, dep := range installedDependencies {
+		switch dep {
+		case "brew":
+			continue
+		case "git":
+			if err := c.UninstallGit(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
 			}
+		case "packer":
+			if err := c.UninstallPacker(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
+			}
+		case "vagrant":
+			if err := c.UninstallVagrant(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
+			}
+		default:
+			uninstallErrors = append(uninstallErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
 		}
-	} else {
-		uninstallErrors = append(uninstallErrors, errors.New("Unsupported client"))
 	}
 
 	return uninstallErrors
@@ -608,8 +610,9 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 		}
 
 		configFilePath := filepath.Join("/tmp", "config.yaml")
-		cmd := "echo"
-		arguments := []string{"'" + string(yamlConfig) + "' ", ">", configFilePath}
+		// Use bash -c so shell redirect (>) works with both SSH and local clients
+		cmd := "/bin/bash"
+		arguments := []string{"-c", "echo '" + string(yamlConfig) + "' > " + configFilePath}
 		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 			return "", err
 		}
@@ -815,8 +818,9 @@ func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopD
 
 	escapedConfig := strings.ReplaceAll(string(jsonConfig), `\`, `\\`)
 	escapedConfig = strings.ReplaceAll(escapedConfig, "'", `\'`)
-	cmd := "echo"
-	arguments := []string{"'" + escapedConfig + "' ", ">", configPath}
+	// Use bash -c so shell redirect (>) works with both SSH and local clients
+	cmd := "/bin/bash"
+	arguments := []string{"-c", "echo '" + escapedConfig + "' > " + configPath}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}

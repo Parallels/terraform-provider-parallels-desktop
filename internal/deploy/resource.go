@@ -813,6 +813,9 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 }
 
 func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV3) (*ssh.SshClient, error) {
+	if data.SshConnection == nil {
+		return nil, errors.New("ssh_connection is required for remote deployment; use install_local = true for local deployment")
+	}
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}

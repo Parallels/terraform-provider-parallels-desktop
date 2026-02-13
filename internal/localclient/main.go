@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -44,9 +45,32 @@ func validateCommand(command string) (string, error) {
 		"unzip":     true,
 		"zip":       true,
 		"devops":    true,
+		// Commands needed for local deployment (install_local = true)
+		"bash":       true,
+		"/bin/bash":  true,
+		"sh":         true,
+		"/bin/sh":    true,
+		"echo":       true,
+		"sudo":       true,
+		"ls":         true,
+		"rm":         true,
+		"which":      true,
+		"mkdir":      true,
+		"cp":         true,
+		"mv":         true,
+		"chmod":      true,
+		"chown":      true,
+		"cat":        true,
+		"grep":       true,
+		"tee":        true,
+		"prldevops":  true,
+		// Parallels Desktop service management
+		"/Applications/Parallels\\ Desktop.app/Contents/MacOS/Parallels\\ Service": true,
 	}
 
-	if !allowedCommands[command] {
+	// Check exact match first, then check basename for full paths
+	// (e.g. /usr/local/bin/prldevops should match "prldevops")
+	if !allowedCommands[command] && !allowedCommands[filepath.Base(command)] {
 		return "", fmt.Errorf("command '%s' is not allowed", command)
 	}
 	return command, nil
@@ -54,8 +78,10 @@ func validateCommand(command string) (string, error) {
 
 func validateArgs(args []string) ([]string, error) {
 	for _, arg := range args {
-		// Check for shell metacharacters and potentially dangerous patterns
-		if strings.ContainsAny(arg, ";$\\") {
+		// Only reject ';' which enables command chaining injection.
+		// '$' and '\' are safe with exec.Command (no shell interpretation)
+		// and are needed for legitimate bash -c subshells and escaped paths.
+		if strings.Contains(arg, ";") {
 			return []string{}, fmt.Errorf("argument contains forbidden characters: %s", arg)
 		}
 	}

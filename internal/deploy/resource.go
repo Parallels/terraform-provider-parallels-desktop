@@ -287,7 +287,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	// Getting parallels latest api version
-	if version, err := parallelsClient.GetDevOpsVersion(); err != nil {
+	if version, err := parallelsClient.GetDevOpsVersion(ctx); err != nil {
 		planVersion := deploy_models.ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
@@ -372,7 +372,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// checking if we still have the devops service running
-	_, devOpsErr := parallelsClient.GetDevOpsVersion()
+	_, devOpsErr := parallelsClient.GetDevOpsVersion(ctx)
 	if devOpsErr != nil {
 		r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 	}
@@ -500,7 +500,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		data.InstalledDependencies = currentData.InstalledDependencies
 	}
 
-	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion()
+	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion(ctx)
 	if getVersionError != nil {
 		if getVersionError.Error() == "Parallels Desktop DevOps Service not found" {
 			_, apiDiag := r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
@@ -993,7 +993,7 @@ func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_
 		return nil, diag
 	}
 
-	currentVersion, err := parallelsClient.GetDevOpsVersion()
+	currentVersion, err := parallelsClient.GetDevOpsVersion(ctx)
 	if err != nil {
 		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {

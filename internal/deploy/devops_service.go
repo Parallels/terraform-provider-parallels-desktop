@@ -676,7 +676,7 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 		return "", err
 	}
 
-	finalVersion, err := c.GetDevOpsVersion()
+	finalVersion, err := c.GetDevOpsVersion(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -753,9 +753,7 @@ func (c *DevOpsServiceClient) uninstallDevOpsServiceLocal(ctx context.Context, d
 	return nil
 }
 
-func (c *DevOpsServiceClient) GetDevOpsVersion() (string, error) {
-	// Use findPath which searches ~/bin, /usr/local/bin, etc.
-	ctx := context.Background()
+func (c *DevOpsServiceClient) GetDevOpsVersion(ctx context.Context) (string, error) {
 	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		// Fall back to legacy check in installPath

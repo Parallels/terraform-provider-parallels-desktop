@@ -754,18 +754,20 @@ func (c *DevOpsServiceClient) uninstallDevOpsServiceLocal(ctx context.Context, d
 }
 
 func (c *DevOpsServiceClient) GetDevOpsVersion() (string, error) {
-	executableName, err := c.getExecutableName(installPath)
-	if err != nil {
-		return "", err
+	// Use findPath which searches ~/bin, /usr/local/bin, etc.
+	ctx := context.Background()
+	devopsPath := c.findPath(ctx, "prldevops")
+	if devopsPath == "" {
+		// Fall back to legacy check in installPath
+		executableName, err := c.getExecutableName(installPath)
+		if err != nil {
+			return "", err
+		}
+		devopsPath = filepath.Join(installPath, executableName)
 	}
 
-	executablePath := filepath.Join(installPath, executableName)
-	cmd := executablePath
-	arguments := []string{"version"}
-	if executableName == "prldevops" {
-		arguments = []string{"--version"}
-	}
-	output, err := c.client.RunCommand(cmd, arguments)
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(devopsPath, arguments)
 	if err != nil {
 		return "", err
 	}

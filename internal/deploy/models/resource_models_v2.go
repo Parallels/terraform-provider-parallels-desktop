@@ -120,9 +120,14 @@ func (o *DeployResourceModelV2) GenerateApiHostConfig(provider *models.Parallels
 		return apiclient.HostConfig{}
 	}
 
+	host := "localhost"
+	if o.SshConnection != nil {
+		host = strings.ReplaceAll(o.SshConnection.Host.String(), "\"", "")
+	}
+
 	hostConfig := apiclient.HostConfig{
 		IsOrchestrator: false,
-		Host:           strings.ReplaceAll(o.SshConnection.Host.String(), "\"", ""),
+		Host:           host,
 		License:        provider.License.ValueString(),
 		Authorization: &authenticator.Authentication{
 			Username: types.StringValue(strings.ReplaceAll(o.Api.Attributes()["user"].String(), "\"", "")),

@@ -163,7 +163,12 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 		data.License = license.MapObject()
 	}
 
-	// Register with orchestrator if needed
+	// Register with orchestrator if needed, otherwise set fields to known zero values
+	if data.Orchestrator == nil {
+		data.IsRegisteredInOrchestrator = types.BoolValue(false)
+		data.OrchestratorHostId = types.StringValue("")
+		data.OrchestratorHost = types.StringValue("")
+	}
 	if data.Orchestrator != nil {
 		diag := r.registerWithOrchestrator(ctx, &data, nil)
 		if diag.HasError() {
@@ -222,7 +227,11 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+	if data.SshConnection != nil {
+		data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+	} else {
+		data.ExternalIp = types.StringValue("localhost")
+	}
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -590,7 +599,11 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if currentData.ExternalIp.ValueString() == "" ||
 		strings.ReplaceAll(currentData.ExternalIp.ValueString(), "\"", "") != strings.ReplaceAll(data.ExternalIp.ValueString(), "\"", "") {
-		data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+		if data.SshConnection != nil {
+			data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+		} else {
+			data.ExternalIp = types.StringValue("localhost")
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -997,9 +1010,14 @@ func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_
 		return nil, diag
 	}
 
+	apiHost := "localhost"
+	if data.SshConnection != nil {
+		apiHost = data.SshConnection.Host.ValueString()
+	}
+
 	apiData := deploy_models.ParallelsDesktopDevOps{
 		Version:  types.StringValue(currentVersion),
-		Host:     types.StringValue(data.SshConnection.Host.ValueString()),
+		Host:     types.StringValue(apiHost),
 		Port:     types.StringValue(targetPort),
 		Protocol: types.StringValue("http"),
 		User:     types.StringValue("root@localhost"),
@@ -1026,7 +1044,10 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 		return diagnostic
 	}
 
-	host := strings.ReplaceAll(data.SshConnection.Host.String(), "\"", "")
+	host := "localhost"
+	if data.SshConnection != nil {
+		host = strings.ReplaceAll(data.SshConnection.Host.String(), "\"", "")
+	}
 	port := strings.ReplaceAll(data.ApiConfig.Port.String(), "\"", "")
 	user := "root@localhost"
 	schema := "http"

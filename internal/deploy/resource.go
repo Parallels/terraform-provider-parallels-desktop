@@ -163,7 +163,12 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 		data.License = license.MapObject()
 	}
 
-	// Register with orchestrator if needed
+	// Register with orchestrator if needed, otherwise set fields to known zero values
+	if data.Orchestrator == nil {
+		data.IsRegisteredInOrchestrator = types.BoolValue(false)
+		data.OrchestratorHostId = types.StringValue("")
+		data.OrchestratorHost = types.StringValue("")
+	}
 	if data.Orchestrator != nil {
 		diag := r.registerWithOrchestrator(ctx, &data, nil)
 		if diag.HasError() {
@@ -222,7 +227,11 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+	if data.SshConnection != nil {
+		data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+	} else {
+		data.ExternalIp = types.StringValue("localhost")
+	}
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -278,7 +287,7 @@ func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	// Getting parallels latest api version
-	if version, err := parallelsClient.GetDevOpsVersion(); err != nil {
+	if version, err := parallelsClient.GetDevOpsVersion(ctx); err != nil {
 		planVersion := deploy_models.ParallelsDesktopDevOps{}
 		if !data.Api.IsNull() {
 			if diags := data.Api.As(ctx, &planVersion, basetypes.ObjectAsOptions{}); diags.HasError() {
@@ -363,7 +372,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// checking if we still have the devops service running
-	_, devOpsErr := parallelsClient.GetDevOpsVersion()
+	_, devOpsErr := parallelsClient.GetDevOpsVersion(ctx)
 	if devOpsErr != nil {
 		r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
 	}
@@ -491,7 +500,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		data.InstalledDependencies = currentData.InstalledDependencies
 	}
 
-	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion()
+	installedVersion, getVersionError := parallelsClient.GetDevOpsVersion(ctx)
 	if getVersionError != nil {
 		if getVersionError.Error() == "Parallels Desktop DevOps Service not found" {
 			_, apiDiag := r.installDevOpsService(ctx, &data, dependencies, parallelsClient)
@@ -590,7 +599,11 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if currentData.ExternalIp.ValueString() == "" ||
 		strings.ReplaceAll(currentData.ExternalIp.ValueString(), "\"", "") != strings.ReplaceAll(data.ExternalIp.ValueString(), "\"", "") {
-		data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+		if data.SshConnection != nil {
+			data.ExternalIp = types.StringValue(strings.ReplaceAll(data.SshConnection.Host.String(), "\"", ""))
+		} else {
+			data.ExternalIp = types.StringValue("localhost")
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -665,7 +678,13 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	})
 
 	if err := parallelsService.UninstallDevOpsService(ctx); err != nil {
-		resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+		if data.InstallLocal.ValueBool() {
+			// For local installs, downgrade to warning so terraform destroy isn't blocked.
+			// The error message includes manual cleanup steps if needed.
+			resp.Diagnostics.AddWarning("Partial cleanup of DevOps service", err.Error())
+		} else {
+			resp.Diagnostics.AddError("Error uninstalling parallels DevOps service", err.Error())
+		}
 	}
 
 	data.Api = types.ObjectUnknown(map[string]attr.Type{
@@ -813,6 +832,9 @@ func UpgradeStateToV2(ctx context.Context, req resource.UpgradeStateRequest, res
 }
 
 func (r *DeployResource) getSshClient(data deploy_models.DeployResourceModelV3) (*ssh.SshClient, error) {
+	if data.SshConnection == nil {
+		return nil, errors.New("ssh_connection is required for remote deployment; use install_local = true for local deployment")
+	}
 	if data.SshConnection.Host.IsNull() {
 		return nil, errors.New("host is required")
 	}
@@ -897,17 +919,30 @@ func (r *DeployResource) installParallelsDesktop(ctx context.Context, parallelsC
 	username := r.provider.MyAccountUser.ValueString()
 	password := r.provider.MyAccountPassword.ValueString()
 
-	// installing parallels license
-	if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
-		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
-			for _, uninstallError := range uninstallErrors {
-				diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+	// For local deployments, check if already licensed before trying to install
+	skipLicense := false
+	if license, err := parallelsClient.GetLicense(ctx); err == nil && license != nil {
+		if license.State.ValueString() == "valid" || license.State.ValueString() == "active" {
+			skipLicense = true
+		}
+	}
+
+	// installing parallels license (skip if already licensed or key is empty for local installs)
+	if !skipLicense && key != "" {
+		if err := parallelsClient.InstallLicense(ctx, key, username, password); err != nil {
+			if uninstallErrors := parallelsClient.UninstallDependencies(ctx, installed_dependencies); len(uninstallErrors) > 0 {
+				for _, uninstallError := range uninstallErrors {
+					diag.AddError("Error uninstalling dependencies", uninstallError.Error())
+				}
 			}
+			if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
+				diag.AddError("Error uninstalling dependencies", err.Error())
+			}
+			diag.AddError("Error installing parallels license", err.Error())
+			return installed_dependencies, diag
 		}
-		if err := parallelsClient.UninstallParallelsDesktop(ctx); err != nil {
-			diag.AddError("Error uninstalling dependencies", err.Error())
-		}
-		diag.AddError("Error installing parallels license", err.Error())
+	} else if !skipLicense && key == "" {
+		diag.AddError("Error installing parallels license", "No license key provided and no valid license found. Set the license in the provider configuration.")
 		return installed_dependencies, diag
 	}
 
@@ -958,7 +993,7 @@ func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_
 		return nil, diag
 	}
 
-	currentVersion, err := parallelsClient.GetDevOpsVersion()
+	currentVersion, err := parallelsClient.GetDevOpsVersion(ctx)
 	if err != nil {
 		if uninstallErrors := parallelsClient.UninstallDependencies(ctx, dependencies); len(uninstallErrors) > 0 {
 			for _, uninstallError := range uninstallErrors {
@@ -975,9 +1010,14 @@ func (r *DeployResource) installDevOpsService(ctx context.Context, data *deploy_
 		return nil, diag
 	}
 
+	apiHost := "localhost"
+	if data.SshConnection != nil {
+		apiHost = data.SshConnection.Host.ValueString()
+	}
+
 	apiData := deploy_models.ParallelsDesktopDevOps{
 		Version:  types.StringValue(currentVersion),
-		Host:     types.StringValue(data.SshConnection.Host.ValueString()),
+		Host:     types.StringValue(apiHost),
 		Port:     types.StringValue(targetPort),
 		Protocol: types.StringValue("http"),
 		User:     types.StringValue("root@localhost"),
@@ -1004,7 +1044,10 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 		return diagnostic
 	}
 
-	host := strings.ReplaceAll(data.SshConnection.Host.String(), "\"", "")
+	host := "localhost"
+	if data.SshConnection != nil {
+		host = strings.ReplaceAll(data.SshConnection.Host.String(), "\"", "")
+	}
 	port := strings.ReplaceAll(data.ApiConfig.Port.String(), "\"", "")
 	user := "root@localhost"
 	schema := "http"

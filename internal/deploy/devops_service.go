@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -80,34 +81,35 @@ func (c *DevOpsServiceClient) RestartServer() error {
 
 func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToInstall []string) ([]string, error) {
 	installed_dependencies := []string{}
-	_, ok := c.client.(*localclient.LocalClient)
+	_, isLocal := c.client.(*localclient.LocalClient)
 
 	if err := c.InstallBrew(ctx); err != nil {
 		return installed_dependencies, err
 	}
 	installed_dependencies = append(installed_dependencies, "brew")
 
-	if !ok {
-		for _, dep := range listToInstall {
-			switch strings.ToLower(dep) {
-			case "brew":
-				brewPresent := c.findPath(ctx, "brew")
-				if brewPresent == "" {
-					if err := c.InstallBrew(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					isAlreadyInInstalledDependencies := false
-					for _, installedDep := range installed_dependencies {
-						if installedDep == "brew" {
-							isAlreadyInInstalledDependencies = true
-						}
-					}
-					if !isAlreadyInInstalledDependencies {
-						installed_dependencies = append(installed_dependencies, "brew")
+	for _, dep := range listToInstall {
+		switch strings.ToLower(dep) {
+		case "brew":
+			brewPresent := c.findPath(ctx, "brew")
+			if brewPresent == "" {
+				if err := c.InstallBrew(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				isAlreadyInInstalledDependencies := false
+				for _, installedDep := range installed_dependencies {
+					if installedDep == "brew" {
+						isAlreadyInInstalledDependencies = true
 					}
 				}
-				// setting up sudo access for brew without password
-
+				if !isAlreadyInInstalledDependencies {
+					installed_dependencies = append(installed_dependencies, "brew")
+				}
+			}
+			// setting up sudo access for brew without password
+			// Skip for local clients -- shell pipe syntax does not work with exec.Command
+			// and the local user already has their own sudo configuration
+			if !isLocal {
 				cmd := "echo"
 				// " %v | sudo -S echo hello | sudo grep -q '^%v ALL=(ALL) NOPASSWD:ALL$' /etc/sudoers || echo '%v ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers", c.client.Password(), c.client.Username(), c.client.Username()
 				sudoArgs := []string{
@@ -155,71 +157,72 @@ func (c *DevOpsServiceClient) InstallDependencies(ctx context.Context, listToIns
 						return installed_dependencies, errors.New("Error setting up brew access to /usr/local/share, error: " + err.Error())
 					}
 				}
-
-			case "git":
-				gitPresent := c.findPath(ctx, "git")
-				brewPresent := c.findPath(ctx, "brew")
-				if gitPresent == "" && brewPresent == "" {
-					if err := c.InstallGit(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "git")
-				}
-			case "packer":
-				packerPresent := c.findPath(ctx, "packer")
-				brewPresent := c.findPath(ctx, "brew")
-				if packerPresent == "" && brewPresent == "" {
-					if err := c.InstallPacker(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "packer")
-				}
-			case "vagrant":
-				vagrantPresent := c.findPath(ctx, "vagrant")
-				brewPresent := c.findPath(ctx, "brew")
-				if vagrantPresent == "" && brewPresent == "" {
-					if err := c.InstallVagrant(ctx); err != nil {
-						return installed_dependencies, err
-					}
-					installed_dependencies = append(installed_dependencies, "vagrant")
-				}
-			default:
-				return installed_dependencies, errors.New("Unsupported dependency " + dep + " to install")
 			}
+
+		case "git":
+			gitPresent := c.findPath(ctx, "git")
+			brewPresent := c.findPath(ctx, "brew")
+			if gitPresent == "" && brewPresent == "" {
+				if err := c.InstallGit(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "git")
+			}
+		case "packer":
+			packerPresent := c.findPath(ctx, "packer")
+			brewPresent := c.findPath(ctx, "brew")
+			if packerPresent == "" && brewPresent == "" {
+				if err := c.InstallPacker(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "packer")
+			}
+		case "vagrant":
+			vagrantPresent := c.findPath(ctx, "vagrant")
+			brewPresent := c.findPath(ctx, "brew")
+			if vagrantPresent == "" && brewPresent == "" {
+				if err := c.InstallVagrant(ctx); err != nil {
+					return installed_dependencies, err
+				}
+				installed_dependencies = append(installed_dependencies, "vagrant")
+			}
+		default:
+			return installed_dependencies, errors.New("Unsupported dependency " + dep + " to install")
 		}
-	} else {
-		return installed_dependencies, errors.New("Unsupported client")
 	}
 
 	return installed_dependencies, nil
 }
 
 func (c *DevOpsServiceClient) UninstallDependencies(ctx context.Context, installedDependencies []string) []error {
-	_, ok := c.client.(*localclient.LocalClient)
+	_, isLocal := c.client.(*localclient.LocalClient)
 	uninstallErrors := []error{}
-	if !ok {
-		for _, dep := range installedDependencies {
-			switch dep {
-			case "brew":
-				continue
-			case "git":
-				if err := c.UninstallGit(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			case "packer":
-				if err := c.UninstallPacker(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			case "vagrant":
-				if err := c.UninstallVagrant(ctx); err != nil {
-					uninstallErrors = append(uninstallErrors, err)
-				}
-			default:
-				uninstallErrors = append(uninstallErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
+
+	// For local clients, never uninstall system dependencies (brew, git, etc.)
+	// from the user's machine -- just no-op
+	if isLocal {
+		return uninstallErrors
+	}
+
+	for _, dep := range installedDependencies {
+		switch dep {
+		case "brew":
+			continue
+		case "git":
+			if err := c.UninstallGit(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
 			}
+		case "packer":
+			if err := c.UninstallPacker(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
+			}
+		case "vagrant":
+			if err := c.UninstallVagrant(ctx); err != nil {
+				uninstallErrors = append(uninstallErrors, err)
+			}
+		default:
+			uninstallErrors = append(uninstallErrors, errors.New("Unsupported dependency"+dep+" to uninstall"))
 		}
-	} else {
-		uninstallErrors = append(uninstallErrors, errors.New("Unsupported client"))
 	}
 
 	return uninstallErrors
@@ -234,7 +237,7 @@ func (c *DevOpsServiceClient) InstallBrew(ctx context.Context) error {
 	brewPath = c.findPath(ctx, "brew")
 	if brewPath == "" {
 		cmd = "/bin/bash"
-		arguments = []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}
+		arguments = []string{"-c", "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash"}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return errors.New("Error running brew install command, error: " + err.Error())
@@ -412,6 +415,11 @@ func (c *DevOpsServiceClient) InstallParallelsDesktop(ctx context.Context) error
 }
 
 func (c *DevOpsServiceClient) UninstallParallelsDesktop(ctx context.Context) error {
+	// For local clients, never uninstall Parallels Desktop from the user's machine
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		return nil
+	}
+
 	// checking if the prlctl is indeed installed, if not we do not need to do anything
 	cmd := c.findPath(ctx, "prlctl")
 	arguments := []string{"--version"}
@@ -479,6 +487,14 @@ func (c *DevOpsServiceClient) InstallLicense(ctx context.Context, key string, us
 }
 
 func (c *DevOpsServiceClient) DeactivateLicense(ctx context.Context) error {
+	// For local clients, never deactivate the host's Parallels Desktop license.
+	// We skip license installation during create (host is already licensed),
+	// so we must also skip deactivation during destroy.
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		tflog.Info(ctx, "Skipping license deactivation for local client — host license is not managed by Terraform")
+		return nil
+	}
+
 	cmd := c.findPath(ctx, "prlsrvctl")
 	arguments := []string{"deactivate-license", "--skip-network-errors"}
 
@@ -533,13 +549,14 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
 		cmd := "/bin/bash"
-		arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "-", "--no-service"}
+		installCmd := "curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh | bash -s -- --no-service"
 		if config.DevOpsVersion.ValueString() != "" && config.DevOpsVersion.ValueString() != "latest" && !config.UseLatestBeta.ValueBool() {
-			arguments = append(arguments, "--version", config.DevOpsVersion.ValueString())
+			installCmd += " --version " + config.DevOpsVersion.ValueString()
 		}
 		if config.UseLatestBeta.ValueBool() {
-			arguments = append(arguments, "--pre-release")
+			installCmd += " --pre-release"
 		}
+		arguments := []string{"-c", installCmd}
 		_, err := c.client.RunCommand(cmd, arguments)
 		if err != nil {
 			return "", errors.New("Error running devops install command, error: " + err.Error())
@@ -608,8 +625,9 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 		}
 
 		configFilePath := filepath.Join("/tmp", "config.yaml")
-		cmd := "echo"
-		arguments := []string{"'" + string(yamlConfig) + "' ", ">", configFilePath}
+		// Use bash -c so shell redirect (>) works with both SSH and local clients
+		cmd := "/bin/bash"
+		arguments := []string{"-c", "echo '" + string(yamlConfig) + "' > " + configFilePath}
 		if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 			return "", err
 		}
@@ -658,7 +676,7 @@ func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license 
 		return "", err
 	}
 
-	finalVersion, err := c.GetDevOpsVersion()
+	finalVersion, err := c.GetDevOpsVersion(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -672,11 +690,16 @@ func (c *DevOpsServiceClient) UninstallDevOpsService(ctx context.Context) error 
 
 	devopsPath := c.findPath(ctx, "prldevops")
 	if devopsPath == "" {
+		tflog.Info(ctx, "prldevops binary not found — nothing to uninstall")
 		return nil
 	}
 
+	if _, isLocal := c.client.(*localclient.LocalClient); isLocal {
+		return c.uninstallDevOpsServiceLocal(ctx, devopsPath)
+	}
+
 	cmd := "/bin/bash"
-	arguments := []string{"-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh)\"", "--", "--uninstall"}
+	arguments := []string{"-c", "curl -fsSL https://raw.githubusercontent.com/Parallels/prl-devops-service/main/scripts/install.sh | bash -s -- --uninstall"}
 
 	_, err := c.client.RunCommand(cmd, arguments)
 	if err != nil {
@@ -686,19 +709,63 @@ func (c *DevOpsServiceClient) UninstallDevOpsService(ctx context.Context) error 
 	return nil
 }
 
-func (c *DevOpsServiceClient) GetDevOpsVersion() (string, error) {
-	executableName, err := c.getExecutableName(installPath)
+// uninstallDevOpsServiceLocal performs a best-effort cleanup of the DevOps
+// service on the local machine. It does NOT use curl from the internet.
+// Steps:
+//  1. Stop & unregister the launchd service via "sudo prldevops uninstall service"
+//  2. Remove the prldevops binary
+//  3. Remove config files
+func (c *DevOpsServiceClient) uninstallDevOpsServiceLocal(ctx context.Context, devopsPath string) error {
+	var warnings []string
+
+	// Step 1: Unregister the launchd service (requires sudo)
+	tflog.Info(ctx, "Unregistering prldevops launchd service")
+	_, err := c.client.RunCommand("sudo", []string{devopsPath, "uninstall", "service"})
 	if err != nil {
-		return "", err
+		warnings = append(warnings, "Failed to unregister launchd service: "+err.Error())
+		tflog.Warn(ctx, "Failed to unregister prldevops service (sudo may not be cached): "+err.Error())
 	}
 
-	executablePath := filepath.Join(installPath, executableName)
-	cmd := executablePath
-	arguments := []string{"version"}
-	if executableName == "prldevops" {
-		arguments = []string{"--version"}
+	// Step 2: Remove the prldevops binary
+	tflog.Info(ctx, "Removing prldevops binary at "+devopsPath)
+	_, err = c.client.RunCommand("rm", []string{"-f", devopsPath})
+	if err != nil {
+		// Try with sudo in case the binary is in a protected location
+		_, err2 := c.client.RunCommand("sudo", []string{"rm", "-f", devopsPath})
+		if err2 != nil {
+			warnings = append(warnings, "Failed to remove prldevops binary at "+devopsPath+": "+err2.Error())
+		}
 	}
-	output, err := c.client.RunCommand(cmd, arguments)
+
+	// Step 3: Remove config file if it exists
+	homeDir, _ := os.UserHomeDir()
+	if homeDir != "" {
+		configPath := filepath.Join(homeDir, ".parallels-devops-service.json")
+		tflog.Info(ctx, "Removing config file at "+configPath)
+		_, _ = c.client.RunCommand("rm", []string{"-f", configPath})
+	}
+
+	if len(warnings) > 0 {
+		return fmt.Errorf("partial cleanup — manual steps may be needed: %s", strings.Join(warnings, "; "))
+	}
+
+	tflog.Info(ctx, "DevOps service uninstalled successfully (local)")
+	return nil
+}
+
+func (c *DevOpsServiceClient) GetDevOpsVersion(ctx context.Context) (string, error) {
+	devopsPath := c.findPath(ctx, "prldevops")
+	if devopsPath == "" {
+		// Fall back to legacy check in installPath
+		executableName, err := c.getExecutableName(installPath)
+		if err != nil {
+			return "", err
+		}
+		devopsPath = filepath.Join(installPath, executableName)
+	}
+
+	arguments := []string{"--version"}
+	output, err := c.client.RunCommand(devopsPath, arguments)
 	if err != nil {
 		return "", err
 	}
@@ -815,8 +882,9 @@ func (c *DevOpsServiceClient) generateConfigFile(config models.ParallelsDesktopD
 
 	escapedConfig := strings.ReplaceAll(string(jsonConfig), `\`, `\\`)
 	escapedConfig = strings.ReplaceAll(escapedConfig, "'", `\'`)
-	cmd := "echo"
-	arguments := []string{"'" + escapedConfig + "' ", ">", configPath}
+	// Use bash -c so shell redirect (>) works with both SSH and local clients
+	cmd := "/bin/bash"
+	arguments := []string{"-c", "echo '" + escapedConfig + "' > " + configPath}
 	if _, err := c.client.RunCommand(cmd, arguments); err != nil {
 		return "", err
 	}
@@ -833,7 +901,15 @@ func (c *DevOpsServiceClient) findPath(ctx context.Context, cmd string) string {
 		path = ""
 	}
 
+	homeDir, _ := os.UserHomeDir()
+	homeBin := ""
+	if homeDir != "" {
+		homeBin = filepath.Join(homeDir, "bin")
+	}
 	folders := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin"}
+	if homeBin != "" {
+		folders = append(folders, homeBin)
+	}
 
 	for _, folder := range folders {
 		if _, err := c.client.RunCommand("ls", []string{filepath.Join(folder, cmd)}); err == nil {

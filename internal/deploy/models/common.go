@@ -138,6 +138,9 @@ func ApiConfigHasChanges(context context.Context, planState, currentState *Paral
 		return true
 	}
 
+	if !(planState.EnabledModules.IsNull() && currentState.EnabledModules.IsNull()) && !planState.EnabledModules.Equal(currentState.EnabledModules) {
+		return true
+	}
 	if planState.Mode != currentState.Mode {
 		return true
 	}
@@ -178,11 +181,11 @@ func ApiConfigHasChanges(context context.Context, planState, currentState *Paral
 		return true
 	}
 
-	if planState.CatalogCacheKeepFreeDiskSpace != currentState.CatalogCacheKeepFreeDiskSpace {
+	if !planState.CatalogCacheKeepFreeDiskSpace.Equal(currentState.CatalogCacheKeepFreeDiskSpace) {
 		return true
 	}
 
-	if planState.CatalogCacheMaxSize != currentState.CatalogCacheMaxSize {
+	if !planState.CatalogCacheMaxSize.Equal(currentState.CatalogCacheMaxSize) {
 		return true
 	}
 

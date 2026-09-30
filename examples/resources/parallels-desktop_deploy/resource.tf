@@ -8,8 +8,8 @@ resource "parallels-desktop_deploy" "example" {
     log_level = "info"
     # This will enable logging for the API
     enable_logging = true
-    # This will set the mode for the API, you can use either api or orchestrator. by default it will be api
-    mode = "api"
+    # Requires the provider build containing BF-02. Registration needs the host module.
+    enabled_modules = ["api", "host"]
     # you can force any version of the devops api, if you leave it empty it will use the latest version
     # but it will not automatically update to the latest version, that would need a manual step
     devops_version = "latest"

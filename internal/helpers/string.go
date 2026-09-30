@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -43,11 +44,16 @@ func GetHostUrl(host string) string {
 }
 
 func GetHostApiBaseUrl(host string) string {
-	return strings.TrimSuffix(GetHostUrl(host)+constants.API_PREFIX, "/")
+	base := GetHostUrl(host)
+	parsed, err := url.Parse(base)
+	if err == nil && strings.Trim(parsed.Path, "/") != "" {
+		return strings.TrimRight(base, "/")
+	}
+	return strings.TrimRight(base, "/") + constants.API_PREFIX
 }
 
 func GetHostApiVersionedBaseUrl(host string) string {
-	return strings.TrimSuffix(GetHostUrl(host)+constants.API_PREFIX_VERSION, "/")
+	return GetHostApiBaseUrl(host) + "/v1"
 }
 
 func ConvertByteToGigabyte(bytes float64) float64 {

@@ -1,7 +1,7 @@
 package models
 
 import (
-	"strings"
+	"context"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
@@ -54,6 +54,7 @@ type ParallelsDesktopDevopsConfigV3 struct {
 	CatalogCacheAllowCacheAboveKeepFreeDiskSpace types.Bool              `tfsdk:"catalog_cache_allow_cache_above_keep_free_disk_space"`
 	DisableCatalogCachingStream                  types.Bool              `tfsdk:"catalog_cache_disable_stream"`
 	TokenDurationMinutes                         types.String            `tfsdk:"token_duration_minutes" json:"token_duration_minutes,omitempty"`
+	EnabledModules                               types.Set               `tfsdk:"enabled_modules"`
 	Mode                                         types.String            `tfsdk:"mode" json:"mode,omitempty"`
 	UseOrchestratorResources                     types.Bool              `tfsdk:"use_orchestrator_resources"`
 	SystemReservedMemory                         types.String            `tfsdk:"system_reserved_memory"`
@@ -69,6 +70,8 @@ type ParallelsDesktopDevopsConfigV3 struct {
 func (p *ParallelsDesktopDevopsConfigV3) MapObject() basetypes.ObjectValue {
 	attributeTypes := make(map[string]attr.Type)
 	attributeTypes["port"] = types.StringType
+	attributeTypes["prefix"] = types.StringType
+	attributeTypes["enabled_modules"] = types.SetType{ElemType: types.StringType}
 	attributeTypes["devops_version"] = types.StringType
 	attributeTypes["root_password"] = types.StringType
 	attributeTypes["hmac_secret"] = types.StringType
@@ -93,17 +96,22 @@ func (p *ParallelsDesktopDevopsConfigV3) MapObject() basetypes.ObjectValue {
 	attributeTypes["log_path"] = types.StringType
 	attributeTypes["enable_port_forwarding"] = types.BoolType
 	attributeTypes["use_latest_beta"] = types.BoolType
-	attributeTypes["environment_variables"] = types.MapType{}
+	attributeTypes["environment_variables"] = types.MapType{ElemType: types.StringType}
 
 	attrs := map[string]attr.Value{}
-	attrs["api_port"] = p.Port
+	attrs["port"] = p.Port
+	attrs["prefix"] = p.Prefix
+	attrs["enabled_modules"] = p.EnabledModules
+	if p.EnabledModules.IsNull() {
+		attrs["enabled_modules"] = types.SetNull(types.StringType)
+	}
 	attrs["devops_version"] = p.DevOpsVersion
 	attrs["root_password"] = p.RootPassword
 	attrs["hmac_secret"] = p.HmacSecret
 	attrs["encryption_rsa_key"] = p.EncryptionRsaKey
 	attrs["log_level"] = p.LogLevel
 	attrs["enable_tls"] = p.EnableTLS
-	attrs["host_tls_port"] = p.TLSPort
+	attrs["tls_port"] = p.TLSPort
 	attrs["tls_certificate"] = p.TLSCertificate
 	attrs["tls_private_key"] = p.TLSPrivateKey
 	attrs["disable_catalog_caching"] = p.DisableCatalogCaching
@@ -127,45 +135,21 @@ func (p *ParallelsDesktopDevopsConfigV3) MapObject() basetypes.ObjectValue {
 		envVars[k] = v
 	}
 	attrs["environment_variables"] = types.MapValueMust(types.StringType, envVars)
+	if p.EnvironmentVariables == nil {
+		attrs["environment_variables"] = types.MapNull(types.StringType)
+	}
 
 	return types.ObjectValueMust(attributeTypes, attrs)
 }
 
-func (o *DeployResourceModelV3) GenerateApiHostConfig(provider *models.ParallelsProviderModel) apiclient.HostConfig {
-	if o.Api.IsNull() || o.Api.IsUnknown() {
-		return apiclient.HostConfig{}
-	}
-
+func (o *DeployResourceModelV3) GenerateApiHostConfig(ctx context.Context, provider *models.ParallelsProviderModel) apiclient.HostConfig {
 	host := "localhost"
 	if o.SshConnection != nil {
-		host = strings.ReplaceAll(o.SshConnection.Host.String(), "\"", "")
+		host = o.SshConnection.Host.ValueString()
 	}
-
-	hostConfig := apiclient.HostConfig{
-		IsOrchestrator: false,
-		Host:           host,
-		License:        provider.License.ValueString(),
-		Authorization: &authenticator.Authentication{
-			Username: types.StringValue(strings.ReplaceAll(o.Api.Attributes()["user"].String(), "\"", "")),
-			Password: types.StringValue(strings.ReplaceAll(o.Api.Attributes()["password"].String(), "\"", "")),
-		},
-
-		DisableTlsValidation: provider.DisableTlsValidation.ValueBool(),
+	cfg, err := ResolveServiceConfig(ctx, o.ApiConfig, provider.License.ValueString(), host, o.Orchestrator != nil)
+	if err != nil {
+		return apiclient.HostConfig{}
 	}
-
-	api_port := strings.ReplaceAll(o.ApiConfig.Port.ValueString(), "\"", "")
-	api_schema := "http"
-
-	if o.ApiConfig.EnableTLS.ValueBool() {
-		api_schema = "https"
-		api_port = strings.ReplaceAll(o.ApiConfig.TLSPort.ValueString(), "\"", "")
-	}
-
-	if api_port != "" {
-		hostConfig.Host = hostConfig.Host + ":" + api_port
-	}
-
-	hostConfig.Host = api_schema + "://" + hostConfig.Host
-
-	return hostConfig
+	return apiclient.HostConfig{Host: cfg.Endpoint, License: provider.License.ValueString(), DisableTlsValidation: provider.DisableTlsValidation.ValueBool(), Authorization: &authenticator.Authentication{Username: types.StringValue("root@localhost"), Password: types.StringValue(cfg.Environment["ROOT_PASSWORD"])}}
 }

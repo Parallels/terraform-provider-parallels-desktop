@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
@@ -15,7 +16,7 @@ import (
 func UnregisterWithOrchestrator(ctx context.Context, config HostConfig, hostId string) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 	urlHost := helpers.GetHostUrl(config.Host)
-	url := fmt.Sprintf("%s/orchestrator/hosts/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), hostId)
+	url := fmt.Sprintf("%s/orchestrator/hosts/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), url.PathEscape(hostId))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -33,10 +34,9 @@ func UnregisterWithOrchestrator(ctx context.Context, config HostConfig, hostId s
 			if clientResponse.ApiError != nil {
 				tflog.Error(ctx, fmt.Sprintf("Error un-registering host: %v, api message: %s", err, clientResponse.ApiError.Message))
 			}
-
-			diagnostics.AddError("There was an error un-registering host", err.Error())
-			return diagnostics
 		}
+		diagnostics.AddError("There was an error un-registering host", err.Error())
+		return diagnostics
 	}
 
 	return diagnostics

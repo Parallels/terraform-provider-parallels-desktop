@@ -39,3 +39,7 @@ terraform-provider-*
 *.tmp*
 .local/
 __debug*
+
+# Preserve authored deployment guides when regenerating provider documentation.
+!templates/guides/*.md.tmpl
+docs/specs/**/*.md

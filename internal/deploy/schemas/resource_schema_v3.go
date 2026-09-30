@@ -21,7 +21,7 @@ var DeployResourceSchemaV3 = schema.Schema{
 		sshconnection.SchemaName: sshconnection.SchemaBlockV0,
 		orchestrator.SchemaName:  orchestrator.SchemaBlockV0,
 	},
-	Version: 2,
+	Version: 3,
 	Attributes: map[string]schema.Attribute{
 		"current_version": schema.StringAttribute{
 			MarkdownDescription: "Current version of Parallels Desktop",
@@ -72,6 +72,7 @@ var DeployResourceSchemaV3 = schema.Schema{
 			},
 		},
 		"api": schema.ObjectAttribute{
+			Sensitive:           true,
 			MarkdownDescription: "Parallels Desktop DevOps Service",
 			Computed:            true,
 			AttributeTypes: map[string]attr.Type{
@@ -93,19 +94,19 @@ var DeployResourceSchemaV3 = schema.Schema{
 			Optional:            true,
 		},
 		"is_registered_in_orchestrator": schema.BoolAttribute{
-			MarkdownDescription: "Is this host registered in the orchestrator",
+			MarkdownDescription: "Whether this resource has a confirmed Orchestrator registration. False when disabled or confirmed absent.",
 			Computed:            true,
 		},
 		"orchestrator_host": schema.StringAttribute{
-			MarkdownDescription: "Orchestrator host ID",
+			MarkdownDescription: "Canonical registered Mac Host API URL; null when no registration is managed.",
 			Computed:            true,
 		},
 		"orchestrator_host_id": schema.StringAttribute{
-			MarkdownDescription: "Orchestrator host ID",
+			MarkdownDescription: "Managed Orchestrator registration ID; null when no registration is managed.",
 			Computed:            true,
 		},
 		"keep_after_error": schema.BoolAttribute{
-			MarkdownDescription: "Keep the cloned VM after an error occurs during creation",
+			MarkdownDescription: "Preserve newly installed dependencies on early deployment errors. Configured services, databases and registration identities are always preserved after readiness or registration failures.",
 			Optional:            true,
 		},
 	},

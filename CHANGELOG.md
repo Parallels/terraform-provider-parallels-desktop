@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-09-30
+
+- This update introduces a new orchestrator registration feature in the `internal/deploy` package. It includes validation logic for orchestrator connection details and deployment configurations. The changes ensure that the deployment process can validate orchestrator settings before proceeding, enhancing the reliability of deployments. Additionally, new tests have been added to cover the functionality and ensure correctness.
+
 ## [0.7.1] - 2026-01-23
 
 - Fixed an issue with the clone provider keep_running

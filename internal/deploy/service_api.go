@@ -12,12 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/deploy/models"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func retryableServiceError(err error) bool {
@@ -107,17 +108,17 @@ func deploymentConfig(ctx context.Context, data *models.DeployResourceModelV3, l
 
 func validateOrchestratorAuth(auth *authenticator.Authentication) error {
 	if auth == nil {
-		return fmt.Errorf("orchestrator authentication is required")
+		return errors.New("orchestrator authentication is required")
 	}
 	if auth.ApiKey.IsUnknown() || auth.Username.IsUnknown() || auth.Password.IsUnknown() {
-		return fmt.Errorf("orchestrator authentication must be known before deployment")
+		return errors.New("orchestrator authentication must be known before deployment")
 	}
 	key, user, pass := auth.ApiKey.ValueString(), auth.Username.ValueString(), auth.Password.ValueString()
 	if key != "" && (user != "" || pass != "") {
-		return fmt.Errorf("use an orchestrator API key or username and password, not both")
+		return errors.New("use an orchestrator API key or username and password, not both")
 	}
 	if key == "" && (user == "" || pass == "") {
-		return fmt.Errorf("orchestrator requires an API key or both username and password")
+		return errors.New("orchestrator requires an API key or both username and password")
 	}
 	return nil
 }
@@ -138,7 +139,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 	}
 	details := data.Orchestrator.Orchestrator
 	if details == nil {
-		return fail(fmt.Errorf("orchestrator connection details are required"))
+		return fail(errors.New("orchestrator connection details are required"))
 	}
 	if err := validateOrchestratorDetails(details); err != nil {
 		return fail(err)
@@ -156,7 +157,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 	id := registrationID(data)
 	if current != nil && current.Orchestrator != nil && current.Orchestrator.Orchestrator != nil {
 		if current.Orchestrator.Orchestrator.GetHost() != details.GetHost() && registrationID(current) != "" {
-			return fail(fmt.Errorf("changing orchestrators requires removing the existing registration first"))
+			return fail(errors.New("changing orchestrators requires removing the existing registration first"))
 		}
 		if id == "" {
 			id = registrationID(current)
@@ -180,7 +181,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 			h := &hosts[i]
 			if helpers.GetHostApiBaseUrl(h.Host) == cfg.Endpoint {
 				if match != nil && match.ID != h.ID {
-					return nil, fmt.Errorf("multiple orchestrator hosts match the registration identity")
+					return nil, errors.New("multiple orchestrator hosts match the registration identity")
 				}
 				match = h
 			}
@@ -212,7 +213,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 			return slices.Equal(a, b)
 		}
 		if !tagsEqual(record.Tags, request.Tags) || (record.Description != "" && request.Description == "") {
-			return fail(fmt.Errorf("this service API cannot update tags or clear a description in place; remove the registration explicitly before changing these fields"))
+			return fail(errors.New("this service API cannot update tags or clear a description in place; remove the registration explicitly before changing these fields"))
 		}
 		if _, err := caller.PutDataToClient(ctx, base+"/"+url.PathEscape(id), nil, request, auth, nil); err != nil {
 			return fail(err)
@@ -239,7 +240,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 			}
 		} else {
 			if created.ID == "" {
-				return fail(fmt.Errorf("orchestrator returned an empty registration ID"))
+				return fail(errors.New("orchestrator returned an empty registration ID"))
 			}
 			if err := save(&apimodels.OrchestratorHost{ID: created.ID, Host: cfg.Endpoint}); err != nil {
 				return fail(err)
@@ -253,7 +254,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 			return false, err
 		}
 		if confirmed.ID != id || helpers.GetHostApiBaseUrl(confirmed.Host) != cfg.Endpoint {
-			return false, fmt.Errorf("registration readback did not match the expected host identity and endpoint")
+			return false, errors.New("registration readback did not match the expected host identity and endpoint")
 		}
 		if err := save(&confirmed); err != nil {
 			return false, err
@@ -266,7 +267,7 @@ func (r *DeployResource) registerWithOrchestrator(ctx context.Context, data, cur
 	return diagnostics
 }
 
-func preparePartialDeploymentState(data *models.DeployResourceModelV3, dependencies []string) {
+func preparePartialDeploymentState(ctx context.Context, data *models.DeployResourceModelV3, dependencies []string) {
 	for _, value := range []*types.String{&data.CurrentVersion, &data.CurrentGitVersion, &data.CurrentPackerVersion, &data.CurrentVagrantVersion, &data.ExternalIp, &data.OrchestratorHost, &data.OrchestratorHostId} {
 		if value.IsUnknown() {
 			*value = types.StringNull()
@@ -284,10 +285,10 @@ func preparePartialDeploymentState(data *models.DeployResourceModelV3, dependenc
 		}
 	}
 	if data.License.IsUnknown() {
-		data.License = types.ObjectNull(data.License.AttributeTypes(context.Background()))
+		data.License = types.ObjectNull(data.License.AttributeTypes(ctx))
 	}
 	if data.InstalledDependencies.IsNull() || data.InstalledDependencies.IsUnknown() {
-		list, _ := types.ListValueFrom(context.Background(), types.StringType, dependencies)
+		list, _ := types.ListValueFrom(ctx, types.StringType, dependencies)
 		data.InstalledDependencies = list
 	}
 }

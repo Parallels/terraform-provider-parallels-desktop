@@ -2,14 +2,16 @@ package deploy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
 
-	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"terraform-provider-parallels-desktop/internal/deploy/models"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
 var _ resource.ResourceWithValidateConfig = &DeployResource{}
@@ -45,26 +47,26 @@ func (r *DeployResource) ValidateConfig(ctx context.Context, req resource.Valida
 func validateReleaseSupport(version string) error {
 	var major, minor, patch int
 	if _, err := fmt.Sscanf(strings.Split(version, "-")[0], "%d.%d.%d", &major, &minor, &patch); err != nil || major != 1 || (minor == 0 && patch < 4) {
-		return fmt.Errorf("this deployment adapter requires DevOps Service >=1.0.4 and <2.0.0")
+		return errors.New("this deployment adapter requires DevOps Service >=1.0.4 and <2.0.0")
 	}
 	return nil
 }
 
 func validateOrchestratorDetails(details *orchestrator.OrchestratorDetails) error {
 	if details == nil {
-		return fmt.Errorf("orchestrator connection details are required")
+		return errors.New("orchestrator connection details are required")
 	}
 	if details.Host.IsUnknown() || details.Port.IsUnknown() || details.Schema.IsUnknown() {
-		return fmt.Errorf("orchestrator endpoint must be known before deployment")
+		return errors.New("orchestrator endpoint must be known before deployment")
 	}
 	endpoint, err := url.Parse(details.GetHost())
 	if err != nil || endpoint.Hostname() == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
-		return fmt.Errorf("orchestrator host must be an HTTP(S) endpoint without userinfo, query or fragment")
+		return errors.New("orchestrator host must be an HTTP(S) endpoint without userinfo, query or fragment")
 	}
 	if port := endpoint.Port(); port != "" {
 		number, err := strconv.Atoi(port)
 		if err != nil || number < 1 || number > 65535 {
-			return fmt.Errorf("orchestrator port must be between 1 and 65535")
+			return errors.New("orchestrator port must be between 1 and 65535")
 		}
 	}
 	return validateOrchestratorAuth(details.UseAuthentication)

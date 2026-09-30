@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -32,7 +33,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 	env := out.Environment
 	// Fail before any remote side effects when apply still contains unknown values.
 	v := reflect.ValueOf(c)
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		if a, ok := v.Field(i).Interface().(attr.Value); ok && a.IsUnknown() {
 			return out, fmt.Errorf("api_config.%s must be known before deployment", v.Type().Field(i).Tag.Get("tfsdk"))
 		}
@@ -57,9 +58,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 			equal := false
 			switch key {
 			case "API_PORT", "TLS_PORT", "CATALOG_CACHE_KEEP_FREE_DISK_SPACE", "CATALOG_CACHE_MAX_SIZE":
-				a, aok := new(big.Rat).SetString(existing)
-				b, bok := new(big.Rat).SetString(value)
-				equal = aok && bok && a.Cmp(b) == 0
+				equal = equalRatStrings(existing, value)
 			case "LOG_LEVEL":
 				equal = strings.EqualFold(existing, value)
 			case "API_PREFIX":
@@ -122,7 +121,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 	}
 	prefix := strings.TrimRight(env["API_PREFIX"], "/")
 	if prefix == "" || !strings.HasPrefix(prefix, "/") || strings.ContainsAny(prefix, "?#\\") || strings.Contains(prefix, "//") {
-		return out, fmt.Errorf("API_PREFIX must be an absolute URL path")
+		return out, errors.New("API_PREFIX must be an absolute URL path")
 	}
 	env["API_PREFIX"] = prefix
 	normalizeModules := func(value string) (string, error) {
@@ -149,7 +148,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 			return err
 		}
 		if modules != "" && modules != n {
-			return fmt.Errorf("mode, enabled_modules and ENABLED_MODULES must agree")
+			return errors.New("mode, enabled_modules and ENABLED_MODULES must agree")
 		}
 		modules = n
 		return nil
@@ -162,7 +161,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 	if !c.EnabledModules.IsNull() {
 		var list []string
 		if d := c.EnabledModules.ElementsAs(ctx, &list, false); d.HasError() {
-			return out, fmt.Errorf("enabled_modules must contain known strings")
+			return out, errors.New("enabled_modules must contain known strings")
 		}
 		if err := mergeModules(strings.Join(list, ",")); err != nil {
 			return out, err
@@ -171,7 +170,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 	mode := c.Mode.ValueString()
 	if legacy, ok := env["MODE"]; ok {
 		if mode != "" && mode != legacy {
-			return out, fmt.Errorf("mode conflicts with MODE")
+			return out, errors.New("mode conflicts with MODE")
 		}
 		mode = legacy
 		delete(env, "MODE")
@@ -183,7 +182,7 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 		case "catalog", "orchestrator":
 			value += "," + mode
 		default:
-			return out, fmt.Errorf("invalid service mode")
+			return out, errors.New("invalid service mode")
 		}
 		if err := mergeModules(value); err != nil {
 			return out, err
@@ -202,13 +201,13 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 		return false
 	}
 	if !hasModule("api") || (registration && !hasModule("host")) {
-		return out, fmt.Errorf("deployment requires the api module; registration also requires the host module")
+		return out, errors.New("deployment requires the api module; registration also requires the host module")
 	}
 	if registration && env["ROOT_PASSWORD"] == "" {
-		return out, fmt.Errorf("registration requires root_password or ROOT_PASSWORD (or a provider license fallback)")
+		return out, errors.New("registration requires root_password or ROOT_PASSWORD (or a provider license fallback)")
 	}
 	if out.Beta && out.Version != "" && out.Version != "latest" {
-		return out, fmt.Errorf("use_latest_beta cannot be combined with an explicit devops_version")
+		return out, errors.New("use_latest_beta cannot be combined with an explicit devops_version")
 	}
 	out.Protocol = "http"
 	out.Port = env["API_PORT"]
@@ -216,13 +215,23 @@ func ResolveServiceConfig(ctx context.Context, input *ParallelsDesktopDevopsConf
 		out.Protocol = "https"
 		out.Port = env["TLS_PORT"]
 		if env["TLS_CERTIFICATE"] == "" || env["TLS_PRIVATE_KEY"] == "" {
-			return out, fmt.Errorf("TLS requires TLS_CERTIFICATE and TLS_PRIVATE_KEY")
+			return out, errors.New("TLS requires TLS_CERTIFICATE and TLS_PRIVATE_KEY")
 		}
 	}
 	if out.Host == "" || strings.ContainsAny(out.Host, "/?#@") || (strings.Contains(out.Host, ":") && net.ParseIP(out.Host) == nil) {
-		return out, fmt.Errorf("deployment host must be a hostname or IP address")
+		return out, errors.New("deployment host must be a hostname or IP address")
 	}
 	out.Prefix = prefix
 	out.Endpoint = (&url.URL{Scheme: out.Protocol, Host: net.JoinHostPort(out.Host, out.Port), Path: prefix}).String()
 	return out, nil
+}
+
+func equalRatStrings(a, b string) bool {
+	const maxNumericInputLength = 256
+	if len(a) > maxNumericInputLength || len(b) > maxNumericInputLength {
+		return false
+	}
+	left, leftOK := new(big.Rat).SetString(a)   // #nosec G113 -- inputs are length-limited above.
+	right, rightOK := new(big.Rat).SetString(b) // #nosec G113 -- inputs are length-limited above.
+	return leftOK && rightOK && left.Cmp(right) == 0
 }

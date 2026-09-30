@@ -3,25 +3,26 @@ package deploy
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	deploymodels "terraform-provider-parallels-desktop/internal/deploy/models"
 	providermodels "terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 	"terraform-provider-parallels-desktop/internal/schemas/orchestrator"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func TestHostReadinessRetriesStartupAndStopsOnAuthenticationFailure(t *testing.T) {
 	for _, status := range []int{503, 401, 404} {
-		t.Run(fmt.Sprint(status), func(t *testing.T) {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
@@ -93,7 +94,7 @@ func TestRegistrationReconciliation(t *testing.T) {
 				switch r.Method {
 				case http.MethodGet:
 					if scenario == "lookup-error" {
-						w.WriteHeader(403)
+						w.WriteHeader(http.StatusForbidden)
 						return
 					}
 					if strings.HasSuffix(r.URL.Path, "/hosts") {
@@ -105,7 +106,7 @@ func TestRegistrationReconciliation(t *testing.T) {
 						return
 					}
 					if scenario == "readback-auth-error" {
-						w.WriteHeader(401)
+						w.WriteHeader(http.StatusUnauthorized)
 						return
 					}
 					_ = json.NewEncoder(w).Encode(record)
@@ -128,13 +129,13 @@ func TestRegistrationReconciliation(t *testing.T) {
 					}
 					record = &apimodels.OrchestratorHost{ID: id, Host: payload.Host, Description: "mac", Enabled: true, State: "healthy"}
 					if scenario == "lost-post-response" {
-						w.WriteHeader(503)
+						w.WriteHeader(http.StatusServiceUnavailable)
 						return
 					}
 					_ = json.NewEncoder(w).Encode(record)
 				case http.MethodDelete:
 					deletes++
-					w.WriteHeader(500)
+					w.WriteHeader(http.StatusInternalServerError)
 				}
 			}))
 			defer server.Close()

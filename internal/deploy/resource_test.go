@@ -12,15 +12,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	deploymodels "terraform-provider-parallels-desktop/internal/deploy/models"
 	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 	"terraform-provider-parallels-desktop/internal/interfaces"
 	providermodels "terraform-provider-parallels-desktop/internal/models"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
 // All host command execution is replaced. These lifecycle tests never run sudo,
@@ -60,23 +61,23 @@ func fixtureResource() *DeployResource {
 	}}
 }
 
-func stateFromJSON(t *testing.T, document map[string]interface{}) tfsdk.State {
+func stateFromJSON(ctx context.Context, t *testing.T, document map[string]interface{}) tfsdk.State {
 	t.Helper()
 	bytes, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw := tfprotov6.RawState{JSON: bytes}
-	value, err := raw.Unmarshal(schemas.DeployResourceSchemaV3.Type().TerraformType(context.Background()))
+	value, err := raw.Unmarshal(schemas.DeployResourceSchemaV3.Type().TerraformType(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return tfsdk.State{Schema: schemas.DeployResourceSchemaV3, Raw: value}
 }
-func stateModel(t *testing.T, state tfsdk.State) deploymodels.DeployResourceModelV3 {
+func stateModel(ctx context.Context, t *testing.T, state tfsdk.State) deploymodels.DeployResourceModelV3 {
 	t.Helper()
 	var data deploymodels.DeployResourceModelV3
-	if d := state.Get(context.Background(), &data); d.HasError() {
+	if d := state.Get(ctx, &data); d.HasError() {
 		t.Fatal(d)
 	}
 	return data
@@ -121,14 +122,18 @@ func (f *registrationFixture) handler(w http.ResponseWriter, r *http.Request) {
 			if f.record != nil {
 				records = append(records, *f.record)
 			}
-			_ = json.NewEncoder(w).Encode(records)
+			if err := json.NewEncoder(w).Encode(records); err != nil {
+				http.Error(w, "failed to encode fixture response", http.StatusInternalServerError)
+			}
 			return
 		}
 		if f.record == nil || !strings.HasSuffix(r.URL.Path, "/"+f.record.ID) {
-			w.WriteHeader(404)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(f.record)
+		if err := json.NewEncoder(w).Encode(f.record); err != nil {
+			http.Error(w, "failed to encode fixture response", http.StatusInternalServerError)
+		}
 	case http.MethodDelete:
 		f.deletes++
 		if f.deleteStatus != 0 {
@@ -136,11 +141,11 @@ func (f *registrationFixture) handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if f.record == nil {
-			w.WriteHeader(404)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		f.record = nil
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPost, http.MethodPut:
 		if r.Method == http.MethodPost {
 			f.posts++
@@ -148,11 +153,16 @@ func (f *registrationFixture) handler(w http.ResponseWriter, r *http.Request) {
 			f.puts++
 		}
 		var request apimodels.OrchestratorHostRequest
-		_ = json.NewDecoder(r.Body).Decode(&request)
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "invalid fixture request", http.StatusBadRequest)
+			return
+		}
 		f.record = &apimodels.OrchestratorHost{ID: "managed-id", Host: request.Host, Description: request.Description, Tags: request.Tags, Enabled: true, State: "healthy"}
-		_ = json.NewEncoder(w).Encode(f.record)
+		if err := json.NewEncoder(w).Encode(f.record); err != nil {
+			http.Error(w, "failed to encode fixture response", http.StatusInternalServerError)
+		}
 	default:
-		w.WriteHeader(405)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 func registrationDocument(server string) map[string]interface{} {
@@ -187,10 +197,10 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 			case "delete-failed":
 				f.deleteStatus = 403
 			}
-			state := stateFromJSON(t, doc)
+			state := stateFromJSON(ctx, t, doc)
 			r := fixtureResource()
 			if strings.HasPrefix(scenario, "delete") {
-				before := stateModel(t, state)
+				before := stateModel(ctx, t, state)
 				data := before
 				diagnostics := r.unregisterWithOrchestrator(ctx, &data)
 				if scenario == "delete-failed" {
@@ -216,7 +226,7 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 				defer cancel()
 			}
 			r.Read(readCtx, resource.ReadRequest{State: state}, &resp)
-			data := stateModel(t, resp.State)
+			data := stateModel(readCtx, t, resp.State)
 			if scenario == "forbidden" || scenario == "server-error" || scenario == "timeout" {
 				if !resp.Diagnostics.HasError() || !resp.State.Raw.Equal(state.Raw) {
 					t.Fatal("lookup failure changed saved state")
@@ -257,13 +267,14 @@ func TestConfirmedAbsenceDoesNotAdoptAnExternalRegistration(t *testing.T) {
 		_, _ = w.Write([]byte(`[{"id":"external-id","host":"http://localhost:8080/api"}]`))
 	}))
 	defer server.Close()
-	data := stateModel(t, stateFromJSON(t, map[string]interface{}{"orchestrator_registration": registrationDocument(server.URL)}))
+	ctx := context.Background()
+	data := stateModel(ctx, t, stateFromJSON(ctx, t, map[string]interface{}{"orchestrator_registration": registrationDocument(server.URL)}))
 	setUnregisteredState(&data)
 	r := fixtureResource()
-	if d := r.refreshRegistration(context.Background(), &data); d.HasError() {
+	if d := r.refreshRegistration(ctx, &data); d.HasError() {
 		t.Fatal(d)
 	}
-	if d := r.unregisterWithOrchestrator(context.Background(), &data); d.HasError() {
+	if d := r.unregisterWithOrchestrator(ctx, &data); d.HasError() {
 		t.Fatal(d)
 	}
 	assertUnregistered(t, data)
@@ -281,9 +292,10 @@ func TestEmptySuccessfulRegistrationResponseDoesNotFabricateState(t *testing.T) 
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
-	data := stateModel(t, stateFromJSON(t, map[string]interface{}{"orchestrator_registration": registrationDocument(server.URL)}))
+	ctx := context.Background()
+	data := stateModel(ctx, t, stateFromJSON(ctx, t, map[string]interface{}{"orchestrator_registration": registrationDocument(server.URL)}))
 	setUnregisteredState(&data)
-	if d := fixtureResource().registerWithOrchestrator(context.Background(), &data, nil); !d.HasError() {
+	if d := fixtureResource().registerWithOrchestrator(ctx, &data, nil); !d.HasError() {
 		t.Fatal("empty registration response was accepted")
 	}
 	assertUnregistered(t, data)

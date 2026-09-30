@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -72,7 +73,9 @@ func newTestServer(t *testing.T, resets int32) *testServer {
 			server.mu.Unlock()
 			n := server.accepts.Add(1)
 			if n <= server.resets {
-				conn.(*net.TCPConn).SetLinger(0)
+				if err := conn.(*net.TCPConn).SetLinger(0); err != nil {
+					t.Errorf("set TCP linger: %v", err)
+				}
 				conn.Close()
 				continue
 			}
@@ -104,7 +107,7 @@ func (s *testServer) serve(raw net.Conn) {
 	go gossh.DiscardRequests(requests)
 	for channel := range channels {
 		if s.stallSessions.Load() {
-			conn.Wait()
+			_ = conn.Wait()
 			return
 		}
 		ch, requests, err := channel.Accept()
@@ -119,26 +122,34 @@ func (s *testServer) serve(raw net.Conn) {
 				if request.Type == "subsystem" {
 					if s.stallSFTP.Load() {
 						s.started <- "sftp"
-						conn.Wait()
+						_ = conn.Wait()
 						return
 					}
 					var subsystem struct{ Name string }
-					gossh.Unmarshal(request.Payload, &subsystem)
+					if err := gossh.Unmarshal(request.Payload, &subsystem); err != nil {
+						return
+					}
 					if subsystem.Name != "sftp" {
-						request.Reply(false, nil)
+						if err := request.Reply(false, nil); err != nil {
+							return
+						}
 						continue
 					}
-					request.Reply(true, nil)
+					if err := request.Reply(true, nil); err != nil {
+						return
+					}
 					server, err := sftp.NewServer(ch)
 					if err != nil {
 						return
 					}
 					defer server.Close()
-					server.Serve()
+					_ = server.Serve()
 					return
 				}
 				if request.Type != "exec" {
-					request.Reply(false, nil)
+					if err := request.Reply(false, nil); err != nil {
+						return
+					}
 					continue
 				}
 				var payload struct{ Command string }
@@ -146,25 +157,27 @@ func (s *testServer) serve(raw net.Conn) {
 					return
 				}
 				s.execs.Add(1)
-				request.Reply(true, nil)
+				if err := request.Reply(true, nil); err != nil {
+					return
+				}
 				s.started <- payload.Command
 				if payload.Command == "'drop'" {
 					raw.Close()
 					return
 				}
 				if payload.Command == "'block'" {
-					conn.Wait()
+					_ = conn.Wait()
 					return
 				}
 				cmd := exec.Command("/bin/sh", "-c", payload.Command)
 				cmd.Stdin = ch
 				output, err := cmd.CombinedOutput()
-				ch.Write(output)
+				_, _ = ch.Write(output)
 				code := uint32(0)
 				if err != nil {
 					code = 1
 				}
-				ch.SendRequest("exit-status", false, gossh.Marshal(struct{ Status uint32 }{code}))
+				_, _ = ch.SendRequest("exit-status", false, gossh.Marshal(struct{ Status uint32 }{code}))
 				return
 			}
 		}()
@@ -292,7 +305,7 @@ func TestAuthenticationAndHostKeyFailuresAreTerminal(t *testing.T) {
 
 func TestBoundedHandshakeAndCancellation(t *testing.T) {
 	for _, cancelled := range []bool{false, true} {
-		t.Run(fmt.Sprint(cancelled), func(t *testing.T) {
+		t.Run(strconv.FormatBool(cancelled), func(t *testing.T) {
 			c, err := NewSshClient("test", "", SshAuthorization{User: "user", Password: "secret"})
 			if err != nil {
 				t.Fatal(err)
@@ -365,7 +378,7 @@ func TestRetryBudgetAndCause(t *testing.T) {
 
 func TestCancelCommandAndCloseInterrupts(t *testing.T) {
 	for _, closeClient := range []bool{false, true} {
-		t.Run(fmt.Sprint(closeClient), func(t *testing.T) {
+		t.Run(strconv.FormatBool(closeClient), func(t *testing.T) {
 			s := newTestServer(t, 0)
 			c := testClient(t, s)
 			ctx, cancel := context.WithCancel(context.Background())

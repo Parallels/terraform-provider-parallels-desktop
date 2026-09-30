@@ -159,7 +159,6 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 		clientResponse.ApiError.Code = int64(response.StatusCode)
 		clientResponse.ApiError.Message = http.StatusText(response.StatusCode)
 		return &clientResponse, &HTTPStatusError{StatusCode: response.StatusCode}
-
 	}
 
 	if destination != nil {

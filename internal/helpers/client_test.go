@@ -38,13 +38,13 @@ func TestHTTPPrefixAndTLSWithDeadline(t *testing.T) {
 func TestHTTPStatusRedactsResponseAndHonorsCancellation(t *testing.T) {
 	secret := "a-very-sensitive-password"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(401)
+		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"message":"` + secret + `","code":200}`))
 	}))
 	defer server.Close()
 	response, err := NewHttpCaller(context.Background(), false).GetDataFromClient(context.Background(), server.URL, nil, nil, nil)
 	var status *HTTPStatusError
-	if !errors.As(err, &status) || status.StatusCode != 401 || response.ApiError.Code != 401 || strings.Contains(err.Error(), secret) {
+	if !errors.As(err, &status) || status.StatusCode != http.StatusUnauthorized || response.ApiError.Code != 401 || strings.Contains(err.Error(), secret) {
 		t.Fatalf("invalid sanitized status %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

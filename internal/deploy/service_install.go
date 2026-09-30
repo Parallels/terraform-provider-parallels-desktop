@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"terraform-provider-parallels-desktop/internal/deploy/models"
+
+	"gopkg.in/yaml.v3"
 )
 
 const installerRevision = "797a00b5b89aed885f870fda142c22d31c4f9a9a"
@@ -24,7 +26,7 @@ var releaseVersion = regexp.MustCompile(`^(?:release-)?v?(\d+\.\d+\.\d+(?:-[0-9A
 func normalizeRelease(value string) (string, error) {
 	m := releaseVersion.FindStringSubmatch(strings.TrimSpace(value))
 	if m == nil {
-		return "", fmt.Errorf("DevOps Service version must be a concrete semantic version")
+		return "", errors.New("DevOps Service version must be a concrete semantic version")
 	}
 	return m[1], nil
 }
@@ -34,7 +36,7 @@ func installedRelease(output string) (string, error) {
 	if strings.Contains(output, " version ") {
 		fields := strings.Fields(strings.SplitN(output, " version ", 2)[1])
 		if len(fields) == 0 {
-			return "", fmt.Errorf("missing installed version")
+			return "", errors.New("missing installed version")
 		}
 		return normalizeRelease(fields[0])
 	}
@@ -56,7 +58,7 @@ func resolveRelease(ctx context.Context, beta bool) (string, error) {
 		return "", fmt.Errorf("could not resolve DevOps release: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("release lookup returned HTTP %d", resp.StatusCode)
 	}
 	type release struct {
@@ -81,7 +83,7 @@ func resolveRelease(ctx context.Context, beta bool) (string, error) {
 			return normalizeRelease(r.Tag)
 		}
 	}
-	return "", fmt.Errorf("no prerelease available")
+	return "", errors.New("no prerelease available")
 }
 
 func (c *DevOpsServiceClient) InstallDevOpsService(ctx context.Context, license string, input models.ParallelsDesktopDevopsConfigV3) (string, error) {
@@ -117,15 +119,13 @@ func (c *DevOpsServiceClient) installConfiguredService(ctx context.Context, cfg 
 			return "", fmt.Errorf("installed DevOps Service version %s differs from requested %s; upgrade the binary explicitly before applying", actual, requested)
 		}
 		if cfg.Beta && !strings.Contains(actual, "-") {
-			return "", fmt.Errorf("installed DevOps Service is stable; install the desired prerelease before applying")
+			return "", errors.New("installed DevOps Service is stable; install the desired prerelease before applying")
 		}
 		requested = actual
-	} else {
-		if requested == "" || requested == "latest" {
-			requested, err = resolveRelease(ctx, cfg.Beta)
-			if err != nil {
-				return "", err
-			}
+	} else if requested == "" || requested == "latest" {
+		requested, err = resolveRelease(ctx, cfg.Beta)
+		if err != nil {
+			return "", err
 		}
 	}
 	// This adapter was reviewed against module-based releases 1.0.4 and 1.1.0.
@@ -160,7 +160,7 @@ curl -fsSL "https://raw.githubusercontent.com/Parallels/prl-devops-service/` + i
 	}
 	existing, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encodedExisting))
 	if err != nil {
-		return "", fmt.Errorf("could not decode canonical DevOps configuration snapshot")
+		return "", errors.New("could not decode canonical DevOps configuration snapshot")
 	}
 	runtime, err := mergeRuntimeConfig(existing, cfg.Environment)
 	if err != nil {
@@ -182,7 +182,7 @@ func mergeRuntimeConfig(existing []byte, env map[string]string) ([]byte, error) 
 	var root map[string]interface{}
 	if len(existing) > 0 {
 		if err := yaml.Unmarshal(existing, &root); err != nil {
-			return nil, fmt.Errorf("existing canonical DevOps configuration is invalid YAML")
+			return nil, errors.New("existing canonical DevOps configuration is invalid YAML")
 		}
 	}
 	if root == nil {
@@ -194,6 +194,8 @@ func mergeRuntimeConfig(existing []byte, env map[string]string) ([]byte, error) 
 
 // Secrets are supplied only on stdin. The transaction never deletes the database.
 // Configuration-only updates keep the binary and database, and refresh launchd.
+//
+//nolint:dupword // Repeated fi tokens are required Bash control-flow terminators.
 const configureServiceScript = `set -euo pipefail
 umask 077
 config_dir=/etc/prl-devops-service

@@ -2,16 +2,17 @@ package deploy
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/url"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/deploy/models"
 	"terraform-provider-parallels-desktop/internal/helpers"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func setUnregisteredState(data *models.DeployResourceModelV3) {
@@ -26,7 +27,7 @@ func setUnregisteredState(data *models.DeployResourceModelV3) {
 func canonicalRegisteredHost(host string) (string, error) {
 	parsed, err := url.Parse(host)
 	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("orchestrator returned an invalid registered Host API URL")
+		return "", errors.New("orchestrator returned an invalid registered Host API URL")
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	parsed.Host = strings.ToLower(parsed.Host)
@@ -35,7 +36,7 @@ func canonicalRegisteredHost(host string) (string, error) {
 
 func setRegisteredState(data *models.DeployResourceModelV3, record *apimodels.OrchestratorHost) error {
 	if record == nil || record.ID == "" {
-		return fmt.Errorf("orchestrator returned an empty registration identity")
+		return errors.New("orchestrator returned an empty registration identity")
 	}
 	host, err := canonicalRegisteredHost(record.Host)
 	if err != nil {
@@ -62,7 +63,7 @@ func registrationID(data *models.DeployResourceModelV3) string {
 
 func (r *DeployResource) registrationClient(data *models.DeployResourceModelV3) (apiclient.HostConfig, error) {
 	if data.Orchestrator == nil {
-		return apiclient.HostConfig{}, fmt.Errorf("registration connection details are absent")
+		return apiclient.HostConfig{}, errors.New("registration connection details are absent")
 	}
 	details := data.Orchestrator.Orchestrator
 	if err := validateOrchestratorDetails(details); err != nil {

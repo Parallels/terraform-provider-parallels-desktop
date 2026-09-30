@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"terraform-provider-parallels-desktop/internal/deploy/models"
+	"terraform-provider-parallels-desktop/internal/deploy/schemas"
+
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-	"terraform-provider-parallels-desktop/internal/deploy/models"
-	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 )
 
 func TestRegistrationPlanTransitions(t *testing.T) {
@@ -42,8 +43,8 @@ func TestRegistrationPlanTransitions(t *testing.T) {
 			if scenario == "credentials-change" {
 				configDoc["orchestrator_registration"].(map[string]interface{})["orchestrator"].(map[string]interface{})["authentication"] = map[string]interface{}{"api_key": "different"}
 			}
-			prior := stateFromJSON(t, priorDoc)
-			configured := stateFromJSON(t, configDoc)
+			prior := stateFromJSON(ctx, t, priorDoc)
+			configured := stateFromJSON(ctx, t, configDoc)
 			if scenario == "disabled-create" || scenario == "enable" {
 				prior.Raw = tftypes.NewValue(prior.Raw.Type(), nil)
 			}
@@ -82,14 +83,17 @@ func TestRegistrationPlanTransitions(t *testing.T) {
 			_ = response.Plan.GetAttribute(ctx, path.Root("is_registered_in_orchestrator"), &registered)
 			_ = response.Plan.GetAttribute(ctx, path.Root("orchestrator_host"), &host)
 			_ = response.Plan.GetAttribute(ctx, path.Root("orchestrator_host_id"), &id)
-			if scenario == "disabled-create" || scenario == "disabled-update" || scenario == "disable" {
+			switch scenario {
+			case "disabled-create", "disabled-update", "disable":
 				assertUnregistered(t, models.DeployResourceModelV3{IsRegisteredInOrchestrator: registered, OrchestratorHost: host, OrchestratorHostId: id})
-			} else if scenario == "unchanged" {
+			case "unchanged":
 				if !registered.ValueBool() || id.ValueString() != "managed-id" || host.ValueString() == "" {
 					t.Fatal("unchanged registration not preserved")
 				}
-			} else if !registered.IsUnknown() || !host.IsUnknown() || !id.IsUnknown() {
-				t.Fatal("unconfirmed plan values must remain unknown")
+			default:
+				if !registered.IsUnknown() || !host.IsUnknown() || !id.IsUnknown() {
+					t.Fatal("unconfirmed plan values must remain unknown")
+				}
 			}
 		})
 	}

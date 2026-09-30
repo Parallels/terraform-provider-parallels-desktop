@@ -142,12 +142,12 @@ func (p *ParallelsDesktopDevopsConfigV3) MapObject() basetypes.ObjectValue {
 	return types.ObjectValueMust(attributeTypes, attrs)
 }
 
-func (o *DeployResourceModelV3) GenerateApiHostConfig(provider *models.ParallelsProviderModel) apiclient.HostConfig {
+func (o *DeployResourceModelV3) GenerateApiHostConfig(ctx context.Context, provider *models.ParallelsProviderModel) apiclient.HostConfig {
 	host := "localhost"
 	if o.SshConnection != nil {
 		host = o.SshConnection.Host.ValueString()
 	}
-	cfg, err := ResolveServiceConfig(context.Background(), o.ApiConfig, provider.License.ValueString(), host, o.Orchestrator != nil)
+	cfg, err := ResolveServiceConfig(ctx, o.ApiConfig, provider.License.ValueString(), host, o.Orchestrator != nil)
 	if err != nil {
 		return apiclient.HostConfig{}
 	}

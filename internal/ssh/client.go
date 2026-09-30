@@ -60,7 +60,7 @@ type SshClient struct {
 	policy     connectionPolicy
 	mu         sync.Mutex
 	conn       *ssh.Client
-	lifecycle  context.Context
+	lifecycle  context.Context //nolint:containedctx // Close cancels this context to stop in-flight operations.
 	cancel     context.CancelFunc
 	operations chan struct{}
 }

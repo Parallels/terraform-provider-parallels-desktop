@@ -14,13 +14,14 @@ import (
 	"testing"
 	"time"
 
+	providermodels "terraform-provider-parallels-desktop/internal/models"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	providerschema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	providermodels "terraform-provider-parallels-desktop/internal/models"
 )
 
 // The fixture provider uses the production resource, schema and protocol server.

@@ -118,7 +118,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 	defer func() {
 		if resp.Diagnostics.HasError() && !data.Api.IsNull() && !data.Api.IsUnknown() {
 			// Once configured, the service and database remain managed even if readiness or registration fails.
-			preparePartialDeploymentState(&data, dependencies)
+			preparePartialDeploymentState(ctx, &data, dependencies)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		}
 	}()
@@ -193,7 +193,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	data.InstalledDependencies = installDependenciesListValue
 
-	hostConfig := data.GenerateApiHostConfig(r.provider)
+	hostConfig := data.GenerateApiHostConfig(ctx, r.provider)
 
 	if len(data.ReverseProxyHosts) > 0 {
 		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)
@@ -406,7 +406,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 				partial.OrchestratorHostId = types.StringNull()
 				partial.OrchestratorHost = types.StringNull()
 			}
-			preparePartialDeploymentState(&partial, dependencies)
+			preparePartialDeploymentState(ctx, &partial, dependencies)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
 		}
 	}()
@@ -534,7 +534,8 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 		data.InstalledDependencies = currentData.InstalledDependencies
 	}
 
-	if data.Orchestrator != nil {
+	switch {
+	case data.Orchestrator != nil:
 		if !serviceConfigured {
 			if err := waitForHost(ctx, effective, r.provider.DisableTlsValidation.ValueBool()); err != nil {
 				resp.Diagnostics.AddError("Host API is not ready", err.Error())
@@ -546,18 +547,18 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 			resp.Diagnostics.Append(diagnostics...)
 			return
 		}
-	} else if currentData.Orchestrator != nil {
+	case currentData.Orchestrator != nil:
 		diagnostics := r.unregisterWithOrchestrator(ctx, &currentData)
 		if diagnostics.HasError() {
 			resp.Diagnostics.Append(diagnostics...)
 			return
 		}
 		setUnregisteredState(&data)
-	} else {
+	default:
 		setUnregisteredState(&data)
 	}
 
-	hostConfig := data.GenerateApiHostConfig(r.provider)
+	hostConfig := data.GenerateApiHostConfig(ctx, r.provider)
 
 	if reverseproxy.ReverseProxyHostsDiff(data.ReverseProxyHosts, currentData.ReverseProxyHosts) {
 		copyCurrentRpHosts := reverseproxy.CopyReverseProxyHosts(currentData.ReverseProxyHosts)
@@ -630,7 +631,7 @@ func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		}
 	}
 
-	hostConfig := data.GenerateApiHostConfig(r.provider)
+	hostConfig := data.GenerateApiHostConfig(ctx, r.provider)
 
 	if len(data.ReverseProxyHosts) > 0 {
 		rpHostsCopy := reverseproxy.CopyReverseProxyHosts(data.ReverseProxyHosts)

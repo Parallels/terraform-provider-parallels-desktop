@@ -13,12 +13,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
+	"terraform-provider-parallels-desktop/internal/deploy/models"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gopkg.in/yaml.v3"
-	"terraform-provider-parallels-desktop/internal/deploy/models"
 )
 
 type installerCommands struct {
@@ -123,7 +125,7 @@ func TestVersionOutput(t *testing.T) {
 
 func TestConfigurationTransactionRestoresPreviousState(t *testing.T) {
 	for _, fail := range []bool{false, true} {
-		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+		t.Run(strconv.FormatBool(fail), func(t *testing.T) {
 			dir := t.TempDir()
 			configDir := filepath.Join(dir, "config")
 			if err := os.Mkdir(configDir, 0700); err != nil {

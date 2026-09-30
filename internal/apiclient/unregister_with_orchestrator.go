@@ -34,7 +34,6 @@ func UnregisterWithOrchestrator(ctx context.Context, config HostConfig, hostId s
 			if clientResponse.ApiError != nil {
 				tflog.Error(ctx, fmt.Sprintf("Error un-registering host: %v, api message: %s", err, clientResponse.ApiError.Message))
 			}
-
 		}
 		diagnostics.AddError("There was an error un-registering host", err.Error())
 		return diagnostics

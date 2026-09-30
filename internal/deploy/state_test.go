@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"terraform-provider-parallels-desktop/internal/deploy/models"
+	"terraform-provider-parallels-desktop/internal/deploy/schemas"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-	"terraform-provider-parallels-desktop/internal/deploy/models"
-	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 )
 
 func TestReleasedVersionTwoStateUpgrade(t *testing.T) {
@@ -60,7 +61,7 @@ func TestPartialFailureStateCanBePersisted(t *testing.T) {
 	data.OrchestratorHostId = types.StringValue("confirmed-id")
 	data.OrchestratorHost = types.StringValue("http://mac:8080/api")
 	data.IsRegisteredInOrchestrator = types.BoolValue(true)
-	preparePartialDeploymentState(&data, []string{"git"})
+	preparePartialDeploymentState(ctx, &data, []string{"git"})
 	if d := state.Set(ctx, &data); d.HasError() {
 		t.Fatal(d)
 	}

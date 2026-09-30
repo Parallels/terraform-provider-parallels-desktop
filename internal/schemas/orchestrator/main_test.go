@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func TestLookupUsesIDBeforeEndpointAndNeverDescription(t *testing.T) {
@@ -19,7 +20,7 @@ func TestLookupUsesIDBeforeEndpointAndNeverDescription(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				if scenario == "forbidden" {
-					w.WriteHeader(403)
+					w.WriteHeader(http.StatusForbidden)
 					return
 				}
 				_ = json.NewEncoder(w).Encode([]apimodels.OrchestratorHost{{ID: "wrong", Host: "http://mac:8080/api", Description: ""}, {ID: "right", Host: "http://other:8080/api", Description: ""}})

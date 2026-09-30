@@ -108,7 +108,9 @@ var ApiConfigSchemaBlockV3 = schema.SingleNestedBlock{
 			Description:         "JWT Token duration in minutes",
 			Optional:            true,
 		},
+		"enabled_modules": schema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Enabled DevOps Service modules. Defaults to api and host. Registration requires host."},
 		"mode": schema.StringAttribute{
+			DeprecationMessage:  "Use enabled_modules instead.",
 			MarkdownDescription: "API Operation mode, either orchestrator or catalog",
 			Optional:            true,
 			Sensitive:           true,
@@ -141,6 +143,7 @@ var ApiConfigSchemaBlockV3 = schema.SingleNestedBlock{
 			Optional:            true,
 		},
 		"environment_variables": schema.MapAttribute{
+			Sensitive:           true,
 			MarkdownDescription: "Environment variables that can be used in the DevOps service, please see documentation to see which variables are available",
 			Optional:            true,
 			ElementType:         types.StringType,

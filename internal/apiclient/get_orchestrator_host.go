@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
@@ -21,7 +22,7 @@ func GetOrchestratorHost(ctx context.Context, config HostConfig, hostId string) 
 		return nil, diagnostics
 	}
 
-	url := fmt.Sprintf("%s/orchestrator/hosts/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), hostId)
+	url := fmt.Sprintf("%s/orchestrator/hosts/%s", helpers.GetHostApiVersionedBaseUrl(urlHost), url.PathEscape(hostId))
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)
 	if err != nil {
@@ -60,13 +61,7 @@ func GetOrchestratorHosts(ctx context.Context, config HostConfig) ([]apimodels.O
 	}
 
 	client := helpers.NewHttpCaller(ctx, config.DisableTlsValidation)
-	if clientResponse, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
-		if clientResponse != nil && clientResponse.ApiError != nil {
-			if clientResponse.ApiError.Code == 404 {
-				return nil, diagnostics
-			}
-			tflog.Error(ctx, fmt.Sprintf("Error getting orchestrator hosts: %v, api message: %s", err, clientResponse.ApiError.Message))
-		}
+	if _, err := client.GetDataFromClient(ctx, url, nil, auth, &response); err != nil {
 		diagnostics.AddError("There was an error getting the orchestrator hosts", err.Error())
 		return nil, diagnostics
 	}

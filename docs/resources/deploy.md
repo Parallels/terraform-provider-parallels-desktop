@@ -23,8 +23,8 @@ resource "parallels-desktop_deploy" "example" {
     log_level = "info"
     # This will enable logging for the API
     enable_logging = true
-    # This will set the mode for the API, you can use either api or orchestrator. by default it will be api
-    mode = "api"
+    # Requires the provider build containing BF-02. Registration needs the host module.
+    enabled_modules = ["api", "host"]
     # you can force any version of the devops api, if you leave it empty it will use the latest version
     # but it will not automatically update to the latest version, that would need a manual step
     devops_version = "latest"
@@ -111,24 +111,24 @@ resource "parallels-desktop_deploy" "example" {
 
 - `api_config` (Block, Optional) Parallels Desktop DevOps configuration (see [below for nested schema](#nestedblock--api_config))
 - `install_local` (Boolean) Deploy Parallels Desktop in the local machine, this will ignore the need to connect to a remote machine
-- `keep_after_error` (Boolean) Keep the cloned VM after an error occurs during creation
+- `keep_after_error` (Boolean) Preserve newly installed dependencies on early deployment errors. Configured services, databases and registration identities are always preserved after readiness or registration failures.
 - `orchestrator_registration` (Block, Optional) Orchestrator connection details (see [below for nested schema](#nestedblock--orchestrator_registration))
 - `reverse_proxy_host` (Block List) Parallels Desktop DevOps Reverse Proxy configuration (see [below for nested schema](#nestedblock--reverse_proxy_host))
 - `ssh_connection` (Block, Optional) Host connection details (see [below for nested schema](#nestedblock--ssh_connection))
 
 ### Read-Only
 
-- `api` (Object) Parallels Desktop DevOps Service (see [below for nested schema](#nestedatt--api))
+- `api` (Object, Sensitive) Parallels Desktop DevOps Service (see [below for nested schema](#nestedatt--api))
 - `current_git_version` (String) Current version of Git
 - `current_packer_version` (String) Current version of Hashicorp Packer
 - `current_vagrant_version` (String) Current version of Hashicorp Vagrant
 - `current_version` (String) Current version of Parallels Desktop
 - `external_ip` (String) External IP address
 - `installed_dependencies` (List of String) List of installed dependencies
-- `is_registered_in_orchestrator` (Boolean) Is this host registered in the orchestrator
+- `is_registered_in_orchestrator` (Boolean) Whether this resource has a confirmed Orchestrator registration. False when disabled or confirmed absent.
 - `license` (Object) Parallels Desktop license (see [below for nested schema](#nestedatt--license))
-- `orchestrator_host` (String) Orchestrator host ID
-- `orchestrator_host_id` (String) Orchestrator host ID
+- `orchestrator_host` (String) Canonical registered Mac Host API URL; null when no registration is managed.
+- `orchestrator_host_id` (String) Managed Orchestrator registration ID; null when no registration is managed.
 
 <a id="nestedblock--api_config"></a>
 ### Nested Schema for `api_config`
@@ -144,12 +144,13 @@ Optional:
 - `enable_logging` (Boolean) Enable logging
 - `enable_port_forwarding` (Boolean) Enable inbuilt reverse proxy for port forwarding
 - `enable_tls` (Boolean) Parallels Desktop DevOps enable TLS
+- `enabled_modules` (Set of String) Enabled DevOps Service modules. Defaults to api and host. Registration requires host.
 - `encryption_rsa_key` (String, Sensitive) Parallels Desktop DevOps RSA key, this is used to encrypt database file on rest
-- `environment_variables` (Map of String) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
+- `environment_variables` (Map of String, Sensitive) Environment variables that can be used in the DevOps service, please see documentation to see which variables are available
 - `hmac_secret` (String, Sensitive) Parallels Desktop DevOps HMAC secret, this is used to sign the JWT tokens
 - `log_level` (String) Parallels Desktop DevOps log level, you can choose between debug, info, warn, error
 - `log_path` (String) Path to store logs
-- `mode` (String, Sensitive) API Operation mode, either orchestrator or catalog
+- `mode` (String, Sensitive, Deprecated) API Operation mode, either orchestrator or catalog
 - `port` (String) Parallels Desktop DevOps port
 - `prefix` (String) Parallels Desktop DevOps port
 - `root_password` (String, Sensitive) Parallels Desktop DevOps root password

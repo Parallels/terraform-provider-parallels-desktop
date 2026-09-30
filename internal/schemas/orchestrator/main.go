@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"strings"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
@@ -69,16 +68,20 @@ func RegisterWithHost(context context.Context, plan OrchestratorRegistration, di
 		return "", diagnostics
 	}
 
-	if response != nil {
+	if response != nil && response.ID != "" {
 		return response.ID, diagnostics
 	}
-
+	diagnostics.AddError("Invalid registration response", "Orchestrator returned an empty host ID")
 	return "", diagnostics
 }
 
 func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) (bool, *apimodels.OrchestratorHost, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	if data.Orchestrator == nil {
+		return false, nil, diagnostics
+	}
+	if data.Orchestrator.UseAuthentication == nil {
+		diagnostics.AddError("Orchestrator authentication is required", "Provide explicit Orchestrator credentials")
 		return false, nil, diagnostics
 	}
 
@@ -94,8 +97,11 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration,
 
 	currentHostId := data.HostId.ValueString()
 	currentHostUrl := helpers.GetHostApiBaseUrl(data.GetHost())
-	currentHostDescription := data.Description.ValueString()
-	response, _ := apiclient.GetOrchestratorHosts(context, hostConfig)
+	response, lookupDiags := apiclient.GetOrchestratorHosts(context, hostConfig)
+	diagnostics.Append(lookupDiags...)
+	if diagnostics.HasError() {
+		return false, nil, diagnostics
+	}
 	if response == nil {
 		return false, nil, diagnostics
 	}
@@ -104,12 +110,26 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration,
 		return false, nil, diagnostics
 	}
 
-	for _, host := range response {
-		if strings.EqualFold(currentHostId, host.ID) ||
-			strings.EqualFold(currentHostUrl, host.Host) ||
-			strings.EqualFold(currentHostDescription, host.Description) {
-			return true, &host, diagnostics
+	if currentHostId != "" {
+		for i := range response {
+			if response[i].ID == currentHostId {
+				return true, &response[i], diagnostics
+			}
 		}
+		return false, nil, diagnostics
+	}
+	var match *apimodels.OrchestratorHost
+	for i := range response {
+		if currentHostUrl == helpers.GetHostApiBaseUrl(response[i].Host) {
+			if match != nil {
+				diagnostics.AddError("Ambiguous registration", "Multiple hosts match the endpoint")
+				return false, nil, diagnostics
+			}
+			match = &response[i]
+		}
+	}
+	if match != nil {
+		return true, match, diagnostics
 	}
 
 	return false, nil, diagnostics
@@ -117,6 +137,10 @@ func IsAlreadyRegistered(context context.Context, data OrchestratorRegistration,
 
 func UnregisterWithHost(context context.Context, data OrchestratorRegistration, disableTlsValidation bool) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
+	if data.Orchestrator == nil || data.Orchestrator.UseAuthentication == nil {
+		diagnostics.AddError("Orchestrator authentication is required", "")
+		return diagnostics
+	}
 
 	hostConfig := apiclient.HostConfig{
 		Host: data.Orchestrator.GetHost(),
@@ -128,7 +152,6 @@ func UnregisterWithHost(context context.Context, data OrchestratorRegistration, 
 		DisableTlsValidation: disableTlsValidation,
 	}
 
-	_ = UpdateFromDetails(context, &data)
 	if data.HostId.ValueString() != "" {
 		diag := apiclient.UnregisterWithOrchestrator(context, hostConfig, data.HostId.ValueString())
 		if diag.HasError() {
@@ -175,6 +198,10 @@ func UpdateFromDetails(context context.Context, data *OrchestratorRegistration) 
 		data.HostCredentials = data.Orchestrator.UseAuthentication
 	}
 
+	if data.HostCredentials == nil || data.Orchestrator.UseAuthentication == nil {
+		diagnostics.AddError("Host credentials are required", "Provide explicit authentication")
+		return diagnostics
+	}
 	if data.HostCredentials.ApiKey.ValueString() == "" {
 		if data.Orchestrator.UseAuthentication.ApiKey.ValueString() != "" {
 			data.HostCredentials.ApiKey = data.Orchestrator.UseAuthentication.ApiKey

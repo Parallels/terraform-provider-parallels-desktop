@@ -17,6 +17,8 @@ This provider plugin is maintained by Parallels and the community, please check 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.19
 
+For remote Mac deployment, see the [SSH and dependency installation requirements](docs/guides/deployment-ssh.md), including noninteractive sudo access and connection retry behavior.
+
 ## Building The Provider
 
 1. Clone the repository
@@ -60,3 +62,7 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 ```shell
 make testacc
 ```
+
+See [Mac service configuration and registration](docs/guides/deployment-service.md) for the BF-02 workflow and compatibility limits.
+
+See [Orchestrator registration state](docs/guides/deployment-registration.md) for BF-03 output semantics and the conditional registration example.

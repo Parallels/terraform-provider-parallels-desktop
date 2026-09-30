@@ -1,6 +1,9 @@
 package orchestrator
 
 import (
+	"net"
+	"net/url"
+	"strings"
 	"terraform-provider-parallels-desktop/internal/schemas/authenticator"
 
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -18,15 +21,7 @@ type OrchestratorRegistration struct {
 }
 
 func (o OrchestratorRegistration) GetHost() string {
-	host := o.Host.ValueString()
-	if o.Schema.ValueString() != "" {
-		host = o.Schema.ValueString() + "://" + host
-	}
-	if o.Port.ValueString() != "" {
-		host = host + ":" + o.Port.ValueString()
-	}
-
-	return host
+	return connectionURL(o.Host.ValueString(), o.Schema.ValueString(), o.Port.ValueString())
 }
 
 type OrchestratorDetails struct {
@@ -37,13 +32,25 @@ type OrchestratorDetails struct {
 }
 
 func (o OrchestratorDetails) GetHost() string {
-	host := o.Host.ValueString()
-	if o.Schema.ValueString() != "" {
-		host = o.Schema.ValueString() + "://" + host
-	}
-	if o.Port.ValueString() != "" {
-		host = host + ":" + o.Port.ValueString()
-	}
+	return connectionURL(o.Host.ValueString(), o.Schema.ValueString(), o.Port.ValueString())
+}
 
-	return host
+func connectionURL(host, scheme, port string) string {
+	if scheme == "" {
+		scheme = "http"
+	}
+	if !strings.Contains(host, "://") {
+		if net.ParseIP(strings.Trim(host, "[]")) != nil && strings.Contains(host, ":") {
+			host = "[" + strings.Trim(host, "[]") + "]"
+		}
+		host = scheme + "://" + host
+	}
+	u, err := url.Parse(host)
+	if err != nil {
+		return ""
+	}
+	if port != "" {
+		u.Host = net.JoinHostPort(u.Hostname(), port)
+	}
+	return strings.TrimRight(u.String(), "/")
 }

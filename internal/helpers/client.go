@@ -89,39 +89,26 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 		return &clientResponse, errors.New("url cannot be empty")
 	}
 
-	client := http.DefaultClient
-	if c.disableTlsVerification {
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-			Timeout: 60 * time.Second,
-		}
-	}
-
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout := time.Until(deadline)
-		if timeout > 0 {
-			client = &http.Client{
-				Timeout: timeout,
-			}
-		}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.disableTlsVerification}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 60 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}
 
 	var req *http.Request
 
 	if data != nil {
 		reqBody, err := json.MarshalIndent(data, "", "  ")
-		tflog.Info(ctx, fmt.Sprintf("Request body: %s", reqBody))
 		if err != nil {
 			return &clientResponse, fmt.Errorf("error marshalling data, err: %v", err)
 		}
-		req, err = http.NewRequest(verb.String(), url, bytes.NewBuffer(reqBody))
+		req, err = http.NewRequestWithContext(ctx, verb.String(), url, bytes.NewBuffer(reqBody))
 		if err != nil {
 			return &clientResponse, fmt.Errorf("error creating request, err: %v", err)
 		}
 	} else {
-		req, err = http.NewRequest(verb.String(), url, nil)
+		req, err = http.NewRequestWithContext(ctx, verb.String(), url, nil)
 		if err != nil {
 			return &clientResponse, fmt.Errorf("error creating request, err: %v", err)
 		}
@@ -133,7 +120,6 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 
 	if auth != nil {
 		if auth.BearerToken != "" {
-			tflog.Info(ctx, "Setting Authorization header to Bearer "+auth.BearerToken)
 			req.Header.Set("Authorization", "Bearer "+auth.BearerToken)
 		} else if auth.ApiKey != "" {
 			req.Header.Set("X-Api-Key", auth.ApiKey)
@@ -150,7 +136,7 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 
 	response, err := client.Do(req)
 	if err != nil {
-		return &clientResponse, fmt.Errorf("error %s data on %s, err: %v", verb, url, err)
+		return &clientResponse, fmt.Errorf("error %s data on %s, err: %w", verb, url, err)
 	}
 	defer response.Body.Close()
 
@@ -170,11 +156,10 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 			}
 		}
 
-		if clientResponse.ApiError.Message != "" {
-			return &clientResponse, fmt.Errorf("error on %s data from %s, err: %v message: %v", verb, url, clientResponse.ApiError.Code, clientResponse.ApiError.Message)
-		} else {
-			return &clientResponse, fmt.Errorf("error on %s data from %s, status code: %d", verb, url, response.StatusCode)
-		}
+		clientResponse.ApiError.Code = int64(response.StatusCode)
+		clientResponse.ApiError.Message = http.StatusText(response.StatusCode)
+		return &clientResponse, &HTTPStatusError{StatusCode: response.StatusCode}
+
 	}
 
 	if destination != nil {
@@ -208,11 +193,12 @@ func (c *HttpCaller) GetJwtToken(ctx context.Context, baseUrl, username, passwor
 		Password: password,
 	}
 
-	tflog.Info(ctx, "Getting token from %s"+baseUrl+"/api/v1/auth/token with username"+username+" and password"+password+"")
-
 	var tokenResponse clientmodels.TokenLoginResponse
-	if _, err := c.PostDataToClient(ctx, baseUrl+"/api/v1/auth/token", nil, tokenRequest, nil, &tokenResponse); err != nil {
+	if _, err := c.PostDataToClient(ctx, GetHostApiVersionedBaseUrl(baseUrl)+"/auth/token", nil, tokenRequest, nil, &tokenResponse); err != nil {
 		return "", err
+	}
+	if tokenResponse.Token == "" {
+		return "", errors.New("authentication returned an empty token")
 	}
 	return tokenResponse.Token, nil
 }
@@ -261,4 +247,11 @@ func CleanUrlSuffixAndPrefix(url string) string {
 	url = strings.TrimPrefix(url, "/")
 	url = strings.TrimSuffix(url, "/")
 	return url
+}
+
+// HTTPStatusError deliberately excludes response bodies, which may contain credentials.
+type HTTPStatusError struct{ StatusCode int }
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("HTTP request returned status %d", e.StatusCode)
 }

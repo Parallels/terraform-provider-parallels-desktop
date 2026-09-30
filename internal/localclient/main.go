@@ -89,7 +89,7 @@ func executeWithOutput(ctx context.Context, command Command, input io.Reader) (s
 		return "", "", -1, err
 	}
 	// Arguments are literal argv. Explicit shell scripts are owned by callers.
-	cmd := exec.CommandContext(ctx, validatedCmd, command.Args...)
+	cmd := exec.CommandContext(ctx, validatedCmd, command.Args...) // #nosec G204 -- validatedCmd is allowlisted and arguments are passed as literal argv.
 	cmd.WaitDelay = time.Second
 
 	if command.WorkingDirectory != "" {

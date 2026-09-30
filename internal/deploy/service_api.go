@@ -51,7 +51,7 @@ func pollService(ctx context.Context, timeout time.Duration, check func(context.
 			return err
 		}
 		last = err
-		timer := time.NewTimer(delay + time.Duration(rand.Int64N(int64(delay/4)+1)))
+		timer := time.NewTimer(delay + time.Duration(rand.Int64N(int64(delay/4)+1))) // #nosec G404 -- jitter only spreads readiness retries.
 		select {
 		case <-ctx.Done():
 			timer.Stop()

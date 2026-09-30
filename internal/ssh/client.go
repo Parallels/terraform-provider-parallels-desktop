@@ -101,7 +101,7 @@ func NewSshClient(host, port string, auth SshAuthorization) (*SshClient, error) 
 		dialTimeout: 15 * time.Second, handshakeTimeout: 30 * time.Second, budget: 90 * time.Second, attempts: 5,
 		dial: (&net.Dialer{}).DialContext, wait: waitContext,
 		delay: func(attempt int) time.Duration {
-			return time.Second*time.Duration(1<<(attempt-1)) + time.Duration(rand.Int64N(int64(250*time.Millisecond)))
+			return time.Second*time.Duration(1<<(attempt-1)) + time.Duration(rand.Int64N(int64(250*time.Millisecond))) // #nosec G404 -- jitter only spreads retry attempts.
 		},
 	}}, nil
 }
@@ -365,7 +365,7 @@ func (c *SshClient) TransferFileContext(parent context.Context, local, remote st
 			result = &OperationError{Target: c.BaseAddress(), Phase: "file-transfer", Attempts: 1, Elapsed: time.Since(start), Err: result}
 		}
 	}()
-	f, err := os.Open(local)
+	f, err := os.Open(local) // #nosec G304 -- local is the caller-selected source file for transfer.
 	if err != nil {
 		return err
 	}

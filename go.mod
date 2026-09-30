@@ -4,10 +4,10 @@ go 1.26.0
 
 require (
 	github.com/amplitude/analytics-go v1.3.1
-	github.com/cjlapao/common-go v0.0.49
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
+	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.11.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.11
@@ -22,16 +22,17 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/hashicorp/terraform-plugin-go v0.31.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.4.0 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
@@ -40,4 +41,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

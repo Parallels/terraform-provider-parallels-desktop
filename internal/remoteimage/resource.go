@@ -185,7 +185,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			CatalogId:      data.CatalogId.ValueString(),
 			Version:        version,
 			Architecture:   architecture,
-			Connection:     data.CatalogConnection.ValueString(),
+			Connection:     common.FormatHostConnectionString(*catalogHostConfig),
 			StartAfterPull: data.RunAfterCreate.ValueBool(),
 			Path:           data.Path.ValueString(),
 		},

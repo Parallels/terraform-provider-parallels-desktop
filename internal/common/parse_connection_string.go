@@ -22,10 +22,16 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 
 	credentials := connStr[:atIndex]
 	host := connStr[atIndex+1:]
+	if credentials == "" {
+		return nil, errors.New("credentials cannot be empty")
+	}
 
 	// Split host and parameters
 	hostParts := strings.SplitN(host, "?", 2)
 	host = hostParts[0]
+	if host == "" {
+		return nil, errors.New("host cannot be empty")
+	}
 
 	var params map[string]string
 	if len(hostParts) == 2 {
@@ -44,16 +50,18 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 		host = "https://" + host
 	}
 
-	// Split credentials at ':' to get username and password
-	credIndex := strings.Index(credentials, ":")
-	if credIndex == -1 {
-		return nil, errors.New("invalid credentials format")
-	}
-	username := credentials[:credIndex]
-	password := credentials[credIndex+1:]
-
 	var authentication authenticator.Authentication
-	if strings.EqualFold(username, "api_key") {
+	// DevOps uses credentials without ':' as an API key. Keep accepting the
+	// provider's legacy api_key:<key> format as well.
+	username, password, hasPassword := strings.Cut(credentials, ":")
+	if !hasPassword {
+		authentication = authenticator.Authentication{
+			ApiKey: types.StringValue(credentials),
+		}
+	} else if strings.EqualFold(username, "api_key") {
+		if password == "" {
+			return nil, errors.New("API key cannot be empty")
+		}
 		authentication = authenticator.Authentication{
 			ApiKey: types.StringValue(password),
 		}
@@ -71,4 +79,14 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 	}
 
 	return hostConfig, nil
+}
+
+// FormatHostConnectionString serializes a parsed connection using DevOps's
+// catalog syntax. Use the same host and credentials for lookup and remote pull.
+func FormatHostConnectionString(config apiclient.HostConfig) string {
+	credentials := config.Authorization.ApiKey.ValueString()
+	if credentials == "" {
+		credentials = config.Authorization.Username.ValueString() + ":" + config.Authorization.Password.ValueString()
+	}
+	return "host=" + credentials + "@" + config.Host
 }

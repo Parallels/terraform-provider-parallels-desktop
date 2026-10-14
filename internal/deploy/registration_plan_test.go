@@ -19,8 +19,8 @@ func TestRegistrationPlanTransitions(t *testing.T) {
 	for _, scenario := range []string{"disabled-create", "disabled-update", "enable", "disable", "unchanged", "api-change", "credentials-change", "missing", "unknown-block", "unknown-auth", "endpoint-drift", "destroy"} {
 		t.Run(scenario, func(t *testing.T) {
 			configDoc := map[string]interface{}{}
-			priorDoc := map[string]interface{}{"is_registered_in_orchestrator": true, "orchestrator_host": "http://localhost:8080/api", "orchestrator_host_id": "managed-id", "orchestrator_registration": registrationDocument("http://orchestrator")}
-			priorDoc["orchestrator_registration"].(map[string]interface{})["host_id"] = "managed-id"
+			priorDoc := map[string]interface{}{"is_registered_in_orchestrator": true, "orchestrator_host": "http://localhost:8080/api", "orchestrator_host_id": testManagedHostID, "orchestrator_registration": registrationDocument("http://orchestrator")}
+			priorDoc["orchestrator_registration"].(map[string]interface{})["host_id"] = testManagedHostID
 			if scenario != "disabled-create" && scenario != "disabled-update" && scenario != "disable" {
 				configDoc["orchestrator_registration"] = registrationDocument("http://orchestrator")
 				configDoc["orchestrator_registration"].(map[string]interface{})["host_id"] = nil
@@ -87,7 +87,7 @@ func TestRegistrationPlanTransitions(t *testing.T) {
 			case "disabled-create", "disabled-update", "disable":
 				assertUnregistered(t, models.DeployResourceModelV3{IsRegisteredInOrchestrator: registered, OrchestratorHost: host, OrchestratorHostId: id})
 			case "unchanged":
-				if !registered.ValueBool() || id.ValueString() != "managed-id" || host.ValueString() == "" {
+				if !registered.ValueBool() || id.ValueString() != testManagedHostID || host.ValueString() == "" {
 					t.Fatal("unchanged registration not preserved")
 				}
 			default:

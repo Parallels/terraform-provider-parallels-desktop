@@ -80,7 +80,7 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 
 	if destination != nil {
 		destType := reflect.TypeOf(destination)
-		if destType.Kind() != reflect.Ptr {
+		if destType.Kind() != reflect.Pointer {
 			return &clientResponse, errors.New("dest must be a pointer type")
 		}
 	}

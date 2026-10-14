@@ -167,7 +167,7 @@ func TestConfigurationTransactionRestoresPreviousState(t *testing.T) {
 				script = strings.ReplaceAll(script, "/usr/bin/base64 -D", "/usr/bin/base64 -d")
 			}
 			payload := base64.StdEncoding.EncodeToString([]byte(`{}`)) + "\n" + base64.StdEncoding.EncodeToString([]byte("environment:\n  API_PORT: '9090'\n")) + "\n" + fmt.Sprintf("%x\n", sha256.Sum256(previous))
-			command := exec.Command("/bin/bash", "-c", script, "test-configure", installer)
+			command := exec.CommandContext(t.Context(), "/bin/bash", "-c", script, "test-configure", installer)
 			command.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin")
 			command.Stdin = strings.NewReader(payload)
 			output, err := command.CombinedOutput()

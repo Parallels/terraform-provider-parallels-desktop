@@ -12,13 +12,13 @@ var ApiConfigSchemaBlockV2 = schema.SingleNestedBlock{
 	Description:         "Parallels Desktop DevOps configuration",
 	Attributes: map[string]schema.Attribute{
 		"port": schema.StringAttribute{
-			MarkdownDescription: "Parallels Desktop DevOps port",
-			Description:         "Parallels Desktop DevOps port",
+			MarkdownDescription: devOpsPortDescription,
+			Description:         devOpsPortDescription,
 			Optional:            true,
 		},
 		"prefix": schema.StringAttribute{
-			MarkdownDescription: "Parallels Desktop DevOps port",
-			Description:         "Parallels Desktop DevOps port",
+			MarkdownDescription: devOpsPortDescription,
+			Description:         devOpsPortDescription,
 			Optional:            true,
 		},
 		"devops_version": schema.StringAttribute{

@@ -138,7 +138,7 @@ func ApiConfigHasChanges(context context.Context, planState, currentState *Paral
 		return true
 	}
 
-	if !(planState.EnabledModules.IsNull() && currentState.EnabledModules.IsNull()) && !planState.EnabledModules.Equal(currentState.EnabledModules) {
+	if (!planState.EnabledModules.IsNull() || !currentState.EnabledModules.IsNull()) && !planState.EnabledModules.Equal(currentState.EnabledModules) {
 		return true
 	}
 	if planState.Mode != currentState.Mode {

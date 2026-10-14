@@ -1,6 +1,7 @@
 
 GOX = gox
 GOLANGCI_LINT = GOLANGCI_LINT
+GOLANGCI_LINT_VERSION ?= v2.14.0
 GOSEC = gosec
 TFPROVIDERLINT = tfproviderlint
 DEPS_TOOLS = deps_tools
@@ -32,7 +33,6 @@ check-release: lint format-check build unit-test clean
 
 .PHONY: lint
 lint:
-	# remove two disabled linters when their errors are addressed
 	golangci-lint run \
 		--timeout 15m0s
 
@@ -94,7 +94,7 @@ $(GOX):
 
 $(GOLANGCI_LINT):
 	@echo "Installing golangci-lint..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 $(GOSEC):
 	@echo "Installing gosec..."
@@ -119,6 +119,6 @@ $(MISSPELL):
 $(DEPS_TOOLS):
 	@echo "Installing Terraform Provider tools..."
 	@cd tools && go get github.com/bflad/tfproviderlint/cmd/tfproviderlint
-	@cd tools && go get github.com/golangci/golangci-lint/cmd/golangci-lint
+	@cd tools && go get github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@cd tools && go mod tidy
 	@go generate -tags tools tools/tools.go

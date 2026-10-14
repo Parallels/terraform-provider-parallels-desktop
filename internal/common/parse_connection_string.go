@@ -54,18 +54,19 @@ func ParseHostConnectionString(connStr string) (*apiclient.HostConfig, error) {
 	// DevOps uses credentials without ':' as an API key. Keep accepting the
 	// provider's legacy api_key:<key> format as well.
 	username, password, hasPassword := strings.Cut(credentials, ":")
-	if !hasPassword {
+	switch {
+	case !hasPassword:
 		authentication = authenticator.Authentication{
 			ApiKey: types.StringValue(credentials),
 		}
-	} else if strings.EqualFold(username, "api_key") {
+	case strings.EqualFold(username, "api_key"):
 		if password == "" {
 			return nil, errors.New("API key cannot be empty")
 		}
 		authentication = authenticator.Authentication{
 			ApiKey: types.StringValue(password),
 		}
-	} else {
+	default:
 		authentication = authenticator.Authentication{
 			Username: types.StringValue(username),
 			Password: types.StringValue(password),

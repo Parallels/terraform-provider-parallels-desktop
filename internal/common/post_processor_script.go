@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
@@ -59,11 +60,12 @@ func RunPostProcessorScript(ctx context.Context, hostConfig apiclient.HostConfig
 			resultDiag := script.Apply(ctx, hostConfig, vm)
 			tflog.Info(ctx, fmt.Sprintf("Script %s executed, result %v", script.Inline, resultDiag))
 			if resultDiag.HasError() {
-				errorMessages := "Script failed to run:"
+				var errorMessages strings.Builder
+				errorMessages.WriteString("Script failed to run:")
 				for _, diag := range resultDiag.Errors() {
-					errorMessages += "\n" + diag.Summary() + " " + diag.Detail()
+					errorMessages.WriteString("\n" + diag.Summary() + " " + diag.Detail())
 				}
-				return errors.New(errorMessages)
+				return errors.New(errorMessages.String())
 			}
 
 			return nil

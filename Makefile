@@ -3,6 +3,7 @@ GOX = gox
 GOLANGCI_LINT = GOLANGCI_LINT
 GOLANGCI_LINT_VERSION ?= v2.14.0
 GOSEC = gosec
+GOSEC_VERSION ?= v2.29.0
 TFPROVIDERLINT = tfproviderlint
 DEPS_TOOLS = deps_tools
 GOFUMPT = gofumpt
@@ -98,7 +99,7 @@ $(GOLANGCI_LINT):
 
 $(GOSEC):
 	@echo "Installing gosec..."
-	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@go install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION)
 
 $(GOFUMPT):
 	@echo "Installing gofumpt..."

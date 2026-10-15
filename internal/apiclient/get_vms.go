@@ -23,9 +23,9 @@ func GetVms(ctx context.Context, config HostConfig, filterField, filterValue str
 	var url string
 
 	if config.IsOrchestrator {
-		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/machines/"
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/orchestrator/machines"
 	} else {
-		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/machines/"
+		url = helpers.GetHostApiVersionedBaseUrl(urlHost) + "/machines"
 	}
 
 	auth, err := authenticator.GetAuthenticator(ctx, urlHost, config.License, config.Authorization, config.DisableTlsValidation)

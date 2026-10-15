@@ -346,7 +346,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 	data.OsType = types.StringValue(createdVM.OS)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),
@@ -698,7 +698,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	data.ID = types.StringValue(vm.ID)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),

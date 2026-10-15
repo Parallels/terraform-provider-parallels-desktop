@@ -28,6 +28,8 @@ import (
 // connect to SSH, install software or change a real launchd job.
 type lifecycleCommands struct{}
 
+const testManagedHostID = "managed-id"
+
 func (*lifecycleCommands) Username() string { return "fixture" }
 func (*lifecycleCommands) Password() string { return "fixture" }
 func (*lifecycleCommands) Close() error     { return nil }
@@ -157,7 +159,7 @@ func (f *registrationFixture) handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid fixture request", http.StatusBadRequest)
 			return
 		}
-		f.record = &apimodels.OrchestratorHost{ID: "managed-id", Host: request.Host, Description: request.Description, Tags: request.Tags, Enabled: true, State: "healthy"}
+		f.record = &apimodels.OrchestratorHost{ID: testManagedHostID, Host: request.Host, Description: request.Description, Tags: request.Tags, Enabled: true, State: "healthy"}
 		if err := json.NewEncoder(w).Encode(f.record); err != nil {
 			http.Error(w, "failed to encode fixture response", http.StatusInternalServerError)
 		}
@@ -173,7 +175,7 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 	ctx := context.Background()
 	for _, scenario := range []string{"disabled", "present", "missing", "forbidden", "server-error", "timeout", "delete", "delete-missing", "delete-failed"} {
 		t.Run(scenario, func(t *testing.T) {
-			f := &registrationFixture{record: &apimodels.OrchestratorHost{ID: "managed-id", Host: "http://mac:8080/api", Enabled: true, State: "healthy"}}
+			f := &registrationFixture{record: &apimodels.OrchestratorHost{ID: testManagedHostID, Host: "http://mac:8080/api", Enabled: true, State: "healthy"}}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if scenario == "timeout" {
 					<-r.Context().Done()
@@ -182,7 +184,7 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 				f.handler(w, r)
 			}))
 			defer server.Close()
-			doc := map[string]interface{}{"install_local": true, "current_version": "27.0.1", "api": map[string]interface{}{"version": "1.1.0", "host": "localhost", "protocol": "http", "port": "8080", "user": "root@localhost", "password": "fixture-license"}, "orchestrator_registration": registrationDocument(server.URL), "is_registered_in_orchestrator": true, "orchestrator_host_id": "managed-id", "orchestrator_host": "http://mac:8080/api"}
+			doc := map[string]interface{}{"install_local": true, "current_version": "27.0.1", "api": map[string]interface{}{"version": "1.1.0", "host": "localhost", "protocol": "http", "port": "8080", "user": "root@localhost", "password": "fixture-license"}, "orchestrator_registration": registrationDocument(server.URL), "is_registered_in_orchestrator": true, "orchestrator_host_id": testManagedHostID, "orchestrator_host": "http://mac:8080/api"}
 			switch scenario {
 			case "disabled":
 				delete(doc, "orchestrator_registration")
@@ -204,7 +206,7 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 				data := before
 				diagnostics := r.unregisterWithOrchestrator(ctx, &data)
 				if scenario == "delete-failed" {
-					if !diagnostics.HasError() || data.OrchestratorHostId.ValueString() != "managed-id" {
+					if !diagnostics.HasError() || data.OrchestratorHostId.ValueString() != testManagedHostID {
 						t.Fatal("failed removal lost identity")
 					}
 				} else {
@@ -238,7 +240,7 @@ func TestRegistrationReadAndRemovalLifecycle(t *testing.T) {
 			}
 			if scenario == "disabled" || scenario == "missing" {
 				assertUnregistered(t, data)
-			} else if data.OrchestratorHostId.ValueString() != "managed-id" || data.Orchestrator.HostId.ValueString() != "managed-id" {
+			} else if data.OrchestratorHostId.ValueString() != testManagedHostID || data.Orchestrator.HostId.ValueString() != testManagedHostID {
 				t.Fatal("read did not refresh authoritative ID")
 			}
 			if scenario == "disabled" && f.calls != 0 {

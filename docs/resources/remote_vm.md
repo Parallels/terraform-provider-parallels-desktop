@@ -138,7 +138,7 @@ resource "parallels-desktop_remote_vm" "example_box" {
 
 ### Required
 
-- `catalog_connection` (String) Parallels DevOps Catalog Connection
+- `catalog_connection` (String) Parallels DevOps Catalog Connection. Use `host=<api_key>@<host>` for API key authentication or `host=<username>:<password>@<host>` for username/password authentication. The legacy `host=api_key:<key>@<host>` format is also accepted. Include `http://` or `https://` in the host; omitted schemes default to HTTPS.
 - `catalog_id` (String) Catalog Id to pull
 - `name` (String) Virtual Machine name to create, this needs to be unique in the host
 - `path` (String) Path

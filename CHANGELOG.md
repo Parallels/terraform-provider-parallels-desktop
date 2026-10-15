@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-10-15
+
+- This update modifies the API endpoint URLs in `get_vms.go` to remove trailing slashes for consistency. Additionally, it enhances the connection string parsing in `parse_connection_string.go` to ensure that both credentials and host are provided, returning appropriate errors when they are missing. The documentation for `catalog_connection` has also been updated to clarify authentication formats.
+
 ## [0.7.3] - 2026-10-12
 
 

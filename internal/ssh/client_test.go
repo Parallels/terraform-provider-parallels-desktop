@@ -54,7 +54,8 @@ func newTestServer(t *testing.T, resets int32) *testServer {
 		return nil, errors.New("authentication denied")
 	}}
 	config.AddHostKey(signer)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func newTestServer(t *testing.T, resets int32) *testServer {
 				continue
 			}
 			server.wg.Add(1)
-			go server.serve(conn)
+			go server.serve(t.Context(), conn)
 		}
 	}()
 	t.Cleanup(func() {
@@ -96,7 +97,7 @@ func newTestServer(t *testing.T, resets int32) *testServer {
 	return server
 }
 
-func (s *testServer) serve(raw net.Conn) {
+func (s *testServer) serve(ctx context.Context, raw net.Conn) {
 	defer s.wg.Done()
 	defer raw.Close()
 	conn, channels, requests, err := gossh.NewServerConn(raw, s.config)
@@ -169,7 +170,7 @@ func (s *testServer) serve(raw net.Conn) {
 					_ = conn.Wait()
 					return
 				}
-				cmd := exec.Command("/bin/sh", "-c", payload.Command)
+				cmd := exec.CommandContext(ctx, "/bin/sh", "-c", payload.Command)
 				cmd.Stdin = ch
 				output, err := cmd.CombinedOutput()
 				_, _ = ch.Write(output)

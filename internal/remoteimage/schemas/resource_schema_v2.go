@@ -111,7 +111,7 @@ func GetRemoteImageSchemaV2(ctx context.Context) schema.Schema {
 				},
 			},
 			"catalog_connection": schema.StringAttribute{
-				MarkdownDescription: "Parallels DevOps Catalog Connection",
+				MarkdownDescription: "Parallels DevOps Catalog Connection. Use `host=<api_key>@<host>` for API key authentication or `host=<username>:<password>@<host>` for username/password authentication. The legacy `host=api_key:<key>@<host>` format is also accepted. Include `http://` or `https://` in the host; omitted schemes default to HTTPS.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

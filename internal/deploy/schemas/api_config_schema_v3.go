@@ -7,18 +7,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+const devOpsPortDescription = "Parallels Desktop DevOps port"
+
 var ApiConfigSchemaBlockV3 = schema.SingleNestedBlock{
 	MarkdownDescription: "Parallels Desktop DevOps configuration",
 	Description:         "Parallels Desktop DevOps configuration",
 	Attributes: map[string]schema.Attribute{
 		"port": schema.StringAttribute{
-			MarkdownDescription: "Parallels Desktop DevOps port",
-			Description:         "Parallels Desktop DevOps port",
+			MarkdownDescription: devOpsPortDescription,
+			Description:         devOpsPortDescription,
 			Optional:            true,
 		},
 		"prefix": schema.StringAttribute{
-			MarkdownDescription: "Parallels Desktop DevOps port",
-			Description:         "Parallels Desktop DevOps port",
+			MarkdownDescription: devOpsPortDescription,
+			Description:         devOpsPortDescription,
 			Optional:            true,
 		},
 		"devops_version": schema.StringAttribute{

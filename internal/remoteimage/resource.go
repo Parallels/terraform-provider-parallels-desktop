@@ -185,7 +185,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 			CatalogId:      data.CatalogId.ValueString(),
 			Version:        version,
 			Architecture:   architecture,
-			Connection:     data.CatalogConnection.ValueString(),
+			Connection:     common.FormatHostConnectionString(*catalogHostConfig),
 			StartAfterPull: data.RunAfterCreate.ValueBool(),
 			Path:           data.Path.ValueString(),
 		},
@@ -399,7 +399,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	data.OrchestratorHostId = types.StringValue(refreshVm.HostId)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),
@@ -797,7 +797,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),

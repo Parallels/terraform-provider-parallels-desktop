@@ -170,7 +170,7 @@ resource "bf3_deploy" "mac" {
 			t.Fatalf("unexpected registered state %v", v["is_registered_in_orchestrator"])
 		}
 		if enabled {
-			if v["orchestrator_host_id"] != "managed-id" || v["orchestrator_host"] != server.URL+prefix {
+			if v["orchestrator_host_id"] != testManagedHostID || v["orchestrator_host"] != server.URL+prefix {
 				t.Fatal("incorrect confirmed registration")
 			}
 		} else {

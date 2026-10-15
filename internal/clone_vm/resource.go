@@ -393,7 +393,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 	data.OsType = types.StringValue(clonedVm.OS)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),
@@ -759,7 +759,7 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	data.InternalIp = types.StringValue(internalIp)
 	if data.OnDestroyScript != nil {
 		for _, script := range data.OnDestroyScript {
-			elements := make([]attr.Value, 0)
+			elements := make([]attr.Value, 0, 1)
 			result := postprocessorscript.PostProcessorScriptRunResult{
 				ExitCode: types.StringValue("0"),
 				Stdout:   types.StringValue(""),

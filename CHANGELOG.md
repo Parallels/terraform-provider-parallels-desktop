@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-10-19
+
+- This update introduces a new attribute `vm_ready_timeout` across multiple resources, allowing users to specify how long to wait for a VM to report an internal IP before configuring reverse proxy hosts. This change is implemented in the `internal/common` package with a new function to parse the timeout value. The default timeout is set to 15 minutes, which can be adjusted as needed. Documentation has been updated accordingly.
+
 ## [0.7.5] - 2026-10-19
 
 - This update introduces a new function `operationTimeout` in the `internal/remoteimage/resource.go` file to read user-defined timeouts from the plan or state. The `clientTimeout` function in `internal/helpers/client.go` now uses a default timeout when no context deadline is provided. Additionally, tests for the new timeout functionality have been added in `internal/remoteimage/timeout_test.go`.

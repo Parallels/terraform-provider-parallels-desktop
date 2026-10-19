@@ -33,6 +33,21 @@ func (v HttpCallerVerb) String() string {
 	return string(v)
 }
 
+// defaultClientTimeout bounds requests whose context carries no deadline of its own.
+var defaultClientTimeout = 60 * time.Second
+
+// clientTimeout returns the http.Client timeout for a request. When ctx has a
+// deadline, the caller (for example a resource timeouts block) governs how long
+// the request may take, so the client adds no fixed limit that could fire first.
+// Operations such as creating a VM from a catalog answer only after the host has
+// pulled the image, which takes minutes.
+func clientTimeout(ctx context.Context) time.Duration {
+	if _, ok := ctx.Deadline(); ok {
+		return 0
+	}
+	return defaultClientTimeout
+}
+
 type HttpCaller struct {
 	disableTlsVerification bool
 }
@@ -92,7 +107,7 @@ func (c *HttpCaller) RequestDataToClient(ctx context.Context, verb HttpCallerVer
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.disableTlsVerification}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 60 * time.Second,
+	client := &http.Client{Transport: transport, Timeout: clientTimeout(ctx),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}
 

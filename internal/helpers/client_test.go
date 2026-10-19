@@ -54,3 +54,50 @@ func TestHTTPStatusRedactsResponseAndHonorsCancellation(t *testing.T) {
 		t.Fatalf("lost cancellation: %v", err)
 	}
 }
+
+func TestClientTimeoutFollowsContextDeadline(t *testing.T) {
+	if got := clientTimeout(context.Background()); got != defaultClientTimeout {
+		t.Fatalf("no deadline: got %v, want %v", got, defaultClientTimeout)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	if got := clientTimeout(ctx); got != 0 {
+		t.Fatalf("with deadline: got %v, want no fixed client timeout", got)
+	}
+}
+
+func TestSlowResponseOutlivesDefaultTimeoutWhenContextHasDeadline(t *testing.T) {
+	previous := defaultClientTimeout
+	defaultClientTimeout = 100 * time.Millisecond
+	defer func() { defaultClientTimeout = previous }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(400 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"vm"}`))
+	}))
+	defer server.Close()
+
+	var out struct {
+		ID string `json:"id"`
+	}
+
+	// A context deadline governs: the slow create succeeds.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := NewHttpCaller(ctx, false).PostDataToClient(ctx, server.URL, nil, map[string]string{"a": "b"}, nil, &out); err != nil || out.ID != "vm" {
+		t.Fatalf("slow request with deadline failed: %q %v", out.ID, err)
+	}
+
+	// The context deadline is still enforced.
+	short, cancelShort := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancelShort()
+	if _, err := NewHttpCaller(short, false).GetDataFromClient(short, server.URL, nil, nil, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("context deadline not enforced: %v", err)
+	}
+
+	// Without a deadline the default timeout still protects the caller.
+	if _, err := NewHttpCaller(context.Background(), false).GetDataFromClient(context.Background(), server.URL, nil, nil, nil); err == nil {
+		t.Fatal("default timeout not applied without a context deadline")
+	}
+}

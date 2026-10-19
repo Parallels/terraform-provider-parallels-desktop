@@ -15,6 +15,7 @@ import (
 	"terraform-provider-parallels-desktop/internal/schemas/reverseproxy"
 	"terraform-provider-parallels-desktop/internal/telemetry"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -63,11 +64,30 @@ func (r *RemoteVmResource) Configure(ctx context.Context, req resource.Configure
 	r.provider = data
 }
 
+// attributeGetter is satisfied by tfsdk.Plan and tfsdk.State.
+type attributeGetter interface {
+	GetAttribute(ctx context.Context, path path.Path, target interface{}) diag.Diagnostics
+}
+
+// operationTimeout reads the user's timeouts block from the plan or state. The
+// model cannot be used for this because it is only populated after the whole
+// plan or state is loaded, which needs the context that this timeout builds.
+func operationTimeout(ctx context.Context, source attributeGetter, defaultTimeout time.Duration) (time.Duration, diag.Diagnostics) {
+	var configured timeouts.Value
+	diags := source.GetAttribute(ctx, path.Root("timeouts"), &configured)
+	if diags.HasError() {
+		return 0, diags
+	}
+	timeout, timeoutDiags := configured.Create(ctx, defaultTimeout)
+	diags.Append(timeoutDiags...)
+	return timeout, diags
+}
+
 func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data models.RemoteVmResourceModelV2
 
 	// Setting the default timeout
-	contextTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+	contextTimeout, diags := operationTimeout(ctx, req.Plan, 60*time.Minute)
 
 	resp.Diagnostics.Append(diags...)
 
@@ -459,7 +479,7 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 	var data models.RemoteVmResourceModelV2
 
 	// Setting the default timeout
-	contextTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+	contextTimeout, diags := operationTimeout(ctx, req.State, 60*time.Minute)
 
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -532,7 +552,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	var currentData models.RemoteVmResourceModelV2
 
 	// Setting the default timeout
-	contextTimeout, diags := data.Timeouts.Create(ctx, 60*time.Minute)
+	contextTimeout, diags := operationTimeout(ctx, req.Plan, 60*time.Minute)
 
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -872,7 +892,7 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 	var data models.RemoteVmResourceModelV2
 
 	// Setting the default timeout
-	contextTimeout, diags := data.Timeouts.Create(ctx, 90*time.Minute)
+	contextTimeout, diags := operationTimeout(ctx, req.State, 90*time.Minute)
 
 	resp.Diagnostics.Append(diags...)
 

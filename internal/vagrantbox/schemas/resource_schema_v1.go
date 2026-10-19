@@ -142,6 +142,10 @@ func GetResourceSchemaV1(ctx context.Context) schema.Schema {
 				MarkdownDescription: "VM internal IP address",
 				Computed:            true,
 			},
+			"vm_ready_timeout": schema.StringAttribute{
+				MarkdownDescription: "How long to wait for the VM to report an internal IP before configuring reverse proxy hosts, as a duration such as `10m` or `1h`. Increase this for guests that reboot during first boot. Defaults to `15m`",
+				Optional:            true,
+			},
 			"keep_running": schema.BoolAttribute{
 				MarkdownDescription: "This will keep the VM running after the terraform apply",
 				Optional:            true,

@@ -971,14 +971,23 @@ func updateReverseProxyHostsTarget(ctx context.Context, data *resource_models.Cl
 	resultDiagnostic := diag.Diagnostics{}
 	var refreshedVm *apimodels.VirtualMachine
 	var rpDiag diag.Diagnostics
-	refreshedVm, rpDiag = common.EnsureMachineHasInternalIp(ctx, hostConfig, targetVm)
+	vmReadyTimeout, timeoutDiag := common.ParseVmReadyTimeout(data.VmReadyTimeout)
+	if timeoutDiag.HasError() {
+		return nil, timeoutDiag
+	}
+	refreshedVm, rpDiag = common.EnsureMachineHasInternalIp(ctx, hostConfig, targetVm, vmReadyTimeout)
 	if rpDiag.HasError() {
 		resultDiagnostic.Append(rpDiag...)
 		if data.ID.ValueString() != "" {
 			// If we have an ID, we need to delete the machine
 			apiclient.SetMachineState(ctx, hostConfig, data.ID.ValueString(), apiclient.MachineStateOpStop)
+			// refreshedVm is nil when the VM could not be fetched, fall back to the original machine
+			if refreshedVm == nil {
+				refreshedVm = targetVm
+			}
 			if _, diag := common.EnsureMachineStopped(ctx, hostConfig, refreshedVm); diag.HasError() {
-				return nil, diag
+				resultDiagnostic.Append(diag...)
+				return nil, resultDiagnostic
 			}
 			apiclient.DeleteVm(ctx, hostConfig, data.ID.ValueString())
 		}

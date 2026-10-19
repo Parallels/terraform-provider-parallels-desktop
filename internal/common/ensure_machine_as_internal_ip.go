@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
@@ -13,8 +14,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func EnsureMachineHasInternalIp(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine) (*apimodels.VirtualMachine, diag.Diagnostics) {
+func EnsureMachineHasInternalIp(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine, timeout time.Duration) (*apimodels.VirtualMachine, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
+
+	if vm == nil {
+		diagnostics.AddError("There was an error getting the vm", "vm is nil")
+		return nil, diagnostics
+	}
 
 	refreshVm, ensureRunningDiag := EnsureMachineRunning(ctx, hostConfig, vm)
 	if ensureRunningDiag.HasError() {
@@ -26,14 +32,15 @@ func EnsureMachineHasInternalIp(ctx context.Context, hostConfig apiclient.HostCo
 		return nil, diagnostics
 	}
 
-	maxRetries := constants.DEFAULT_OPERATION_MAX_RETRY_COUNT
-	retryCount := 0
+	if timeout <= 0 {
+		timeout = DefaultVmReadyTimeout
+	}
+	deadline := time.Now().Add(timeout)
 	for {
 		diagnostics = diag.Diagnostics{}
-		retryCount += 1
-		// We have run out of retries, add an error and break out of the loop
-		if retryCount >= maxRetries {
-			diagnostics.AddError("Error in Internal IP", "We could not get the internal IP of the machine")
+		// We have run out of time, add an error and break out of the loop
+		if time.Now().After(deadline) {
+			diagnostics.AddError("Error in Internal IP", fmt.Sprintf("We could not get the internal IP of the machine within %s", timeout))
 			break
 		}
 
@@ -42,11 +49,13 @@ func EnsureMachineHasInternalIp(ctx context.Context, hostConfig apiclient.HostCo
 			if checkVmDiag.HasError() {
 				diagnostics.Append(checkVmDiag...)
 				tflog.Error(ctx, "Error getting vm Internal IP")
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 			if updatedVm == nil {
 				diagnostics.AddError("Error in Internal IP", "VM not found")
 				tflog.Error(ctx, "Error getting vm Internal IP, VM not found")
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 

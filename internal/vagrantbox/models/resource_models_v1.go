@@ -39,5 +39,6 @@ type VagrantBoxResourceModelV1 struct {
 	Config                *vmconfig.VmConfig                         `tfsdk:"config"`
 	PrlCtl                []*prlctl.PrlCtlCmd                        `tfsdk:"prlctl"`
 	KeepRunning           types.Bool                                 `tfsdk:"keep_running"`
+	VmReadyTimeout        types.String                               `tfsdk:"vm_ready_timeout"`
 	ReverseProxyHosts     []*reverseproxy.ReverseProxyHost           `tfsdk:"reverse_proxy_host"`
 }

@@ -16,6 +16,11 @@ import (
 func EnsureMachineStopped(ctx context.Context, hostConfig apiclient.HostConfig, vm *apimodels.VirtualMachine) (*apimodels.VirtualMachine, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 
+	if vm == nil {
+		diagnostics.AddError("There was an error stopping the vm", "vm is nil")
+		return nil, diagnostics
+	}
+
 	currentVm, refreshDiags := apiclient.GetVm(ctx, hostConfig, vm.ID)
 	if refreshDiags.HasError() {
 		diagnostics.Append(refreshDiags...)
@@ -43,11 +48,13 @@ func EnsureMachineStopped(ctx context.Context, hostConfig apiclient.HostConfig, 
 			result, stateDiag := apiclient.SetMachineState(ctx, hostConfig, currentVm.ID, apiclient.MachineStateOpStop)
 			if stateDiag.HasError() {
 				diagnostics.Append(stateDiag...)
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 
 			if !result {
 				diagnostics.AddError("error stopping vm", "Could not set the state of the machine to stopped")
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 
@@ -56,10 +63,12 @@ func EnsureMachineStopped(ctx context.Context, hostConfig apiclient.HostConfig, 
 			refreshedVm, refreshedVmDiag := apiclient.GetVm(ctx, hostConfig, currentVm.ID)
 			if refreshedVmDiag.HasError() {
 				diagnostics.Append(refreshedVmDiag...)
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 			if refreshedVm == nil {
 				diagnostics.AddError("error stopping vm", "Could not verify the state of the machine after stopping, vm is nil")
+				time.Sleep(constants.DEFAULT_OPERATION_RETRY_INTERVAL_IN_SECONDS * time.Second)
 				continue
 			}
 

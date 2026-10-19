@@ -145,6 +145,7 @@ resource "parallels-desktop_remote_vm" "example_vagrant_file" {
 - `force_changes` (Boolean) Force changes, this will force the VM to be stopped and started again
 - `host` (String) Parallels Desktop DevOps Host
 - `keep_running` (Boolean) This will keep the VM running after the terraform apply
+- `vm_ready_timeout` (String) How long to wait for the VM to report an internal IP before configuring reverse proxy hosts, as a duration such as `10m` or `1h`. Increase this for guests that reboot during first boot. Defaults to `15m`
 - `on_destroy_script` (Block List) Run any script after the virtual machine is created (see [below for nested schema](#nestedblock--on_destroy_script))
 - `orchestrator` (String) Parallels Desktop DevOps Orchestrator
 - `owner` (String) Virtual Machine owner

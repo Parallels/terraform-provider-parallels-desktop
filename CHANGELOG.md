@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-11-13
+
+- feat: add telemetry tracking for resource create, read, update, and delete operations
+- feat: introduce `TrackOperation` for consistent telemetry event reporting
+- feat: add `TrackSession` to capture provider configuration events
+
 ## [0.7.7] - 2026-11-13
 
 - feat: add machine fingerprinting for unique device identification

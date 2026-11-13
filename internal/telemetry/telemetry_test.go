@@ -122,7 +122,7 @@ func TestCallbackNeverBlocks(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			svc.Callback(context.Background(), types.ExecuteResult{Code: 200})
 		}
 	}()

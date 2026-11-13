@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-11-13
+
+- feat: add machine fingerprinting for unique device identification
+- feat: include hashed license in telemetry items for analytics
+- fix: prevent blocking in telemetry callbacks to enhance performance
+- fix: ensure telemetry flushing does not delay Terraform operations
+
 ## [0.7.6] - 2026-10-19
 
 - This update introduces a new attribute `vm_ready_timeout` across multiple resources, allowing users to specify how long to wait for a VM to report an internal IP before configuring reverse proxy hosts. This change is implemented in the `internal/common` package with a new function to parse the timeout value. The default timeout is set to 15 minutes, which can be adjusted as needed. Documentation has been updated accordingly.

@@ -7,6 +7,7 @@ import (
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/models"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 	data_models "terraform-provider-parallels-desktop/internal/virtualmachine/models"
 	"terraform-provider-parallels-desktop/internal/virtualmachine/schemas"
 
@@ -53,6 +54,7 @@ func (d *VirtualMachinesDataSource) Schema(_ context.Context, req datasource.Sch
 }
 
 func (d *VirtualMachinesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	defer telemetry.TrackOperation(ctx, d.provider.License.ValueString(), telemetry.EventDataSourceVm, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 	var data data_models.VirtualMachinesDataSourceModelV2
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)

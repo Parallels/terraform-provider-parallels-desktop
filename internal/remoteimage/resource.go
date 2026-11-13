@@ -98,15 +98,7 @@ func (r *RemoteVmResource) Create(ctx context.Context, req resource.CreateReques
 	apiCtx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(apiCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		apiCtx,
-		r.provider.License.String(),
-		telemetry.EventRemoteImage, telemetry.ModeCreate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
+	defer telemetry.TrackOperation(apiCtx, r.provider.License.String(), telemetry.EventRemoteImage, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.Plan.Get(apiCtx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -489,15 +481,7 @@ func (r *RemoteVmResource) Read(ctx context.Context, req resource.ReadRequest, r
 	aptCtx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(aptCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		aptCtx,
-		r.provider.License.String(),
-		telemetry.EventRemoteImage, telemetry.ModeRead,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(aptCtx, telemetryEvent)
+	defer telemetry.TrackOperation(aptCtx, r.provider.License.String(), telemetry.EventRemoteImage, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(aptCtx, &data)...)
 
@@ -562,15 +546,7 @@ func (r *RemoteVmResource) Update(ctx context.Context, req resource.UpdateReques
 	aptCtx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(aptCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		aptCtx,
-		r.provider.License.String(),
-		telemetry.EventRemoteImage, telemetry.ModeUpdate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(aptCtx, telemetryEvent)
+	defer telemetry.TrackOperation(aptCtx, r.provider.License.String(), telemetry.EventRemoteImage, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(aptCtx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(aptCtx, &data)...)
@@ -906,15 +882,7 @@ func (r *RemoteVmResource) Delete(ctx context.Context, req resource.DeleteReques
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)
 
-	telemetrySvc := telemetry.Get(apiCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		apiCtx,
-		r.provider.License.String(),
-		telemetry.EventRemoteImage, telemetry.ModeDestroy,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
+	defer telemetry.TrackOperation(apiCtx, r.provider.License.String(), telemetry.EventRemoteImage, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 
 	if resp.Diagnostics.HasError() {
 		return

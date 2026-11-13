@@ -66,15 +66,7 @@ func (r *CloneVmResource) Configure(ctx context.Context, req resource.ConfigureR
 func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data resource_models.CloneVmResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventCloneVm, telemetry.ModeCreate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventCloneVm, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -439,15 +431,7 @@ func (r *CloneVmResource) Create(ctx context.Context, req resource.CreateRequest
 func (r *CloneVmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data resource_models.CloneVmResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventCloneVm, telemetry.ModeRead,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventCloneVm, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
@@ -512,15 +496,7 @@ func (r *CloneVmResource) Update(ctx context.Context, req resource.UpdateRequest
 	var data resource_models.CloneVmResourceModelV1
 	var currentData resource_models.CloneVmResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventCloneVm, telemetry.ModeUpdate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventCloneVm, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -832,15 +808,7 @@ func (r *CloneVmResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventCloneVm, telemetry.ModeDestroy,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventCloneVm, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 
 	if resp.Diagnostics.HasError() {
 		return

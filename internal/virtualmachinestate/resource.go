@@ -72,15 +72,7 @@ func (r *VirtualMachineStateResource) Create(ctx context.Context, req resource.C
 	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(apiCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		apiCtx,
-		r.provider.License.String(),
-		telemetry.EventVirtualMachineState, telemetry.ModeCreate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
+	defer telemetry.TrackOperation(apiCtx, r.provider.License.String(), telemetry.EventVirtualMachineState, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.Plan.Get(apiCtx, &data)...)
 
@@ -195,15 +187,7 @@ func (r *VirtualMachineStateResource) Read(ctx context.Context, req resource.Rea
 	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(apiCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		apiCtx,
-		r.provider.License.String(),
-		telemetry.EventVirtualMachineState, telemetry.ModeRead,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
+	defer telemetry.TrackOperation(apiCtx, r.provider.License.String(), telemetry.EventVirtualMachineState, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)
 
@@ -263,15 +247,7 @@ func (r *VirtualMachineStateResource) Update(ctx context.Context, req resource.U
 	ctx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventVirtualMachineState, telemetry.ModeUpdate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventVirtualMachineState, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -403,15 +379,7 @@ func (r *VirtualMachineStateResource) Delete(ctx context.Context, req resource.D
 	apiCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
 
-	telemetrySvc := telemetry.Get(apiCtx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		apiCtx,
-		r.provider.License.String(),
-		telemetry.EventVirtualMachineState, telemetry.ModeDestroy,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(apiCtx, telemetryEvent)
+	defer telemetry.TrackOperation(apiCtx, r.provider.License.String(), telemetry.EventVirtualMachineState, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(apiCtx, &data)...)

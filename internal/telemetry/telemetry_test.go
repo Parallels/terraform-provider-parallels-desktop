@@ -3,14 +3,42 @@ package telemetry
 import (
 	"context"
 	"crypto/sha256"
+	"sync"
+
 	"encoding/base64"
 	"testing"
 	"time"
 
 	"github.com/amplitude/analytics-go/amplitude/types"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 
 	mockamp "terraform-provider-parallels-desktop/internal/telemetry/test"
 )
+
+// withTestService points the package singleton at a mock-backed service for
+// the duration of fn (TrackOperation/TrackSession resolve it via Get).
+func withTestService(t *testing.T, fn func()) []*types.Event {
+	t.Helper()
+
+	mock := mockamp.NewMockAmplitudeClient()
+	var captured []*types.Event
+	mock.On("Track", func(args ...interface{}) {
+		ev := args[0].(types.Event)
+		captured = append(captured, &ev)
+	})
+	mock.On("Flush", func(args ...interface{}) {})
+
+	previous := globalTelemetryService
+	globalTelemetryService = &TelemetryService{
+		client:          mock,
+		EnableTelemetry: true,
+		CallBackChan:    make(chan types.ExecuteResult, 32),
+	}
+	defer func() { globalTelemetryService = previous }()
+
+	fn()
+	return captured
+}
 
 func TestMachineFingerprintStableAndSized(t *testing.T) {
 	first := MachineFingerprint()
@@ -141,6 +169,61 @@ func TestNewDisablesWithoutApiKey(t *testing.T) {
 	}
 	// TrackEvent on a disabled service must be a no-op, not a nil-client panic.
 	svc.TrackEvent(context.Background(), TelemetryItem{Type: "x"})
+}
+
+func TestTrackOperationReportsSanitizedOutcome(t *testing.T) {
+	clean := withTestService(t, func() {
+		TrackOperation(context.Background(), "lic", EventCloneVm, ModeCreate, &diag.Diagnostics{}, time.Now())
+	})
+	if len(clean) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(clean))
+	}
+	props := clean[0].EventProperties
+	if props["outcome"] != "success" || props["error_count"] != 0 {
+		t.Errorf("clean op = outcome:%v errors:%v, want success:0", props["outcome"], props["error_count"])
+	}
+	if _, ok := props["duration_ms"]; !ok {
+		t.Error("missing duration_ms property")
+	}
+
+	var diags diag.Diagnostics
+	diags.AddError("boom", "secret host 10.0.0.1")
+	diags.AddWarning("warn", "not an error")
+	failed := withTestService(t, func() {
+		TrackOperation(context.Background(), "lic", EventCloneVm, ModeCreate, &diags, time.Now())
+	})
+	props = failed[0].EventProperties
+	if props["outcome"] != "error" || props["error_count"] != 1 {
+		t.Errorf("failed op = outcome:%v errors:%v, want error:1 (warnings must not count)", props["outcome"], props["error_count"])
+	}
+	for k, v := range props {
+		if s, ok := v.(string); ok && (s == "boom" || s == "secret host 10.0.0.1") {
+			t.Errorf("property %q leaks diag text: %q", k, s)
+		}
+	}
+}
+
+func TestTrackSessionFiresOnceWithVersionAndCI(t *testing.T) {
+	t.Setenv("TF_IN_AUTOMATION", "1")
+	sessionOnce = &sync.Once{}
+	defer func() { sessionOnce = &sync.Once{} }()
+
+	captured := withTestService(t, func() {
+		TrackSession(context.Background(), "lic", "1.9.8")
+		TrackSession(context.Background(), "lic", "1.9.8")
+	})
+	if len(captured) != 1 {
+		t.Fatalf("session must fire exactly once per process, got %d events", len(captured))
+	}
+	if captured[0].EventType != "PD-TERRAFORM-PROVIDER::PROVIDER::CONFIGURE" {
+		t.Errorf("EventType = %q", captured[0].EventType)
+	}
+	if captured[0].EventProperties["terraform_version"] != "1.9.8" {
+		t.Errorf("terraform_version = %v", captured[0].EventProperties["terraform_version"])
+	}
+	if captured[0].EventProperties["is_ci"] != true {
+		t.Errorf("is_ci = %v, want true with TF_IN_AUTOMATION", captured[0].EventProperties["is_ci"])
+	}
 }
 
 func sha256B64(s string) string {

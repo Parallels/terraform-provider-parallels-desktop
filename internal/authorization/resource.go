@@ -3,11 +3,13 @@ package authorization
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"terraform-provider-parallels-desktop/internal/apiclient"
 	"terraform-provider-parallels-desktop/internal/apiclient/apimodels"
 	"terraform-provider-parallels-desktop/internal/helpers"
 	"terraform-provider-parallels-desktop/internal/models"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -57,6 +59,7 @@ func (r *AuthorizationResource) Configure(ctx context.Context, req resource.Conf
 }
 
 func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	defer telemetry.TrackOperation(ctx, r.provider.License.ValueString(), telemetry.EventAuthorization, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 	tflog.Info(ctx, "Creating Authorization Resource")
 	var data AuthorizationResourceModel
 
@@ -274,6 +277,7 @@ func (r *AuthorizationResource) Create(ctx context.Context, req resource.CreateR
 }
 
 func (r *AuthorizationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	defer telemetry.TrackOperation(ctx, r.provider.License.ValueString(), telemetry.EventAuthorization, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 	var data AuthorizationResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -353,6 +357,7 @@ func (r *AuthorizationResource) Read(ctx context.Context, req resource.ReadReque
 }
 
 func (r *AuthorizationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	defer telemetry.TrackOperation(ctx, r.provider.License.ValueString(), telemetry.EventAuthorization, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 	tflog.Info(ctx, "Updating Authorization Resource")
 	var data AuthorizationResourceModel
 	var currentData AuthorizationResourceModel
@@ -403,6 +408,7 @@ func (r *AuthorizationResource) Update(ctx context.Context, req resource.UpdateR
 }
 
 func (r *AuthorizationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	defer telemetry.TrackOperation(ctx, r.provider.License.ValueString(), telemetry.EventAuthorization, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 	tflog.Info(ctx, "Deleting Authorization Resource")
 	var data AuthorizationResourceModel
 

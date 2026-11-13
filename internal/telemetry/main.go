@@ -20,7 +20,9 @@ var (
 func New(context context.Context) *TelemetryService {
 	svc := &TelemetryService{
 		EnableTelemetry: true,
-		CallBackChan:    make(chan types.ExecuteResult),
+		// Buffered so SDK callbacks can be dropped instead of blocking when
+		// nothing consumes them (see TelemetryService.Callback).
+		CallBackChan: make(chan types.ExecuteResult, 32),
 	}
 
 	// Getting the code inbuilt api key
@@ -35,6 +37,10 @@ func New(context context.Context) *TelemetryService {
 	config := amplitude.NewConfig(key)
 	config.FlushQueueSize = 100
 	config.FlushInterval = time.Second * 3
+	// Fail fast on unreachable endpoints: TrackEvent flushes synchronously
+	// with a bounded timeout, so a slow network must not stall operations.
+	config.ConnectionTimeout = time.Second * 5
+	config.FlushMaxRetries = 3
 	// adding a callback to read what is the status
 	config.ExecuteCallback = func(result types.ExecuteResult) {
 		svc.Callback(context, result)
@@ -49,9 +55,11 @@ func New(context context.Context) *TelemetryService {
 func Get(context context.Context) *TelemetryService {
 	if globalTelemetryService == nil {
 		lock.Lock()
-
-		globalTelemetryService = New(context)
-		lock.Unlock()
+		defer lock.Unlock()
+		// Re-check under the lock: terraform can run operations concurrently.
+		if globalTelemetryService == nil {
+			globalTelemetryService = New(context)
+		}
 		return globalTelemetryService
 	}
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"terraform-provider-parallels-desktop/internal/deploy/schemas"
 	"terraform-provider-parallels-desktop/internal/interfaces"
@@ -71,15 +72,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 	var data deploy_models.DeployResourceModelV3
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventDeploy, telemetry.ModeCreate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventDeploy, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -223,15 +216,7 @@ func (r *DeployResource) Create(ctx context.Context, req resource.CreateRequest,
 
 func (r *DeployResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data deploy_models.DeployResourceModelV3
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventDeploy, telemetry.ModeRead,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventDeploy, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 
 	tflog.Info(ctx, "Read request to see logs")
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -316,15 +301,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 	var data deploy_models.DeployResourceModelV3
 	var currentData deploy_models.DeployResourceModelV3
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventDeploy, telemetry.ModeUpdate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventDeploy, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -601,15 +578,7 @@ func (r *DeployResource) Update(ctx context.Context, req resource.UpdateRequest,
 func (r *DeployResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data deploy_models.DeployResourceModelV3
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventDeploy, telemetry.ModeDestroy,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventDeploy, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)

@@ -8,6 +8,7 @@ import (
 	deploy "terraform-provider-parallels-desktop/internal/deploy"
 	"terraform-provider-parallels-desktop/internal/models"
 	"terraform-provider-parallels-desktop/internal/remoteimage"
+	"terraform-provider-parallels-desktop/internal/telemetry"
 	"terraform-provider-parallels-desktop/internal/vagrantbox"
 	"terraform-provider-parallels-desktop/internal/virtualmachine"
 	"terraform-provider-parallels-desktop/internal/virtualmachinestate"
@@ -107,6 +108,8 @@ func (p *ParallelsProvider) Configure(ctx context.Context, req provider.Configur
 		MyAccountPassword:    config.MyAccountPassword,
 		DisableTlsValidation: config.DisableTlsValidation,
 	}
+
+	telemetry.TrackSession(ctx, data.License.ValueString(), req.TerraformVersion)
 
 	resp.DataSourceData = &data
 	resp.ResourceData = &data

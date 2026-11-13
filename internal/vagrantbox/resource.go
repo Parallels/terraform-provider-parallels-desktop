@@ -66,15 +66,7 @@ func (r *VagrantBoxResource) Configure(ctx context.Context, req resource.Configu
 func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data resource_models.VagrantBoxResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventVagrant, telemetry.ModeCreate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventVagrant, telemetry.ModeCreate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
@@ -384,15 +376,7 @@ func (r *VagrantBoxResource) Create(ctx context.Context, req resource.CreateRequ
 func (r *VagrantBoxResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data resource_models.VagrantBoxResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventVagrant, telemetry.ModeRead,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventVagrant, telemetry.ModeRead, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -455,15 +439,7 @@ func (r *VagrantBoxResource) Update(ctx context.Context, req resource.UpdateRequ
 	var data resource_models.VagrantBoxResourceModelV1
 	var currentData resource_models.VagrantBoxResourceModelV1
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventVagrant, telemetry.ModeUpdate,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventVagrant, telemetry.ModeUpdate, &resp.Diagnostics, time.Now())
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &currentData)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -766,15 +742,7 @@ func (r *VagrantBoxResource) Delete(ctx context.Context, req resource.DeleteRequ
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 
-	telemetrySvc := telemetry.Get(ctx)
-	telemetryEvent := telemetry.NewTelemetryItem(
-		ctx,
-		r.provider.License.String(),
-		telemetry.EventVagrant, telemetry.ModeDestroy,
-		nil,
-		nil,
-	)
-	telemetrySvc.TrackEvent(ctx, telemetryEvent)
+	defer telemetry.TrackOperation(ctx, r.provider.License.String(), telemetry.EventVagrant, telemetry.ModeDestroy, &resp.Diagnostics, time.Now())
 
 	if resp.Diagnostics.HasError() {
 		return
